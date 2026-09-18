@@ -23,7 +23,8 @@ if [ $BUILD_RC -eq 0 ]; then BUILD="green"; else BUILD="red"; fi
 cd "$ROOT"
 
 # --- gate 2: sorry / admit count ----------------------------------------
-SORRY_COUNT=$(grep -rniE '\b(sorry|admit)\b' --include='*.lean' lean \
+SORRY_COUNT=$(grep -rniE '\b(sorry|admit)\b' --include='*.lean' \
+  --exclude-dir=.lake lean \
   | grep -v 'sorryAx' | wc -l | tr -d ' ')
 echo "sorries: $SORRY_COUNT"
 

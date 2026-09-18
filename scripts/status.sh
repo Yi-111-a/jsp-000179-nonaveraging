@@ -9,7 +9,8 @@ lake build >/dev/null 2>&1
 BUILD_RC=$?
 cd ..
 
-SORRY_COUNT=$(grep -rniE '\b(sorry|admit)\b' --include='*.lean' lean \
+SORRY_COUNT=$(grep -rniE '\b(sorry|admit)\b' --include='*.lean' \
+  --exclude-dir=.lake lean \
   | grep -v 'sorryAx' | wc -l | tr -d ' ')
 
 cd lean

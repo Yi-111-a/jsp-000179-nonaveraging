@@ -89,4 +89,46 @@ theorem nonAveraging_int_iff (A : Finset ℤ) :
         (S.card : ℤ) * a ≠ S.sum id := by
   simp [NonAveraging]
 
+/-- Pushforward of a non-averaging set along an injective additive hom:
+`NonAveraging A → NonAveraging (A.image f)`. -/
+theorem NonAveraging.image {β : Type*} [DecidableEq β] [AddCommGroup β]
+    (f : α →+ β) (hf : Function.Injective f) (hA : NonAveraging A) :
+    NonAveraging (A.image f) := by
+  intro b hb T hT hne havg
+  rw [Finset.mem_image] at hb
+  obtain ⟨a, ha, rfl⟩ := hb
+  have hT' : T ⊆ (A.erase a).image f := by
+    intro x hx
+    have hxT := Finset.mem_erase.mp (hT hx)
+    obtain ⟨y, hy, hxy⟩ := Finset.mem_image.mp hxT.2
+    refine Finset.mem_image.mpr ⟨y, Finset.mem_erase.mpr ⟨?_, hy⟩, hxy⟩
+    rintro rfl
+    exact hxT.1 hxy.symm
+  set T' := (A.erase a).filter (fun y ↦ f y ∈ T) with hT'def
+  have him : T'.image f = T := by
+    ext x
+    simp only [hT'def, Finset.mem_image, Finset.mem_filter]
+    constructor
+    · rintro ⟨y, ⟨_, hfyT⟩, rfl⟩
+      exact hfyT
+    · intro hx
+      obtain ⟨y, hy, rfl⟩ := Finset.mem_image.mp (hT' hx)
+      exact ⟨y, ⟨hy, hx⟩, rfl⟩
+  have hT'ne : T'.Nonempty := by
+    rcases T'.eq_empty_or_nonempty with h | h
+    · rw [h, Finset.image_empty] at him
+      exact absurd him.symm (Finset.nonempty_iff_ne_empty.mp hne)
+    · exact h
+  have hcard : T.card = T'.card := by
+    rw [← him, Finset.card_image_of_injective _ hf]
+  have hsum : T.sum id = f (T'.sum id) := by
+    conv_lhs => rw [← him]
+    rw [Finset.sum_image (fun x _ y _ h ↦ hf h), map_sum]
+    simp
+  have havg' : f (T'.card • a) = f (T'.sum id) := by
+    rw [map_nsmul, ← hsum, ← hcard]
+    exact havg
+  exact absurd (hf havg')
+    (hA a ha T' (Finset.filter_subset _ _) hT'ne)
+
 end Nonaveraging

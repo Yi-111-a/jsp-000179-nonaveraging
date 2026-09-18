@@ -1,0 +1,32 @@
+problem:
+  id: JSP-000179
+  title: "How large can a subset of an integer interval be if no element is the average of some other elements?"
+  area: additive combinatorics
+  catalog: "https://github.com/TheJustinSunPrize/awards/blob/main/problems/catalog-0101-0200.md#JSP-000179"
+  source_paper:
+    title: "Sharp bound for the Erdős-Straus non-averaging set problem"
+    authors: ["Huy Tuan Pham", "Dmitrii Zakharov"]
+    arxiv: "2410.14624"
+    version: v2
+    revised: "2025-09-10"
+
+headline:
+  theorem: nonaveraging_max_size_sharp
+  file: lean/Nonaveraging/Main.lean
+  statement: "log h(n) / log n → 1/4, h(n) = max |A|, A ⊆ [n] non-averaging"
+
+toolchain:
+  lean: "leanprover/lean4:v4.34.0"
+  mathlib: "v4.34.0"
+
+gates:
+  build: "cd lean && lake build"
+  sorries: 0
+  axioms_whitelist: ["propext", "Classical.choice", "Quot.sound"]
+  commit_sha_chars: 40
+
+checkpoints:
+  - name: weak-exponent
+    description: "n^{1/4-c} ≤ h(n) ≤ n^{1/4+δ} for a fixed slack δ before the o(1) sharpening"
+  - name: sharp
+    description: "full n^{1/4+o(1)}"

@@ -1,39 +1,41 @@
-# JSP-000179 — Erdős–Straus non-averaging set problem
+# JSP-000179 — How large can a subset of an integer interval be if no element is the average of some other elements?
+
+- **id:** JSP-000179
+- **title:** How large can a subset of an integer interval be if no element is the average of some other elements?
+- **area:** Additive combinatorics
+- **status:** Solved
+- **Lean:** No (formalization target)
+- **Eligible / Claim:** No / Unavailable
+- **role:** Formalize path (Solved + Lean=No)
 
 ## Statement
 
-A set of integers `A` is **non-averaging** if no element `a ∈ A` can be written
-as the average of a nonempty subset of `A ∖ {a}`; equivalently, `A` avoids
-solutions in distinct variables to all equations
+How large can a subset of an integer interval be if no element is the average of some other elements?
 
-    k·x₀ = x₁ + ⋯ + xₖ      (k ≥ 1, all variables distinct)
+Equivalently: let \(h(n)\) be the maximum size of a *non-averaging* subset of \(\{1,\ldots,n\}\) (no element is the average of a nonempty subset of the remaining elements). Determine the growth of \(h(n)\).
 
-Let `h(n)` denote the largest size of a non-averaging subset of `[n] = {1,…,n}`.
+## Catalog
 
-**Theorem (Pham–Zakharov 2024/2025).** `h(n) = n^{1/4 + o(1)}`.
+- Anchor: https://github.com/TheJustinSunPrize/awards/blob/main/problems/catalog-0101-0200.md#JSP-000179
+- Awards home: https://github.com/TheJustinSunPrize/awards
 
-Equivalently, `log h(n) / log n → 1/4` as `n → ∞`.
+## Primary papers
 
-## History
+- [PhZa24] Sharp bound for the Erdős–Straus non-averaging set problem — arXiv:2410.14624 (2024). **Main formalization source.**
+- [CFP23] Homogeneous structures in subset sums and non-averaging sets — arXiv:2311.01416.
+- [Bo89] On the lower estimation of nonaveraging sets — Acta Math. Hungar. (1989).
+- [ErSa90] On a problem of Straus — Disorder in physical systems (1990).
 
-| Who | Bound |
-| --- | --- |
-| Straus (late 1960s) | `h(n) ≥ e^{c√log n}` |
-| Erdős–Straus | `h(n) = O(n^{2/3})` |
-| Erdős–Sárközy (1990) | `h(n) ≪ (n log n)^{1/2}` |
-| Abbott | `h(n) = Ω(n^{1/5})` |
-| Bosznay (1989) | `h(n) = Ω(n^{1/4})`, explicit parabola construction |
-| Conlon–Fox–Pham (2023) | `h(n) ≤ n^{√2−1+o(1)}` |
-| **Pham–Zakharov (arXiv:2410.14624v2)** | **`h(n) = n^{1/4+o(1)}`** |
+## Accepted mathematical answer
 
-## References
+\[
+h(n)=n^{1/4+o(1)},
+\]
+i.e. \(\log h(n)/\log n \to 1/4\) (Pham–Zakharov). Bosznay’s construction gives the matching \(\Omega(n^{1/4})\) lower bound.
 
-- [PhZa24] H. T. Pham, D. Zakharov, *Sharp bound for the Erdős–Straus
-  non-averaging set problem*, arXiv:2410.14624v2 (2025). — **primary source**
-- [CFP23] D. Conlon, J. Fox, H. T. Pham, *Homogeneous structures in subset sums
-  and non-averaging sets*, arXiv:2311.01416 (2023). — structure theorem input
-- [Bo89] A. P. Bosznay, *On the lower estimation of nonaveraging sets*,
-  Acta Math. Hungar. (1989), 155–157. — lower-bound construction
-- [ErSa90] P. Erdős, A. Sárközy, *On a problem of Straus* (1990).
-- JSP catalog entry:
-  https://github.com/TheJustinSunPrize/awards/blob/main/problems/catalog-0101-0200.md#JSP-000179
+## Success criteria
+
+- `lake build` succeeds
+- Zero `sorry` / `admit`
+- Named headline theorem(s) in ACCEPTANCE.md proved
+- No new axioms beyond standard Lean axioms

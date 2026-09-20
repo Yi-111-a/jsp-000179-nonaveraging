@@ -1,0 +1,9 @@
+{
+  "jsp_id": "JSP-000179",
+  "catalog_url": "https://github.com/TheJustinSunPrize/awards/blob/main/problems/catalog-0101-0200.md#JSP-000179",
+  "original_question_en": "How large can a subset of an integer interval be if no element is the average of some other elements?",
+  "required_theorems": [
+    "nonaveraging_max_size_sharp"
+  ],
+  "notes": "Target is PhZa24 sharp bound h(n)=n^{1/4+o(1)} (log h(n)/log n → 1/4). One-sided or weak-exponent lemmas are milestones only."
+}

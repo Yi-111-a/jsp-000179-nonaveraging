@@ -73,6 +73,184 @@ theorem card_toFinset_le : P.toFinset.card ≤ ∏ i, P.width i := by
 def subsetSumsL {ℓ : ℕ} (A : Finset (Fin ℓ → ℤ)) : Finset (Fin ℓ → ℤ) :=
   A.powerset.image (·.sum id)
 
+/-- The *centered* GAP `{∑ rᵢ • qᵢ : rᵢ ∈ [−Nᵢ, Nᵢ]}`, expressed in `GAP`
+form as `base = −∑ Nᵢ • qᵢ`, `widthᵢ = 2Nᵢ + 1`.  Centered GAPs are
+homogeneous and symmetric about `0`; they are the normal form used for the
+GAP `P` in the CFP structure theorem (cf. CFP23 §5, where it is noted that
+`P` may be taken symmetric at the cost of at most doubling the widths). -/
+def centered (q : Fin d → (Fin ℓ → ℤ)) (N : Fin d → ℕ) : GAP ℓ d where
+  base := -(∑ i, (N i : ℤ) • q i)
+  step := q
+  width := fun i ↦ 2 * N i + 1
+
+theorem centered_eval (q : Fin d → (Fin ℓ → ℤ)) (N : Fin d → ℕ)
+    (n : Fin d → ℕ) :
+    (centered q N).eval n = ∑ i, ((n i : ℤ) - N i) • q i := by
+  simp only [centered, eval, sub_smul, Finset.sum_sub_distrib]
+  rw [sub_eq_add_neg, add_comm]
+
+/-- Membership in a centered GAP: sums `∑ rᵢ • qᵢ` with `|rᵢ| ≤ Nᵢ`. -/
+theorem mem_centered {q : Fin d → (Fin ℓ → ℤ)} {N : Fin d → ℕ}
+    {x : Fin ℓ → ℤ} :
+    x ∈ (centered q N).toFinset ↔
+      ∃ r : Fin d → ℤ, (∀ i, |r i| ≤ (N i : ℤ)) ∧ x = ∑ i, r i • q i := by
+  constructor
+  · intro hx
+    obtain ⟨n, hn, rfl⟩ := Finset.mem_image.mp hx
+    obtain ⟨m, -, rfl⟩ := Finset.mem_image.mp hn
+    refine ⟨fun i ↦ ((m i : ℕ) : ℤ) - (N i : ℤ), fun i ↦ ?_,
+      centered_eval q N (fun i ↦ (m i : ℕ))⟩
+    have hlt : (m i : ℕ) ≤ 2 * N i := by
+      have h : (m i : ℕ) < 2 * N i + 1 := (m i).isLt
+      omega
+    have hle : ((m i : ℕ) : ℤ) ≤ 2 * (N i : ℤ) := by exact_mod_cast hlt
+    have hnn : (0 : ℤ) ≤ ((m i : ℕ) : ℤ) := by positivity
+    show |(m i : ℤ) - (N i : ℤ)| ≤ (N i : ℤ)
+    rw [abs_le]; constructor <;> omega
+  · rintro ⟨r, hr, rfl⟩
+    apply Finset.mem_image.mpr
+    refine ⟨fun i ↦ (r i + N i).toNat, ?_, ?_⟩
+    · apply Finset.mem_image.mpr
+      refine ⟨fun i ↦ ⟨(r i + N i).toNat, ?_⟩, Finset.mem_univ _, ?_⟩
+      · have hri := abs_le.mp (hr i)
+        show (r i + N i).toNat < 2 * N i + 1
+        omega
+      · ext i; simp
+    · rw [centered_eval]
+      apply Finset.sum_congr rfl; intro i _
+      have hri := abs_le.mp (hr i)
+      have hnonneg : (0 : ℤ) ≤ r i + N i := by omega
+      congr 1
+      rw [Int.toNat_of_nonneg hnonneg]
+      omega
+
+/-- A centered GAP is symmetric about `0`. -/
+theorem centered_symmetric (q : Fin d → (Fin ℓ → ℤ)) (N : Fin d → ℕ) :
+    (centered q N).Symmetric := by
+  refine ⟨0, fun x hx ↦ ?_⟩
+  obtain ⟨r, hr, rfl⟩ := mem_centered.mp hx
+  apply mem_centered.mpr
+  refine ⟨fun i ↦ -r i, fun i ↦ by simpa using hr i, ?_⟩
+  simp [neg_smul, Finset.sum_neg_distrib]
+
+/-- A centered GAP is homogeneous (its base is `∑ (−Nᵢ) • qᵢ`). -/
+theorem centered_homogeneous (q : Fin d → (Fin ℓ → ℤ)) (N : Fin d → ℕ) :
+    (centered q N).Homogeneous :=
+  ⟨fun i ↦ -(N i : ℤ), by simp [centered, neg_smul, Finset.sum_neg_distrib]⟩
+
+/-- `0` belongs to every centered GAP. -/
+theorem zero_mem_centered (q : Fin d → (Fin ℓ → ℤ)) (N : Fin d → ℕ) :
+    (0 : Fin ℓ → ℤ) ∈ (centered q N).toFinset :=
+  mem_centered.mpr ⟨0, fun i ↦ by simp, by simp⟩
+
+/-- The base-`H` packing `a ↦ ∑ⱼ aⱼ Hʲ` used in the Appendix-A encoding
+`φ : (−H/2, H/2]^ℓ → ℤ` of Pham–Zakharov (arXiv:2410.14624v2, Appendix A).
+It is additive and injective on the balanced box `|aⱼ| < H/2`. -/
+def packVec (H : ℤ) {ℓ : ℕ} (a : Fin ℓ → ℤ) : ℤ :=
+  ∑ j, a j * H ^ j.val
+
+theorem packVec_zero (H : ℤ) {ℓ : ℕ} : packVec H (0 : Fin ℓ → ℤ) = 0 := by
+  simp [packVec]
+
+theorem packVec_add (H : ℤ) {ℓ : ℕ} (a b : Fin ℓ → ℤ) :
+    packVec H (a + b) = packVec H a + packVec H b := by
+  simp [packVec, add_mul, Finset.sum_add_distrib]
+
+theorem packVec_neg (H : ℤ) {ℓ : ℕ} (a : Fin ℓ → ℤ) :
+    packVec H (-a) = -packVec H a := by
+  simp [packVec, neg_mul, Finset.sum_neg_distrib]
+
+theorem packVec_sub (H : ℤ) {ℓ : ℕ} (a b : Fin ℓ → ℤ) :
+    packVec H (a - b) = packVec H a - packVec H b := by
+  rw [sub_eq_add_neg, packVec_add, packVec_neg, sub_eq_add_neg]
+
+theorem packVec_smul (H : ℤ) {ℓ : ℕ} (t : ℤ) (a : Fin ℓ → ℤ) :
+    packVec H (t • a) = t * packVec H a := by
+  simp [packVec, mul_assoc, Finset.mul_sum]
+
+/-- `packVec` as an additive group homomorphism `(Fin ℓ → ℤ) →+ ℤ`. -/
+def packVecHom (H : ℤ) {ℓ : ℕ} : (Fin ℓ → ℤ) →+ ℤ where
+  toFun := packVec H
+  map_zero' := packVec_zero H
+  map_add' := packVec_add H
+
+/-- `packVec` commutes with finite sums: `φ(∑ S) = ∑ φ(S)`.  This is the
+additive-transfer step used to compare `Σ(A')` with `Σ(φ(A'))`. -/
+theorem packVec_sum (H : ℤ) {ℓ : ℕ} (S : Finset (Fin ℓ → ℤ)) :
+    packVec H (∑ x ∈ S, x) = ∑ x ∈ S, packVec H x :=
+  map_sum (packVecHom H) _ S
+
+/-- **Balanced-digit uniqueness** for `packVec`: on the box
+`|aⱼ| ≤ K` with `2K < H`, the packing `∑ⱼ aⱼ Hʲ` is injective.
+This is the injectivity of `φ` on `(−H/2, H/2]^ℓ` used in Appendix A. -/
+theorem packVec_inj {H : ℤ} (hH : 0 < H) {K : ℤ} (h2K : 2 * K < H) :
+    ∀ {ℓ : ℕ} (a b : Fin ℓ → ℤ),
+      (∀ j, |a j| ≤ K) → (∀ j, |b j| ≤ K) →
+      packVec H a = packVec H b → a = b := by
+  intro ℓ
+  induction ℓ with
+  | zero => intro a b _ _ _; exact Subsingleton.elim _ _
+  | succ ℓ ih =>
+    intro a b ha hb hab
+    have hsplit : ∀ v : Fin (ℓ + 1) → ℤ,
+        packVec H v = v 0 + H * packVec H (fun j ↦ v j.succ) := by
+      intro v
+      unfold packVec
+      rw [Fin.sum_univ_succ]
+      simp only [Fin.val_zero, pow_zero, mul_one, Fin.val_succ, pow_succ]
+      rw [Finset.mul_sum]
+      congr 1
+      apply Finset.sum_congr rfl
+      intro j _
+      ring
+    rw [hsplit a, hsplit b] at hab
+    have ha0 : a 0 = b 0 := by
+      have h1 : |a 0 - b 0| ≤ 2 * K := by
+        have h1 := abs_le.mp (ha 0)
+        have h2 := abs_le.mp (hb 0)
+        rw [abs_le]
+        omega
+      have ht : packVec H (fun j ↦ b j.succ) -
+          packVec H (fun j ↦ a j.succ) = 0 := by
+        have hdvd : a 0 - b 0 =
+            H * (packVec H (fun j ↦ b j.succ) - packVec H (fun j ↦ a j.succ)) := by
+          linarith
+        by_contra hne
+        have hge : (1 : ℤ) ≤
+            |packVec H (fun j ↦ b j.succ) - packVec H (fun j ↦ a j.succ)| :=
+          abs_pos.mpr hne
+        rw [hdvd, abs_mul, abs_of_pos hH] at h1
+        have hge2 : H * 1 ≤ H *
+            |packVec H (fun j ↦ b j.succ) - packVec H (fun j ↦ a j.succ)| :=
+          mul_le_mul_of_nonneg_left hge hH.le
+        omega
+      have hpp : packVec H (fun j ↦ a j.succ) =
+          packVec H (fun j ↦ b j.succ) := by omega
+      have hHp : H * packVec H (fun j ↦ a j.succ) =
+          H * packVec H (fun j ↦ b j.succ) := by rw [hpp]
+      omega
+    have htail : (fun j : Fin ℓ ↦ a j.succ) = (fun j : Fin ℓ ↦ b j.succ) := by
+      have hpeq : packVec H (fun j ↦ a j.succ) = packVec H (fun j ↦ b j.succ) := by
+        have hmul : H * packVec H (fun j ↦ a j.succ) =
+            H * packVec H (fun j ↦ b j.succ) := by omega
+        exact mul_left_cancel₀ hH.ne' hmul
+      exact ih _ _ (fun j : Fin ℓ ↦ ha j.succ) (fun j : Fin ℓ ↦ hb j.succ) hpeq
+    funext j
+    exact Fin.cases ha0 (fun i ↦ congrFun htail i) j
+
+/-- `packVec` is injective on any finite set all of whose elements have
+coordinates in `[−K, K]` with `2K < H`. -/
+theorem packVec_injOn {H : ℤ} (hH : 0 < H) {K : ℤ} (h2K : 2 * K < H) {ℓ : ℕ}
+    (S : Finset (Fin ℓ → ℤ)) (hS : ∀ a ∈ S, ∀ j, |a j| ≤ K) :
+    Set.InjOn (packVec H) (↑S : Set (Fin ℓ → ℤ)) :=
+  fun a ha b hb hab ↦ packVec_inj hH h2K a b (hS a ha) (hS b hb) hab
+
+/-- The packing preserves cardinality on the balanced box. -/
+theorem packVec_image_card {H : ℤ} (hH : 0 < H) {K : ℤ} (h2K : 2 * K < H) {ℓ : ℕ}
+    (S : Finset (Fin ℓ → ℤ)) (hS : ∀ a ∈ S, ∀ j, |a j| ≤ K) :
+    (S.image (packVec H)).card = S.card :=
+  Finset.card_image_of_injOn (packVec_injOn hH h2K S hS)
+
 /-- An axis-aligned box in `ℤ^ℓ`: a product of intervals. -/
 def Box (ℓ : ℕ) := Fin ℓ → Finset ℤ
 
@@ -95,12 +273,60 @@ def IsLBSet (A : Finset (Fin ℓ → ℤ)) (β : ℝ) : Prop :=
 
 end GAP
 
+/-- **CFP23 main theorem** (Conlon–Fox–Pham, Theorem 1.5), quoted as
+**Theorem 5** in Pham–Zakharov (arXiv:2410.14624v2).  This is the deep
+external input to `cfp_structure`: it is stated here as a black box and is
+*not* proved in this file (the `sorry` is the quoted theorem itself).
+
+For `A ⊆ [n] ⊆ ℤ` with `|A| = m`, `n ≤ m^β` and
+`s ∈ [m^η, c·m / log m]`, it gives `Â ⊆ A` with
+`|Â| ≥ m − c⁻¹·s·log m`, a proper `d'`-dimensional (`d' ≤ d`) GAP `P` with
+`Â ∪ {0} ⊆ P`, and `A' ⊆ Â` with `|A'| ≤ s` such that `Σ(A')` contains a
+homogeneous translate of a `≤ c·s` dilation of `P`, which remains proper.
+
+We phrase it for `ℓ = 1` in the ambient `Fin 1 → ℤ` model used by `GAP`, so
+that `cfp_structure` is literally its `ℓ`-dimensional extension obtained by
+the Appendix-A base-`H` packing (`GAP.packVec`, `GAP.packVec_inj`). -/
+theorem cfp_main {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1) :
+    ∃ c d : ℝ, 0 < c ∧ 0 < d ∧
+      ∀ (A : Finset (Fin 1 → ℤ)) (n s : ℕ),
+        (∀ a ∈ A, 0 ≤ a 0 ∧ a 0 ≤ (n : ℤ)) →
+        (n : ℝ) ≤ (A.card : ℝ) ^ β →
+        (A.card : ℝ) ^ η ≤ s →
+        (s : ℝ) ≤ c * A.card / Real.log A.card →
+        ∃ (Â : Finset (Fin 1 → ℤ)) (d' : ℕ) (P : GAP 1 d'),
+          Â ⊆ A ∧
+          (A.card : ℝ) - c⁻¹ * s * Real.log A.card ≤ (Â.card : ℝ) ∧
+          (d' : ℝ) ≤ d ∧
+          P.Symmetric ∧ P.Homogeneous ∧ P.Proper ∧
+          (Â ∪ {0}) ⊆ P.toFinset ∧
+          ∃ A' ⊆ Â, A'.card ≤ s ∧
+            ∃ k : ℕ, 0 < k ∧ (k : ℝ) ≤ c * s ∧
+              ∃ t : Fin 1 → ℤ,
+                ((k • P).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
+                (k • P).Proper := by
+  sorry
+
 /-- **Theorem 3 (CFP structure theorem)**.  For `ℓ, β > 1` and `0 < η < 1`
 there are `c, d > 0` such that for any `A ⊆ B ⊆ ℤ^ℓ`, `|A| = m`, `|B| ≤ m^β`
 and `s ∈ [m^η, c·m/log m]` there exist `Â ⊆ A` with
 `|Â| ≥ m − c⁻¹·s·log m`, an integer `d' ≤ d`, a `d'`-dimensional GAP `P`
 containing `Â ∪ {0}`, and `A' ⊆ Â` of size `≤ s` such that `Σ(A')` contains a
-homogeneous translate of `csP`, and `csP` is proper. -/
+homogeneous translate of `csP`, and `csP` is proper.
+
+This is the `ℓ`-dimensional consequence of `cfp_main` via the Appendix-A
+base-`H` encoding of Pham–Zakharov.  The remaining `sorry` is the derivation
+itself; the individual steps already formalized in this file are
+`GAP.packVec` / `GAP.packVec_inj` (injectivity of `φ` on the balanced box)
+and the `GAP.centered` API (symmetric/homogeneous recentering with widths
+`2Nᵢ+1`).  Still unformalized: (i) reducing an arbitrary `GAP.Box` to a
+standard box `[0,n]^ℓ` with `n ≤ |B| ≤ m^β`; (ii) applying `cfp_main` to the
+packed set `φ(A) ⊆ [0, n₀]` with `n₀ = H^ℓ`, `H = n^κ`, `κ = 10·ℓ³`,
+`β₀ = β·κ·ℓ`; (iii) decoding the one-dimensional GAP `P₀` into a GAP `P` in
+`ℤ^ℓ` with `φ(P) = P₀` by balanced base-`H` digit expansion of its steps;
+(iv) transferring `Σ(A₀')` back to `Σ(A')`; (v) properness of `k·P` from
+properness of `k·P₀` via `packVec_inj` and the Appendix-A size bound on
+`c·H`. -/
 theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1) :
     ∃ c d : ℝ, 0 < c ∧ 0 < d ∧ ∀ (A : Finset (Fin ℓ → ℤ)) (B : GAP.Box ℓ) (s : ℕ),
       A ⊆ B.toFinset → (B.card : ℝ) ≤ (A.card : ℝ) ^ β →

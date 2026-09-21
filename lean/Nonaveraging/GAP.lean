@@ -264,19 +264,529 @@ def card (B : Box ℓ) : ℕ := ∏ i, (B i).card
 theorem card_toFinset (B : Box ℓ) : B.toFinset.card = B.card :=
   Fintype.card_piFinset B
 
+/-- An *interval* box: each side is `Icc lo hi`.  This is the paper's
+"axis-aligned box `B ⊆ ℤ^ℓ`" (arXiv:2410.14624v2, §3).  Interval boxes bound
+coordinate *magnitudes* by `|B|` (each sidelength `hi − lo + 1 ≤ |B|` and, for
+anchored or symmetric sides, the coordinates themselves), which is what the
+Appendix-A `packVec` encoding needs; arbitrary finsets (e.g. `{2^i}`) do not
+satisfy the structure theorem. -/
+def IsInterval (B : Box ℓ) : Prop :=
+  ∀ i, ∃ lo hi : ℤ, B i = Finset.Icc lo hi
+
+/-- An *anchored* box: each side is `Icc 0 N` — the `B = [n]^ℓ` normal form
+used in the Appendix-A reduction. -/
+def Anchored (B : Box ℓ) : Prop :=
+  ∀ i, ∃ N : ℕ, B i = Finset.Icc 0 (N : ℤ)
+
+/-- A *symmetric* box: each side is `Icc (−N) N` — the shape of `ϕ_P(P) − x`
+for `x ∈ ϕ_P(P)` in Definition 9, and of the ambient box in Lemma 8. -/
+def Symmetric (B : Box ℓ) : Prop :=
+  ∀ i, ∃ N : ℕ, B i = Finset.Icc (-(N : ℤ)) (N : ℤ)
+
+theorem Anchored.isInterval {B : Box ℓ} (h : B.Anchored) : B.IsInterval := by
+  intro i
+  obtain ⟨N, hN⟩ := h i
+  exact ⟨0, (N : ℤ), hN⟩
+
+theorem Symmetric.isInterval {B : Box ℓ} (h : B.Symmetric) : B.IsInterval := by
+  intro i
+  obtain ⟨N, hN⟩ := h i
+  exact ⟨-(N : ℤ), (N : ℤ), hN⟩
+
 end Box
 
-/-- `A` is an `(ℓ, β)`-set: a subset of `ℤ^ℓ` contained in a box of size
-`|B| ≤ |A|^β`. -/
+/-- `A` is an `(ℓ, β)`-set: a subset of `ℤ^ℓ` contained in an interval box of
+size `|B| ≤ |A|^β` (arXiv:2410.14624v2, §3). -/
 def IsLBSet (A : Finset (Fin ℓ → ℤ)) (β : ℝ) : Prop :=
-  ∃ B : Box ℓ, A ⊆ B.toFinset ∧ (B.card : ℝ) ≤ (A.card : ℝ) ^ β
+  ∃ B : Box ℓ, B.IsInterval ∧ A ⊆ B.toFinset ∧ (B.card : ℝ) ≤ (A.card : ℝ) ^ β
+
+/-! ### Coefficient tuples
+
+A tuple `n : Fin d → ℕ` is a coefficient tuple of `P` iff `n i < P.width i`
+for every `i`. -/
+
+/-- A tuple is a coefficient tuple iff it is entrywise below `P.width`. -/
+theorem mem_coeffs {P : GAP ℓ d} {n : Fin d → ℕ} :
+    n ∈ P.coeffs ↔ ∀ i, n i < P.width i := by
+  constructor
+  · intro hn i
+    obtain ⟨m, -, rfl⟩ := Finset.mem_image.mp hn
+    exact (m i).isLt
+  · intro h
+    exact Finset.mem_image.mpr ⟨fun i ↦ ⟨n i, h i⟩, Finset.mem_univ _, rfl⟩
+
+/-- Every coefficient tuple of `P` is entrywise below `P.width`. -/
+theorem coeff_mem_width {P : GAP ℓ d} {n : Fin d → ℕ} (hn : n ∈ P.coeffs)
+    (i : Fin d) : n i < P.width i :=
+  (mem_coeffs.mp hn) i
+
+/-! ### Padding a GAP with an extra step vector
+
+`P.padStep v w₀` appends a `(d+1)`-st step `v` of width `w₀`: its points are
+`p + m • v` for `p ∈ P` and `0 ≤ m < w₀`.  This is the padding machinery used
+to absorb a translation (`-lo`) into the GAP itself in the Appendix-A
+reduction. -/
+
+/-- Append a step `v` of width `w₀` to `P`. -/
+def padStep (P : GAP ℓ d) (v : Fin ℓ → ℤ) (w₀ : ℕ) : GAP ℓ (d + 1) where
+  base := P.base
+  step := Fin.snoc P.step v
+  width := Fin.snoc P.width w₀
+
+@[simp] theorem padStep_base (P : GAP ℓ d) (v : Fin ℓ → ℤ) (w₀ : ℕ) :
+    (P.padStep v w₀).base = P.base := rfl
+
+@[simp] theorem padStep_step (P : GAP ℓ d) (v : Fin ℓ → ℤ) (w₀ : ℕ) :
+    (P.padStep v w₀).step = Fin.snoc P.step v := rfl
+
+@[simp] theorem padStep_width (P : GAP ℓ d) (v : Fin ℓ → ℤ) (w₀ : ℕ) :
+    (P.padStep v w₀).width = Fin.snoc P.width w₀ := rfl
+
+/-- Evaluating a padded GAP splits off the last coefficient. -/
+theorem padStep_eval (P : GAP ℓ d) (v : Fin ℓ → ℤ) (w₀ : ℕ)
+    (n : Fin (d + 1) → ℕ) :
+    (P.padStep v w₀).eval n =
+      P.eval (fun i ↦ n i.castSucc) + (n (Fin.last d) : ℤ) • v := by
+  simp only [eval, padStep_base, padStep_step]
+  rw [Fin.sum_univ_castSucc]
+  simp only [Fin.snoc_castSucc, Fin.snoc_last]
+  rw [add_assoc]
+
+/-- Membership in a padded GAP: `p + m • v` with `p ∈ P` and `m < w₀`,
+expressed on coefficients. -/
+theorem mem_padStep {P : GAP ℓ d} {v : Fin ℓ → ℤ} {w₀ : ℕ} {x : Fin ℓ → ℤ} :
+    x ∈ (P.padStep v w₀).toFinset ↔
+      ∃ n : Fin d → ℕ, n ∈ P.coeffs ∧ ∃ m : ℕ, m < w₀ ∧
+        x = P.eval n + (m : ℤ) • v := by
+  constructor
+  · intro hx
+    obtain ⟨c, hc, rfl⟩ := Finset.mem_image.mp hx
+    refine ⟨fun i ↦ c i.castSucc, ?_, c (Fin.last d), ?_, padStep_eval P v w₀ c⟩
+    · rw [mem_coeffs]
+      intro i
+      show c i.castSucc < P.width i
+      have h := (mem_coeffs.mp hc) i.castSucc
+      have e : (P.padStep v w₀).width i.castSucc = P.width i := by
+        simp only [padStep_width, Fin.snoc_castSucc]
+      rwa [e] at h
+    · have h := (mem_coeffs.mp hc) (Fin.last d)
+      have e : (P.padStep v w₀).width (Fin.last d) = w₀ := by
+        simp only [padStep_width, Fin.snoc_last]
+      rwa [e] at h
+  · rintro ⟨n, hn, m, hm, rfl⟩
+    apply Finset.mem_image.mpr
+    refine ⟨(Fin.snoc n m : Fin (d + 1) → ℕ), ?_, ?_⟩
+    · rw [mem_coeffs]
+      intro i
+      rcases i.eq_castSucc_or_eq_last with ⟨j, rfl⟩ | rfl
+      · simp only [padStep_width, Fin.snoc_castSucc]
+        exact coeff_mem_width hn j
+      · simp only [padStep_width, Fin.snoc_last]
+        exact hm
+    · have h1 : (fun i : Fin d ↦ (Fin.snoc n m : Fin (d + 1) → ℕ) i.castSucc) = n := by
+        funext i
+        simp only [Fin.snoc_castSucc]
+      have h2 : (Fin.snoc n m : Fin (d + 1) → ℕ) (Fin.last d) = m := by
+        simp only [Fin.snoc_last]
+      rw [padStep_eval, h1, h2]
+
+/-- The point set of a padded GAP, as an image of `coeffs × [0, w₀)`. -/
+theorem padStep_toFinset (P : GAP ℓ d) (v : Fin ℓ → ℤ) (w₀ : ℕ) :
+    (P.padStep v w₀).toFinset =
+      (P.coeffs ×ˢ Finset.range w₀).image
+        fun nm : (Fin d → ℕ) × ℕ ↦ P.eval nm.1 + (nm.2 : ℤ) • v := by
+  ext x
+  rw [mem_padStep]
+  constructor
+  · rintro ⟨n, hn, m, hm, rfl⟩
+    exact Finset.mem_image.mpr ⟨(n, m),
+      Finset.mem_product.mpr ⟨hn, Finset.mem_range.mpr hm⟩, rfl⟩
+  · intro hx
+    obtain ⟨⟨n, m⟩, hnm, rfl⟩ := Finset.mem_image.mp hx
+    rw [Finset.mem_product] at hnm
+    exact ⟨n, hnm.1, m, Finset.mem_range.mp hnm.2, rfl⟩
+
+/-- The point set of a padded GAP: `{p + m • v : p ∈ P, m < w₀}`. -/
+theorem padStep_toFinset_biUnion (P : GAP ℓ d) (v : Fin ℓ → ℤ) (w₀ : ℕ) :
+    (P.padStep v w₀).toFinset =
+      P.toFinset.biUnion
+        fun p ↦ (Finset.range w₀).image fun m : ℕ ↦ p + (m : ℤ) • v := by
+  ext x
+  rw [mem_padStep, Finset.mem_biUnion]
+  constructor
+  · rintro ⟨n, hn, m, hm, rfl⟩
+    exact ⟨P.eval n, Finset.mem_image.mpr ⟨n, hn, rfl⟩,
+      Finset.mem_image.mpr ⟨m, Finset.mem_range.mpr hm, rfl⟩⟩
+  · rintro ⟨p, hp, hx⟩
+    obtain ⟨n, hn, rfl⟩ := Finset.mem_image.mp hp
+    obtain ⟨m, hm, rfl⟩ := Finset.mem_image.mp hx
+    exact ⟨n, hn, m, Finset.mem_range.mp hm, rfl⟩
+
+/-- The first `d` coefficients of a padded-GAP coefficient tuple form a
+coefficient tuple of `P`. -/
+theorem padStep_coeff_init {P : GAP ℓ d} {v : Fin ℓ → ℤ} {w₀ : ℕ}
+    {c : Fin (d + 1) → ℕ} (hc : c ∈ (P.padStep v w₀).coeffs) :
+    (fun i ↦ c i.castSucc) ∈ P.coeffs := by
+  rw [mem_coeffs] at hc ⊢
+  intro i
+  show c i.castSucc < P.width i
+  have h := hc i.castSucc
+  rw [padStep_width, Fin.snoc_castSucc] at h
+  exact h
+
+/-- The last coefficient of a padded-GAP coefficient tuple is below `w₀`. -/
+theorem padStep_coeff_last {P : GAP ℓ d} {v : Fin ℓ → ℤ} {w₀ : ℕ}
+    {c : Fin (d + 1) → ℕ} (hc : c ∈ (P.padStep v w₀).coeffs) :
+    c (Fin.last d) < w₀ := by
+  rw [mem_coeffs] at hc
+  have h := hc (Fin.last d)
+  rw [padStep_width, Fin.snoc_last] at h
+  exact h
+
+/-- A padded GAP is proper if `P` is proper and the extra scalar `m` is
+recoverable from `p + m • v` (the "absorbed shift" separation hypothesis). -/
+theorem padStep_proper {P : GAP ℓ d} (hP : P.Proper) {v : Fin ℓ → ℤ} {w₀ : ℕ}
+    (hsep : ∀ n ∈ P.coeffs, ∀ m < w₀, ∀ n' ∈ P.coeffs, ∀ m' < w₀,
+      P.eval n + (m : ℤ) • v = P.eval n' + (m' : ℤ) • v → m = m') :
+    (P.padStep v w₀).Proper := by
+  intro c hc c' hc' h
+  rw [padStep_eval, padStep_eval] at h
+  have hm : c (Fin.last d) = c' (Fin.last d) :=
+    hsep _ (padStep_coeff_init hc) _ (padStep_coeff_last hc)
+      _ (padStep_coeff_init hc') _ (padStep_coeff_last hc') h
+  have heval : P.eval (fun i ↦ c i.castSucc) = P.eval (fun i ↦ c' i.castSucc) := by
+    rw [hm] at h
+    simpa using h
+  have hinit := hP (padStep_coeff_init hc) (padStep_coeff_init hc') heval
+  funext i
+  rcases i.eq_castSucc_or_eq_last with ⟨j, rfl⟩ | rfl
+  · exact congrFun hinit j
+  · exact hm
+
+/-- A padded GAP stays homogeneous (extend the base coefficients by `0`). -/
+theorem padStep_homogeneous {P : GAP ℓ d} (hP : P.Homogeneous) (v : Fin ℓ → ℤ)
+    (w₀ : ℕ) : (P.padStep v w₀).Homogeneous := by
+  obtain ⟨c, hc⟩ := hP
+  refine ⟨(Fin.snoc c (0 : ℤ) : Fin (d + 1) → ℤ), ?_⟩
+  rw [padStep_base, Fin.sum_univ_castSucc]
+  simp only [padStep_step, Fin.snoc_castSucc, Fin.snoc_last, zero_smul, add_zero]
+  exact hc
+
+/-- Padding with an odd width `2N + 1` preserves symmetry: the new center is
+`c + N • v`. -/
+theorem padStep_symmetric {P : GAP ℓ d} (hP : P.Symmetric) (v : Fin ℓ → ℤ)
+    (N : ℕ) : (P.padStep v (2 * N + 1)).Symmetric := by
+  obtain ⟨c, hc⟩ := hP
+  refine ⟨c + (N : ℤ) • v, fun x hx ↦ ?_⟩
+  obtain ⟨n, hn, m, hm, rfl⟩ := mem_padStep.mp hx
+  have hmem : P.eval n ∈ P.toFinset := Finset.mem_image.mpr ⟨n, hn, rfl⟩
+  obtain ⟨n', hn', hnn'⟩ := Finset.mem_image.mp (hc _ hmem)
+  refine mem_padStep.mpr ⟨n', hn', 2 * N - m, by omega, ?_⟩
+  rw [hnn', Nat.cast_sub (by omega : m ≤ 2 * N)]
+  ext i
+  simp only [Pi.add_apply, Pi.sub_apply, Pi.smul_apply, smul_eq_mul,
+    Int.nsmul_eq_mul]
+  push_cast
+  ring
+
+/-! ### Subset sums of translated finsets
+
+Subset sums are not translation-invariant, but a `j`-element subset `S ⊆ A₀`
+maps to a `j`-element subset `S + lo ⊆ A₀ + lo`, shifting its sum by `j • lo`.
+`subsetSumsLCard` packages the fixed-cardinality hypothesis needed for the
+Appendix-A anchoring step. -/
+
+/-- Membership in the subset sums of a finset in `ℤ^ℓ`. -/
+theorem mem_subsetSumsL {x : Fin ℓ → ℤ} {A : Finset (Fin ℓ → ℤ)} :
+    x ∈ subsetSumsL A ↔ ∃ S ⊆ A, S.sum id = x := by
+  simp [subsetSumsL]
+
+/-- The `j`-element subset sums of `A`. -/
+def subsetSumsLCard (A : Finset (Fin ℓ → ℤ)) (j : ℕ) : Finset (Fin ℓ → ℤ) :=
+  (A.powerset.filter fun S ↦ S.card = j).image fun S ↦ ∑ x ∈ S, x
+
+theorem mem_subsetSumsLCard {x : Fin ℓ → ℤ} {A : Finset (Fin ℓ → ℤ)} {j : ℕ} :
+    x ∈ subsetSumsLCard A j ↔
+      ∃ S : Finset (Fin ℓ → ℤ), S ⊆ A ∧ S.card = j ∧ (∑ i ∈ S, i) = x := by
+  simp only [subsetSumsLCard, Finset.mem_image, Finset.mem_filter,
+    Finset.mem_powerset]
+  constructor
+  · rintro ⟨S, ⟨hS, hj⟩, rfl⟩
+    exact ⟨S, hS, hj, rfl⟩
+  · rintro ⟨S, hS, hj, rfl⟩
+    exact ⟨S, ⟨hS, hj⟩, rfl⟩
+
+theorem subsetSumsLCard_subset (A : Finset (Fin ℓ → ℤ)) (j : ℕ) :
+    subsetSumsLCard A j ⊆ subsetSumsL A := by
+  intro x hx
+  obtain ⟨S, hS, -, hsum⟩ := mem_subsetSumsLCard.mp hx
+  exact mem_subsetSumsL.mpr ⟨S, hS, hsum⟩
+
+/-- Translating a finset shifts its `j`-element subset sums by `j • lo`. -/
+theorem subsetSumsLCard_image_add {A₀ : Finset (Fin ℓ → ℤ)} (lo : Fin ℓ → ℤ)
+    (j : ℕ) :
+    (subsetSumsLCard A₀ j).image (· + j • lo) ⊆
+      subsetSumsLCard (A₀.image (· + lo)) j := by
+  intro y hy
+  obtain ⟨σ, hσ, rfl⟩ := Finset.mem_image.mp hy
+  obtain ⟨S, hS, hScard, hsum⟩ := mem_subsetSumsLCard.mp hσ
+  apply mem_subsetSumsLCard.mpr
+  refine ⟨S.image (· + lo), ?_, ?_, ?_⟩
+  · intro z hz
+    obtain ⟨w, hw, rfl⟩ := Finset.mem_image.mp hz
+    exact Finset.mem_image.mpr ⟨w, hS hw, rfl⟩
+  · calc (S.image (· + lo)).card = S.card :=
+        Finset.card_image_of_injective _ fun a b h ↦ by simpa using h
+      _ = j := hScard
+  · have hinj : Set.InjOn (· + lo) ↑S := fun a _ b _ h ↦ by simpa using h
+    calc (∑ i ∈ S.image (· + lo), i) = ∑ x ∈ S, (x + lo) := Finset.sum_image hinj
+        _ = (∑ x ∈ S, x) + ∑ _x ∈ S, lo := Finset.sum_add_distrib
+        _ = (∑ x ∈ S, x) + j • lo := by rw [Finset.sum_const, hScard]
+        _ = σ + j • lo := by rw [hsum]
+
+/-- If every element of `T` is a sum of exactly `j` elements of `A₀`, then
+`T + j • lo` consists of subset sums of the translate `A₀ + lo`.  This is the
+explicit fixed-cardinality form of the translation non-invariance of `Σ`. -/
+theorem subsetSumsL_translate_of_card {A₀ : Finset (Fin ℓ → ℤ)} (lo : Fin ℓ → ℤ)
+    {j : ℕ} {T : Finset (Fin ℓ → ℤ)}
+    (hcard : ∀ σ ∈ T, ∃ S : Finset (Fin ℓ → ℤ),
+      S ⊆ A₀ ∧ S.card = j ∧ (∑ x ∈ S, x) = σ) :
+    T.image (· + j • lo) ⊆ subsetSumsL (A₀.image (· + lo)) := by
+  intro y hy
+  obtain ⟨σ, hσ, rfl⟩ := Finset.mem_image.mp hy
+  obtain ⟨S, hS, hScard, hsum⟩ := hcard σ hσ
+  apply mem_subsetSumsL.mpr
+  refine ⟨S.image (· + lo), ?_, ?_⟩
+  · intro z hz
+    obtain ⟨w, hw, rfl⟩ := Finset.mem_image.mp hz
+    exact Finset.mem_image.mpr ⟨w, hS hw, rfl⟩
+  · have hinj : Set.InjOn (· + lo) ↑S := fun a _ b _ h ↦ by simpa using h
+    calc (S.image (· + lo)).sum id = ∑ x ∈ S, (x + lo) := Finset.sum_image hinj
+        _ = (∑ x ∈ S, x) + ∑ _x ∈ S, lo := Finset.sum_add_distrib
+        _ = (∑ x ∈ S, x) + j • lo := by rw [Finset.sum_const, hScard]
+        _ = σ + j • lo := by rw [hsum]
+
+namespace Box
+
+/-- The coordinatewise shift of a box by `−t`. -/
+def shift (B : Box ℓ) (t : Fin ℓ → ℤ) : Box ℓ :=
+  fun i ↦ (B i).image (· - t i)
+
+/-- Shifting a box preserves its cardinality. -/
+theorem shift_card (B : Box ℓ) (t : Fin ℓ → ℤ) : (B.shift t).card = B.card := by
+  show (∏ i, ((B i).image (· - t i)).card) = ∏ i, (B i).card
+  exact Finset.prod_congr rfl fun i _ ↦
+    Finset.card_image_of_injective _ fun _ _ h ↦ by simpa using h
+
+/-- `x ∈ B.shift t` iff `x + t ∈ B`. -/
+theorem mem_shift {B : Box ℓ} {t x : Fin ℓ → ℤ} :
+    x ∈ (B.shift t).toFinset ↔ x + t ∈ B.toFinset := by
+  constructor
+  · intro h
+    apply Fintype.mem_piFinset.mpr
+    intro i
+    have hi := Fintype.mem_piFinset.mp h i
+    obtain ⟨b, hb, hbx⟩ := Finset.mem_image.mp hi
+    rw [Pi.add_apply, ← hbx, sub_add_cancel]
+    exact hb
+  · intro h
+    apply Fintype.mem_piFinset.mpr
+    intro i
+    apply Finset.mem_image.mpr
+    refine ⟨x i + t i, ?_, by simp⟩
+    have hi := Fintype.mem_piFinset.mp h i
+    rwa [Pi.add_apply] at hi
+
+/-- The point set of a shifted box is the translate of the point set. -/
+theorem toFinset_shift (B : Box ℓ) (t : Fin ℓ → ℤ) :
+    (B.shift t).toFinset = B.toFinset.image (· - t) := by
+  ext x
+  rw [mem_shift, Finset.mem_image]
+  constructor
+  · intro h
+    exact ⟨x + t, h, by simp⟩
+  · rintro ⟨y, hy, rfl⟩
+    rwa [sub_add_cancel]
+
+/-- Shifting an interval side `[lo, hi]` by `−lo` anchors it at `0`. -/
+theorem image_sub_Icc (lo hi : ℤ) :
+    (Finset.Icc lo hi).image (· - lo) = Finset.Icc 0 (hi - lo) := by
+  ext x
+  simp only [Finset.mem_image, Finset.mem_Icc]
+  constructor
+  · rintro ⟨y, ⟨h1, h2⟩, rfl⟩
+    exact ⟨by omega, by omega⟩
+  · intro h
+    exact ⟨x + lo, ⟨by omega, by omega⟩, by simp⟩
+
+/-- An interval box with lower corner `lo` shifts to an anchored box. -/
+theorem shift_anchored_of_interval {B : Box ℓ} {lo : Fin ℓ → ℤ}
+    (hB : ∀ i, ∃ hi : ℤ, lo i ≤ hi ∧ B i = Finset.Icc (lo i) hi) :
+    (B.shift lo).Anchored := by
+  intro i
+  obtain ⟨hi, hle, hBi⟩ := hB i
+  refine ⟨(hi - lo i).toNat, ?_⟩
+  show (B i).image (· - lo i) = Finset.Icc 0 ((hi - lo i).toNat : ℤ)
+  rw [hBi, image_sub_Icc]
+  congr 1
+  exact (Int.toNat_of_nonneg (by omega)).symm
+
+/-- Anchoring an interval box at its lower corner: `B − lo` is an anchored box
+of the same cardinality whose point set is the `-lo` translate of `B`'s. -/
+theorem exists_anchored_shift {B : Box ℓ} {lo : Fin ℓ → ℤ}
+    (hB : ∀ i, ∃ hi : ℤ, lo i ≤ hi ∧ B i = Finset.Icc (lo i) hi) :
+    ∃ B' : Box ℓ, B'.Anchored ∧ B'.card = B.card ∧
+      B'.toFinset = B.toFinset.image (· - lo) :=
+  ⟨B.shift lo, shift_anchored_of_interval hB, shift_card B lo,
+    toFinset_shift B lo⟩
+
+/-- For `A` inside an interval box `B` with lower corner `lo`, the translate
+`A - lo` lands in an anchored box of cardinality `|B|`. -/
+theorem exists_anchored_image_sub {A : Finset (Fin ℓ → ℤ)} {B : Box ℓ}
+    {lo : Fin ℓ → ℤ} (hAB : A ⊆ B.toFinset)
+    (hB : ∀ i, ∃ hi : ℤ, lo i ≤ hi ∧ B i = Finset.Icc (lo i) hi) :
+    ∃ B' : Box ℓ, B'.Anchored ∧ B'.card = B.card ∧
+      A.image (· - lo) ⊆ B'.toFinset := by
+  obtain ⟨B', hB', hcard, hpts⟩ := exists_anchored_shift hB
+  refine ⟨B', hB', hcard, ?_⟩
+  rw [hpts]
+  exact Finset.image_subset_image hAB
+
+end Box
+
+/-! ### Decoding a `GAP 1` into `ℤ^ℓ` via base-`H` digits
+
+The Appendix-A encoding `φ` is `packVec H`; its inverse on the balanced box
+sends a `GAP 1 d` to a `GAP ℓ d` whose steps are the digit vectors `dig i`
+with `packVec H (dig i) = P₀.step i 0`. -/
+
+/-- The `ℤ^ℓ` GAP with prescribed base-`H` digit vectors. -/
+def unpack (dig : Fin d → Fin ℓ → ℤ) (bdig : Fin ℓ → ℤ) (w : Fin d → ℕ) :
+    GAP ℓ d where
+  base := bdig
+  step := dig
+  width := w
+
+@[simp] theorem unpack_base (dig : Fin d → Fin ℓ → ℤ) (bdig : Fin ℓ → ℤ)
+    (w : Fin d → ℕ) : (unpack dig bdig w).base = bdig := rfl
+
+@[simp] theorem unpack_step (dig : Fin d → Fin ℓ → ℤ) (bdig : Fin ℓ → ℤ)
+    (w : Fin d → ℕ) : (unpack dig bdig w).step = dig := rfl
+
+@[simp] theorem unpack_width (dig : Fin d → Fin ℓ → ℤ) (bdig : Fin ℓ → ℤ)
+    (w : Fin d → ℕ) : (unpack dig bdig w).width = w := rfl
+
+/-- The coefficient tuples of the decoded GAP are those of `P₀`. -/
+theorem unpack_coeffs {P₀ : GAP 1 d} (dig : Fin d → Fin ℓ → ℤ)
+    (bdig : Fin ℓ → ℤ) :
+    (unpack dig bdig P₀.width).coeffs = P₀.coeffs := rfl
+
+/-- `packVec` of a sum. -/
+theorem packVec_sum' {H : ℤ} {ι : Type*} (s : Finset ι) (f : ι → Fin ℓ → ℤ) :
+    packVec H (∑ i ∈ s, f i) = ∑ i ∈ s, packVec H (f i) :=
+  map_sum (packVecHom H) f s
+
+/-- **Decoding commutes with evaluation**: `packVec` of a point of the decoded
+GAP is the corresponding point of `P₀`, read at coordinate `0`. -/
+theorem packVec_unpack_eval {P₀ : GAP 1 d} {H : ℤ} {dig : Fin d → Fin ℓ → ℤ}
+    {bdig : Fin ℓ → ℤ} (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0) (n : Fin d → ℕ) :
+    packVec H ((unpack dig bdig P₀.width).eval n) = (P₀.eval n) 0 := by
+  have hP : (unpack dig bdig P₀.width).eval n =
+      bdig + ∑ i, (n i : ℤ) • dig i := rfl
+  have hRHS : (P₀.eval n) 0 = P₀.base 0 + ∑ i, (n i : ℤ) * P₀.step i 0 := by
+    show (P₀.base + ∑ i, (n i : ℤ) • P₀.step i) 0 = _
+    rw [Pi.add_apply, Finset.sum_apply]
+    exact congrArg (P₀.base 0 + ·) <|
+      Finset.sum_congr rfl fun i _ ↦ by rw [Pi.smul_apply, smul_eq_mul]
+  rw [hP, packVec_add, packVec_sum' Finset.univ, hbdig, hRHS]
+  exact congrArg (P₀.base 0 + ·) <|
+    Finset.sum_congr rfl fun i _ ↦ by rw [packVec_smul, hdig i]
+
+/-- The `packVec` image of the decoded GAP is the `0`-coordinate image of
+`P₀`: `packVec` maps `P.toFinset` onto `P₀.toFinset` (read at `0`). -/
+theorem unpack_toFinset_image {P₀ : GAP 1 d} {H : ℤ} {dig : Fin d → Fin ℓ → ℤ}
+    {bdig : Fin ℓ → ℤ} (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0) :
+    (unpack dig bdig P₀.width).toFinset.image (packVec H) =
+      P₀.toFinset.image fun x ↦ x 0 := by
+  unfold toFinset
+  rw [unpack_coeffs, Finset.image_image, Finset.image_image]
+  refine Finset.image_congr fun n _ ↦ ?_
+  exact packVec_unpack_eval hdig hbdig n
+
+/-- Equality of `Fin 1 → ℤ` functions detected at coordinate `0`. -/
+theorem eval_one_eq {P₀ : GAP 1 d} {n m : Fin d → ℕ} :
+    P₀.eval n = P₀.eval m ↔ (P₀.eval n) 0 = (P₀.eval m) 0 :=
+  ⟨fun h ↦ congrFun h 0,
+    fun h ↦ funext fun i ↦ (Fin.eq_zero i).symm ▸ h⟩
+
+/-- **Decoding preserves properness**: provided the points of the decoded GAP
+stay in the balanced box `|·| ≤ K` with `2K < H`, the decoded GAP is proper
+iff `P₀` is. -/
+theorem unpack_proper {P₀ : GAP 1 d} {H : ℤ} (hH : 0 < H)
+    {dig : Fin d → Fin ℓ → ℤ} {bdig : Fin ℓ → ℤ}
+    (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0)
+    {K : ℤ} (h2K : 2 * K < H)
+    (hbound : ∀ n ∈ P₀.coeffs, ∀ j,
+      |(unpack dig bdig P₀.width).eval n j| ≤ K) :
+    (unpack dig bdig P₀.width).Proper ↔ P₀.Proper := by
+  have hcoe : ∀ {x : Fin d → ℕ}, x ∈ P₀.coeffs →
+      x ∈ (unpack dig bdig P₀.width).coeffs := fun h ↦ by
+    rw [unpack_coeffs]; exact h
+  constructor
+  · intro hU n hn m hm h
+    have hpack : packVec H ((unpack dig bdig P₀.width).eval n) =
+        packVec H ((unpack dig bdig P₀.width).eval m) := by
+      rw [packVec_unpack_eval hdig hbdig n,
+        packVec_unpack_eval hdig hbdig m, h]
+    exact hU (hcoe hn) (hcoe hm)
+      (packVec_inj hH h2K _ _ (hbound n hn) (hbound m hm) hpack)
+  · intro hP n hn m hm h
+    rw [unpack_coeffs] at hn hm
+    apply hP hn hm
+    apply eval_one_eq.mpr
+    rw [← packVec_unpack_eval hdig hbdig n,
+      ← packVec_unpack_eval hdig hbdig m, h]
+
+/-- Decoding preserves cardinality on the balanced box. -/
+theorem card_unpack_toFinset {P₀ : GAP 1 d} {H : ℤ} (hH : 0 < H)
+    {dig : Fin d → Fin ℓ → ℤ} {bdig : Fin ℓ → ℤ}
+    (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0)
+    {K : ℤ} (h2K : 2 * K < H)
+    (hbound : ∀ a ∈ (unpack dig bdig P₀.width).toFinset, ∀ j, |a j| ≤ K) :
+    (unpack dig bdig P₀.width).toFinset.card = P₀.toFinset.card := by
+  have h1 := packVec_image_card hH h2K _ hbound
+  rw [unpack_toFinset_image hdig hbdig] at h1
+  rw [← h1]
+  exact Finset.card_image_of_injective _
+    fun a b h ↦ funext fun i ↦ (Fin.eq_zero i).symm ▸ h
+
+/-- Decoding preserves homogeneity: if `P₀.base = ∑ cᵢ • stepᵢ` and the
+coefficient combination stays in the balanced box, the decoded base satisfies
+`bdig = ∑ cᵢ • dig i`. -/
+theorem unpack_homogeneous {P₀ : GAP 1 d} {H : ℤ} (hH : 0 < H)
+    {dig : Fin d → Fin ℓ → ℤ} {bdig : Fin ℓ → ℤ} {c : Fin d → ℤ}
+    (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0)
+    (hc : P₀.base = ∑ i, c i • P₀.step i)
+    {K : ℤ} (h2K : 2 * K < H)
+    (hb : ∀ j, |bdig j| ≤ K) (hd : ∀ j, |(∑ i, c i • dig i) j| ≤ K) :
+    (unpack dig bdig P₀.width).Homogeneous := by
+  refine ⟨c, ?_⟩
+  apply packVec_inj hH h2K _ _ hb hd
+  rw [hbdig, hc, packVec_sum' Finset.univ, Finset.sum_apply]
+  refine Finset.sum_congr rfl fun i _ ↦ ?_
+  rw [Pi.smul_apply, smul_eq_mul, packVec_smul, hdig i]
 
 end GAP
 
 /-- **CFP23 main theorem** (Conlon–Fox–Pham, Theorem 1.5), quoted as
 **Theorem 5** in Pham–Zakharov (arXiv:2410.14624v2).  This is the deep
 external input to `cfp_structure`: it is stated here as a black box and is
-*not* proved in this file (the `sorry` is the quoted theorem itself).
+*not* proved in this file (the placeholder is the quoted theorem itself).
 
 For `A ⊆ [n] ⊆ ℤ` with `|A| = m`, `n ≤ m^β` and
 `s ∈ [m^η, c·m / log m]`, it gives `Â ⊆ A` with
@@ -290,6 +800,7 @@ the Appendix-A base-`H` packing (`GAP.packVec`, `GAP.packVec_inj`). -/
 theorem cfp_main {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1) :
     ∃ c d : ℝ, 0 < c ∧ 0 < d ∧
       ∀ (A : Finset (Fin 1 → ℤ)) (n s : ℕ),
+        A.Nonempty →
         (∀ a ∈ A, 0 ≤ a 0 ∧ a 0 ≤ (n : ℤ)) →
         (n : ℝ) ≤ (A.card : ℝ) ^ β →
         (A.card : ℝ) ^ η ≤ s →
@@ -315,20 +826,24 @@ containing `Â ∪ {0}`, and `A' ⊆ Â` of size `≤ s` such that `Σ(A')` cont
 homogeneous translate of `csP`, and `csP` is proper.
 
 This is the `ℓ`-dimensional consequence of `cfp_main` via the Appendix-A
-base-`H` encoding of Pham–Zakharov.  The remaining `sorry` is the derivation
-itself; the individual steps already formalized in this file are
-`GAP.packVec` / `GAP.packVec_inj` (injectivity of `φ` on the balanced box)
-and the `GAP.centered` API (symmetric/homogeneous recentering with widths
-`2Nᵢ+1`).  Still unformalized: (i) reducing an arbitrary `GAP.Box` to a
-standard box `[0,n]^ℓ` with `n ≤ |B| ≤ m^β`; (ii) applying `cfp_main` to the
-packed set `φ(A) ⊆ [0, n₀]` with `n₀ = H^ℓ`, `H = n^κ`, `κ = 10·ℓ³`,
-`β₀ = β·κ·ℓ`; (iii) decoding the one-dimensional GAP `P₀` into a GAP `P` in
-`ℤ^ℓ` with `φ(P) = P₀` by balanced base-`H` digit expansion of its steps;
-(iv) transferring `Σ(A₀')` back to `Σ(A')`; (v) properness of `k·P` from
-properness of `k·P₀` via `packVec_inj` and the Appendix-A size bound on
-`c·H`. -/
+base-`H` encoding of Pham–Zakharov.
+
+**Formalization note.**  The quantified `B` is restricted to *interval*
+boxes (`GAP.Box.IsInterval`), matching the paper's "axis-aligned box":
+with arbitrary finsets the statement is false (e.g. `A = {2^i}` inside a
+one-element-per-coordinate box forces `s ≥ m − O(d log m)`, contradicting
+`s ≈ m^η`), and `A` is required nonempty (`A = ∅`, `s = 0` would force
+`0 < k ≤ c·s = 0`).  See
+`discovery/JSP-000179/scratch/cfp_derivation_report.md` for the full
+analysis, including the Appendix-A `H`-sizing (`κ = 10ℓ³`, `H = n^κ`,
+`cH > n s² (sn)^ℓ`) and the translation subtlety for non-anchored boxes
+(`Σ` is not translation-invariant; the paper's `WLOG B = [n]^ℓ` is only
+directly justified for anchored boxes, while Lemma-8-style applications
+use symmetric boxes — a faithful derivation must resolve this, e.g. by
+padding the decoded GAP to absorb the shift). -/
 theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1) :
     ∃ c d : ℝ, 0 < c ∧ 0 < d ∧ ∀ (A : Finset (Fin ℓ → ℤ)) (B : GAP.Box ℓ) (s : ℕ),
+      A.Nonempty → B.IsInterval →
       A ⊆ B.toFinset → (B.card : ℝ) ≤ (A.card : ℝ) ^ β →
       (A.card : ℝ) ^ η ≤ s → (s : ℝ) ≤ c * A.card / Real.log A.card →
       ∃ (Â : Finset (Fin ℓ → ℤ)) (d' : ℕ) (P : GAP ℓ d'),
@@ -348,6 +863,7 @@ admissible range `[m^{1/2}, c·m/log m]` of Theorem 3. -/
 theorem cfp_structure_cor (ℓ : ℕ) {β : ℝ} (hβ : 1 < β) :
     ∃ c d C : ℝ, 0 < c ∧ 0 < d ∧ 0 < C ∧ ∀ (A : Finset (Fin ℓ → ℤ))
       (B : GAP.Box ℓ),
+      B.IsInterval →
       A ⊆ B.toFinset → (B.card : ℝ) ≤ (A.card : ℝ) ^ β →
       C ≤ (A.card : ℝ) →
       ∃ (Â : Finset (Fin ℓ → ℤ)) (d' : ℕ) (P : GAP ℓ d'),
@@ -385,7 +901,7 @@ theorem cfp_structure_cor (ℓ : ℕ) {β : ℝ} (hβ : 1 < β) :
   obtain ⟨C₁, hC₁⟩ := eventually_atTop.mp
     (evLog.and (ev64.and (evlog.and (eventually_ge_atTop (16 : ℝ)))))
   refine ⟨c, d, max C₁ 1, hc, hd,
-    lt_of_lt_of_le zero_lt_one (le_max_right _ _), fun A B hsub hB hCm ↦ ?_⟩
+    lt_of_lt_of_le zero_lt_one (le_max_right _ _), fun A B hBint hsub hB hCm ↦ ?_⟩
   obtain ⟨hlog2, h64, h1c, hm16⟩ :=
     hC₁ (A.card : ℝ) (le_trans (le_max_left _ _) hCm)
   have hmpos : (0 : ℝ) < (A.card : ℝ) := lt_of_lt_of_le (by norm_num) hm16
@@ -449,9 +965,11 @@ theorem cfp_structure_cor (ℓ : ℕ) {β : ℝ} (hβ : 1 < β) :
       _ ≤ (c * Real.log (A.card : ℝ)) * ((A.card : ℝ) * Real.log (A.card : ℝ)) :=
           mul_le_mul_of_nonneg_right hcm (by positivity)
       _ = c * (A.card : ℝ) * Real.log (A.card : ℝ) ^ 2 := by ring
+  have hAne : A.Nonempty :=
+    Finset.card_pos.mp (Nat.cast_pos.mp (lt_of_lt_of_le (by norm_num) hm16))
   obtain ⟨Â, d', P, hÂsub, hÂcard, hd'le, hSym, hsub0,
     A', hA'sub, hA'card, k, hkpos, hkle, t, htrans, hprop⟩ :=
-    hcfp A B s hsub hB hs_ge hs_le2
+    hcfp A B s hAne hBint hsub hB hs_ge hs_le2
   have hcinv : (0 : ℝ) < c⁻¹ := inv_pos.mpr hc
   have hst : (s : ℝ) * Real.log (A.card : ℝ)
       ≤ (A.card : ℝ) / Real.log (A.card : ℝ) := by

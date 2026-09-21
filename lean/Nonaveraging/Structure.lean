@@ -1044,15 +1044,6 @@ namespace GAP
 
 variable {ℓ : ℕ}
 
-theorem mem_subsetSumsL {A : Finset (Fin ℓ → ℤ)} {x : Fin ℓ → ℤ} :
-    x ∈ GAP.subsetSumsL A ↔ ∃ S ⊆ A, S.sum id = x := by
-  simp only [subsetSumsL, Finset.mem_image, Finset.mem_powerset]
-  constructor
-  · rintro ⟨S, hS, rfl⟩
-    exact ⟨S, hS, rfl⟩
-  · rintro ⟨S, hS, rfl⟩
-    exact ⟨S, hS, rfl⟩
-
 theorem subsetSumsL_mono {S T : Finset (Fin ℓ → ℤ)} (h : S ⊆ T) :
     GAP.subsetSumsL S ⊆ GAP.subsetSumsL T := by
   intro x hx
@@ -1105,15 +1096,19 @@ theorem proper_smul_iff {d : ℕ} {P : GAP ℓ d} {k : ℤ} (hk : k ≠ 0) :
     rw [eval_smul, eval_smul] at hnm
     exact smul_left_injective_intVec hk hnm
 
-/-- The negated GAP `−P = {−b − Σ nᵢ sᵢ}` (same widths). -/
+/-- The negated GAP `-P = {-b - Σ nᵢ sᵢ}` (same widths). -/
 def neg {d : ℕ} (P : GAP ℓ d) : GAP ℓ d :=
-  ⟨−P.base, fun i ↦ −P.step i, P.width⟩
+  ⟨-P.base, fun i ↦ -P.step i, P.width⟩
 
 theorem eval_neg {d : ℕ} (P : GAP ℓ d) (n : Fin d → ℕ) :
-    P.neg.eval n = −P.eval n := by
-  show (−P.base) + ∑ i, (n i : ℤ) • (−P.step i)
-      = −(P.base + ∑ i, (n i : ℤ) • P.step i)
-  simp [smul_neg]
+    P.neg.eval n = -P.eval n := by
+  show (-P.base) + ∑ i, (n i : ℤ) • (-P.step i)
+      = -(P.base + ∑ i, (n i : ℤ) • P.step i)
+  have hsum : (∑ i, (n i : ℤ) • (-P.step i))
+      = -(∑ i, (n i : ℤ) • P.step i) := by
+    rw [← Finset.sum_neg_distrib]
+    exact Finset.sum_congr rfl fun i _ ↦ smul_neg _ _
+  rw [hsum, neg_add]
 
 theorem coeffs_neg {d : ℕ} (P : GAP ℓ d) : P.neg.coeffs = P.coeffs := rfl
 
@@ -1137,16 +1132,21 @@ theorem proper_neg {d : ℕ} {P : GAP ℓ d} : P.neg.Proper ↔ P.Proper := by
     exact neg_injective hnm
 
 theorem translate_neg {d : ℕ} (P : GAP ℓ d) (t : Fin ℓ → ℤ) :
-    P.neg.translate (−t) = (P.translate t).neg := by
-  unfold GAP.translate neg
+    P.neg.translate (-t) = (P.translate t).neg := by
+  show (⟨-t + -P.base, fun i ↦ -P.step i, P.width⟩ : GAP ℓ d)
+      = ⟨-(t + P.base), fun i ↦ -P.step i, P.width⟩
   congr 1
   funext i
-  simp
+  simp only [Pi.add_apply, Pi.neg_apply, neg_add]
 
 theorem smul_neg {d : ℕ} (P : GAP ℓ d) (k : ℤ) :
     k • P.neg = (k • P).neg := by
-  unfold HSMul.hSMul instHSMul SMul.smul instSMul GAP.smul neg
-  simp [smul_neg]
+  show (⟨k • (-P.base), fun i ↦ k • (-P.step i), P.width⟩ : GAP ℓ d)
+      = ⟨-(k • P.base), fun i ↦ -(k • P.step i), P.width⟩
+  congr 1
+  · exact _root_.smul_neg k P.base
+  · funext i
+    exact _root_.smul_neg k (P.step i)
 
 /-- Subset sums of a reflected set: `Σ(−A) = −Σ(A)`. -/
 theorem subsetSumsL_neg {A : Finset (Fin ℓ → ℤ)} :
@@ -1166,13 +1166,16 @@ theorem subsetSumsL_neg {A : Finset (Fin ℓ → ℤ)} :
       rw [← hzy, neg_neg]
       exact hz
     · rw [Finset.sum_image (fun x _ y _ h ↦ neg_injective h)]
-      simp [id_eq, Finset.sum_neg_distrib]
+      have key : (∑ a ∈ S', id (Neg.neg a)) = -(S'.sum id) := by
+        rw [← Finset.sum_neg_distrib]
+        exact Finset.sum_congr rfl fun a _ ↦ rfl
+      rw [key, neg_neg]
   · rintro ⟨v, hv, hvx⟩
     rw [mem_subsetSumsL] at hv
     obtain ⟨T, hT, rfl⟩ := hv
-    refine ⟨T.image Neg.neg, Finset.image_mono hT, ?_⟩
+    refine ⟨T.image Neg.neg, Finset.image_mono Neg.neg hT, ?_⟩
     rw [Finset.sum_image (fun x _ y _ h ↦ neg_injective h)]
-    show (∑ x ∈ T, id (−x)) = x
+    show (∑ x ∈ T, id (-x)) = x
     simp only [id_eq]
     rw [Finset.sum_neg_distrib]
     exact hvx
@@ -1190,16 +1193,17 @@ noncomputable def neg : SubSumWitness (A.image Neg.neg) c d where
   A' := W.A'.image Neg.neg
   P := W.P.neg
   k := W.k
-  t := −W.t
+  t := -W.t
   cpos := W.cpos
   kpos := W.kpos
   hk := by
     rw [Finset.card_image_of_injective _ neg_injective]
     exact W.hk
-  hAh := Finset.image_mono W.hAh
-  hA' := Finset.image_mono W.hA'
+  hAh := Finset.image_mono Neg.neg W.hAh
+  hA' := Finset.image_mono Neg.neg W.hA'
   hA'card := by
-    rw [Finset.card_image_of_injective _ neg_injective]
+    rw [Finset.card_image_of_injective _ neg_injective,
+      Finset.card_image_of_injective _ neg_injective]
     exact W.hA'card
   hAhcard := by
     rw [Finset.card_image_of_injective _ neg_injective,
@@ -1211,12 +1215,15 @@ noncomputable def neg : SubSumWitness (A.image Neg.neg) c d where
       rw [Finset.image_singleton]
       simp
     rw [GAP.toFinset_neg, h0, ← Finset.image_union]
-    exact Finset.image_mono W.hsub
+    exact Finset.image_mono Neg.neg W.hsub
   htranslate := by
+    show (((W.k : ℤ) • W.P.neg).translate (-W.t)).toFinset
+        ⊆ GAP.subsetSumsL (W.A'.image Neg.neg)
     rw [GAP.smul_neg, GAP.translate_neg, GAP.toFinset_neg,
       GAP.subsetSumsL_neg]
-    exact Finset.image_mono W.htranslate
+    exact Finset.image_mono Neg.neg W.htranslate
   hproper := by
+    show ((W.k : ℤ) • W.P.neg).Proper
     rw [GAP.smul_neg]
     exact GAP.proper_neg.mpr W.hproper
 
@@ -1227,14 +1234,16 @@ theorem nonempty_neg :
 theorem image_neg_neg {B : Finset (Fin ℓ → ℤ)} :
     (B.image Neg.neg).image Neg.neg = B := by
   rw [Finset.image_image]
-  simp only [Function.comp_apply, neg_neg]
-  exact Finset.image_id' B
+  simp_rw [Function.comp_apply, neg_neg]
+  exact Finset.image_id' _
 
 theorem nonempty_of_neg {B : Finset (Fin ℓ → ℤ)} {d' : ℕ}
     (h : Nonempty (SubSumWitness (B.image Neg.neg) c d')) :
     Nonempty (SubSumWitness B c d') := by
   obtain ⟨W'⟩ := h
-  exact ⟨image_neg_neg ▸ W'.neg⟩
+  have W'' := W'.neg
+  rw [image_neg_neg] at W''
+  exact ⟨W''⟩
 
 end SubSumWitness
 
@@ -1246,203 +1255,6 @@ theorem SubSumDim_neg {ℓ : ℕ} {A : Finset (Fin ℓ → ℤ)} {c : ℝ} :
   ext d'
   exact ⟨fun h ↦ SubSumWitness.nonempty_of_neg h,
     fun h ↦ h.elim fun W ↦ ⟨W.neg⟩⟩
-
-/-- **Theorem 4** (contrapositive form used in §4).  There is a threshold
-`N` such that whenever `A ⊆ B ⊆ ℤ^ℓ` is non-averaging, `|B| ≤ |A|^β`,
-`(δ,γ)`-irreducible via its canonical witness `W` (so `d = d(A)` and
-`P = P(A)`), `γ ≥ (log|A|)^{−1/C'}` and `|A| ≥ N`, the embedded image
-`ϕ_P(Â)` (viewed in `ℝ^d`) is in `μ`-convex position — otherwise Lemmas
-11–14 produce `a ∈ A` and disjoint nonempty `Ã₁, Ã₂ ⊆ A ∖ {a}` with
-`Σ(Ã₁ − a) = Σ(a − Ã₂)`, contradicting `NonAveraging.subsetSum_eq_zero`.
-Here `C` plays the role of the paper's sufficiently large constants with
-`γ ≤ δ^C` and `δ ≤ μ^C`. -/
-theorem embedded_in_mu_convex_position {ℓ : ℕ} {β c c' δ γ μ C C' : ℝ}
-    (hδ : 0 < δ) (hδ1 : δ < 1) (hγ : 0 < γ) (hγ1 : γ < 1)
-    (hμ : 0 < μ) (hμ1 : μ < 1)
-    (hγδ : γ ≤ δ ^ C) (hδμ : δ ≤ μ ^ C) :
-    ∃ N : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (B : GAP.Box ℓ) (d : ℕ)
-        (W : SubSumWitness A c d),
-      B.IsInterval →
-      NonAveraging A → A ⊆ B.toFinset → (B.card : ℝ) ≤ (A.card : ℝ) ^ β →
-      Irreducible W c' δ γ →
-      (Real.log (A.card : ℝ)) ^ (-(1 : ℝ) / C') ≤ γ →
-      N ≤ A.card →
-      InDeltaConvexPosition
-        (W.imageAh.image fun x i ↦ (x i : ℝ)) μ := by
-  classical
-  -- The threshold `N` is chosen so that `|A| ≥ N` forces `|A| ≥ 3` and
-  -- `log |A| ≥ max (2/c) (1/(c(1−δ)))`, hence `|Â| ≥ |A|/2` and
-  -- `|Â| ≥ δ|A|` (from `W.hAhcard`).
-  refine ⟨⌈Real.exp (max (max (2 / c) (1 / (c * (1 - δ)))) 1)⌉₊ + 3, ?_⟩
-  intro A B d W hBint hNA hAB hBcard hIrred hγlog hN
-  have hc : 0 < c := W.cpos
-  have hN3 : 3 ≤ A.card := (Nat.le_add_left 3 _).trans hN
-  have hA3 : (3 : ℝ) ≤ (A.card : ℝ) := by exact_mod_cast hN3
-  have hApos : (0 : ℝ) < (A.card : ℝ) := by linarith
-  have hexp : Real.exp (max (max (2 / c) (1 / (c * (1 - δ)))) 1)
-      ≤ (A.card : ℝ) :=
-    (Nat.le_ceil _).trans
-      (by exact_mod_cast (Nat.le_add_right _ _).trans hN)
-  have hlogM : max (max (2 / c) (1 / (c * (1 - δ)))) 1
-      ≤ Real.log (A.card : ℝ) :=
-    (Real.le_log_iff_exp_le hApos).mpr hexp
-  have hlog1 : (1 : ℝ) ≤ Real.log (A.card : ℝ) :=
-    (le_max_right _ _).trans hlogM
-  have hlogpos : (0 : ℝ) < Real.log (A.card : ℝ) := by linarith
-  have hclog2 : (2 : ℝ) ≤ c * Real.log (A.card : ℝ) := by
-    have h := (le_max_left _ _).trans ((le_max_left _ _).trans hlogM)
-    rwa [div_le_iff₀ hc, mul_comm] at h
-  have hclogd : (1 : ℝ) ≤ (c * (1 - δ)) * Real.log (A.card : ℝ) := by
-    have h := (le_max_right _ _).trans ((le_max_left _ _).trans hlogM)
-    have hcd : (0 : ℝ) < c * (1 - δ) := mul_pos hc (by linarith)
-    rwa [div_le_iff₀ hcd, mul_comm] at h
-  have hcl : (0 : ℝ) < c * Real.log (A.card : ℝ) := mul_pos hc hlogpos
-  -- `c⁻¹·|A|/log|A| ≤ min(1−δ, 1/2)·|A|`, so `|Â| ≥ δ|A|` and `|Â| ≥ 2`.
-  have hkey : c⁻¹ * (A.card : ℝ) / Real.log (A.card : ℝ)
-      = (A.card : ℝ) * (c * Real.log (A.card : ℝ))⁻¹ := by
-    rw [mul_inv, div_eq_mul_inv]
-    ring
-  have hfracd : c⁻¹ * (A.card : ℝ) / Real.log (A.card : ℝ)
-      ≤ (1 - δ) * (A.card : ℝ) := by
-    have h1d : (0 : ℝ) < 1 - δ := by linarith
-    have hge : (1 - δ)⁻¹ ≤ c * Real.log (A.card : ℝ) := by
-      rw [inv_le_iff₀ h1d]
-      calc (1 : ℝ) ≤ (c * (1 - δ)) * Real.log (A.card : ℝ) := hclogd
-        _ = c * Real.log (A.card : ℝ) * (1 - δ) := by ring
-    have hinv : (c * Real.log (A.card : ℝ))⁻¹ ≤ 1 - δ := by
-      have h := inv_anti₀ (inv_pos.mpr h1d) hge
-      rwa [inv_inv] at h
-    rw [hkey]
-    exact mul_le_mul_of_nonneg_left hinv (by positivity)
-  have hfrach : c⁻¹ * (A.card : ℝ) / Real.log (A.card : ℝ)
-      ≤ (A.card : ℝ) / 2 := by
-    have hinv : (c * Real.log (A.card : ℝ))⁻¹ ≤ (2 : ℝ)⁻¹ := by
-      have h := inv_anti₀ (by norm_num : (0 : ℝ) < 2) hclog2
-      rwa [inv_inv] at h
-    rw [hkey]
-    calc (A.card : ℝ) * (c * Real.log (A.card : ℝ))⁻¹
-        ≤ (A.card : ℝ) * (2 : ℝ)⁻¹ :=
-          mul_le_mul_of_nonneg_left hinv (by positivity)
-      _ = (A.card : ℝ) / 2 := by rw [div_eq_mul_inv]
-  have hAhδ : δ * (A.card : ℝ) ≤ (W.imageAh.card : ℝ) := by
-    rw [W.card_imageAh]
-    have := W.hAhcard
-    linarith [hfracd]
-  have hAhh : (A.card : ℝ) / 2 ≤ (W.Ah.card : ℝ) := by
-    have := W.hAhcard
-    linarith [hfrach]
-  -- `P` is proper (from `kP` proper), `P.toFinset` is nonempty, and the
-  -- zero coefficient vector is available, so `0 ∈ ϕ_P(P)`.
-  have hproper : W.P.Proper :=
-    (GAP.proper_smul_iff (by exact_mod_cast W.kpos.ne')).mp W.hproper
-  have h0mem : (0 : Fin d → ℤ) ∈ W.imageP := by
-    have hne : W.P.toFinset.Nonempty :=
-      ⟨0, W.hsub (Finset.mem_union_right _ (Finset.mem_singleton_self 0))⟩
-    have hw : ∀ i, 0 < W.P.width i := by
-      obtain ⟨p, hp⟩ := hne
-      obtain ⟨n, hn, -⟩ := Finset.mem_image.mp hp
-      obtain ⟨m, -, hm⟩ := Finset.mem_image.mp hn
-      intro i
-      have := (m i).isLt
-      omega
-    have h0c : (fun _ ↦ (0 : ℕ)) ∈ W.P.coeffs := by
-      unfold GAP.coeffs
-      apply Finset.mem_image.mpr
-      refine ⟨fun i ↦ ⟨0, hw i⟩, Finset.mem_univ _, ?_⟩
-      funext i
-      rfl
-    have hbase : W.P.base ∈ W.P.toFinset := by
-      apply Finset.mem_image.mpr
-      exact ⟨fun _ ↦ (0 : ℕ), h0c, by simp [GAP.eval]⟩
-    have hptc : W.P.ptCoeff W.P.base hbase = fun _ ↦ (0 : ℕ) := by
-      have heval : W.P.eval (W.P.ptCoeff W.P.base hbase)
-          = W.P.eval (fun _ ↦ (0 : ℕ)) := by
-        rw [GAP.eval_ptCoeff]
-        simp [GAP.eval]
-      exact hproper (W.P.ptCoeff_mem _ _) h0c heval
-    unfold SubSumWitness.imageP GAP.ptCoeffImage
-    apply Finset.mem_image.mpr
-    refine ⟨⟨W.P.base, hbase⟩, Finset.mem_attach _ _, ?_⟩
-    funext i
-    show ((W.P.ptCoeff W.P.base hbase) i : ℤ) = 0
-    rw [hptc]
-    rfl
-  -- Degenerate regimes are vacuous:
-  -- * `C' ≤ 0` makes `γ ≥ (log|A|)^{−1/C'} ≥ 1`, contradicting `γ < 1`;
-  -- * `d = 0` forces `|Â| ≤ 1`, contradicting `|Â| ≥ |A|/2 ≥ 3/2`;
-  -- * `c' ≤ 0` contradicts `W'.cpos` for the witness of `imageAh − 0`.
-  by_cases hC' : C' ≤ 0
-  · exfalso
-    have hexp' : (0 : ℝ) ≤ -(1 : ℝ) / C' := by
-      by_cases h0 : C' = 0
-      · simp [h0]
-      · rw [div_nonneg_iff]
-        exact Or.inr ⟨by norm_num, le_of_lt (lt_of_le_of_ne hC' h0)⟩
-    have : (1 : ℝ) ≤ (Real.log (A.card : ℝ)) ^ (-(1 : ℝ) / C') :=
-      Real.one_le_rpow hlog1 hexp'
-    linarith [hγlog]
-  by_cases hd : d = 0
-  · subst hd
-    exfalso
-    have hAh1 : (W.Ah.card : ℝ) ≤ 1 := by
-      exact_mod_cast W.card_Ah_le_one
-    linarith [hAhh]
-  by_cases hc' : c' ≤ 0
-  · exfalso
-    obtain ⟨⟨W0⟩, -, -⟩ := hIrred.2 W.imageAh 0 (Subset.refl _) hAhδ h0mem
-    linarith [W0.cpos]
-  push_neg at hC' hc' hd
-  -- The main case (`d ≥ 1`, `0 < c'`, `0 < C'`): assume the embedded image
-  -- is not in `μ`-convex position and derive the contradiction of
-  -- `NonAveraging.not_subsetSum_shift_eq` from a nonzero common subset sum.
-  by_contra hconv
-  obtain ⟨a₀, ha₀, B₁, B₂, hB₁e, hB₂e, hdisj, hcover, hw₁, hw₂, w, hw0,
-    hwb, hws, hvec⟩ := W.not_inConvexPosition_imageAh_split hμ hconv
-  suffices hsuff : ∃ v : Fin d → ℤ, v ≠ 0 ∧
-      v ∈ GAP.subsetSumsL (B₁.image (· - a₀)) ∧
-      v ∈ GAP.subsetSumsL (B₂.image (a₀ - ·)) by
-    obtain ⟨v, hv0, hv1, hv2⟩ := hsuff
-    rw [GAP.mem_subsetSumsL] at hv1 hv2
-    obtain ⟨S₁, hS₁, hS1v⟩ := hv1
-    obtain ⟨S₂, hS₂, hS2v⟩ := hv2
-    obtain ⟨Ã₁, hÃ₁sub, hÃ₁eq⟩ := Finset.subset_image_iff.mp hS₁
-    obtain ⟨Ã₂, hÃ₂sub, hÃ₂eq⟩ := Finset.subset_image_iff.mp hS₂
-    have hsum1 : ∑ x ∈ Ã₁, (x - a₀) = v := by
-      have h := hS1v
-      rw [← hÃ₁eq, Finset.sum_image
-        (fun x _ y _ hh ↦ sub_left_injective hh)] at h
-      simpa [id_eq] using h
-    have hsum2 : ∑ y ∈ Ã₂, (a₀ - y) = v := by
-      have h := hS2v
-      rw [← hÃ₂eq, Finset.sum_image
-        (fun x _ y _ hh ↦ sub_right_injective hh)] at h
-      simpa [id_eq] using h
-    have hnonempty : Ã₁.Nonempty ∨ Ã₂.Nonempty := by
-      by_cases h1 : Ã₁.Nonempty
-      · exact Or.inl h1
-      · right
-        by_cases h2 : Ã₂.Nonempty
-        · exact h2
-        · exfalso
-          rw [Finset.not_nonempty_iff_eq_empty] at h1 h2
-          subst h1
-          subst h2
-          simp at hsum1
-          exact hv0 hsum1.symm
-    have hNA' : NonAveraging W.imageAh :=
-      GAP.nonAveraging_ptCoeffImage _ (NonAveraging.mono W.hAh hNA)
-    exact NonAveraging.not_subsetSum_shift_eq hNA' ha₀
-      (hÃ₁sub.trans hB₁e) (hÃ₂sub.trans hB₂e) (hdisj.mono hÃ₁sub hÃ₂sub)
-      hnonempty (hsum1.trans hsum2.symm)
-  -- === The Lemmas 11–14 core ===
-  -- It remains to produce a nonzero `v ∈ Σ(B₁ − a₀) ∩ Σ(a₀ − B₂)`.
-  -- Irreducibility supplies d-dimensional witnesses `W₁, W₂` for
-  -- `B₁ − a₀` and `a₀ − B₂` with `|Pᵢ| ≥ γ|P|`; the balanced combination
-  -- `T = Σ w_x·(x − a₀) = Σ w_x·(a₀ − x)` lies in both zonotopes; the
-  -- covering lemma (Lemma 14) puts a fat box around `T` inside both
-  -- subset-sum sets modulo the GAP lattices `⟨Pᵢ⟩`, and the covolume
-  -- bound (Lemmas 11–12) forces `⟨P₁⟩ ∩ ⟨P₂⟩` to meet that box off 0.
-  sorry
 
 /-- **First step of Theorem 4** (paper §3.3).  If `A₀ ⊆ ℝ^d` fails to be in
 `μ`-convex position, there is a point `a ∈ A₀` such that every closed
@@ -1654,5 +1466,201 @@ theorem SubSumWitness.not_inConvexPosition_imageAh_split {d : ℕ} {c : ℝ}
       rw [← hfsub x]
     rw [e1, e2]
     exact hvec
+
+/-- **Theorem 4** (contrapositive form used in §4).  There is a threshold
+`N` such that whenever `A ⊆ B ⊆ ℤ^ℓ` is non-averaging, `|B| ≤ |A|^β`,
+`(δ,γ)`-irreducible via its canonical witness `W` (so `d = d(A)` and
+`P = P(A)`), `γ ≥ (log|A|)^{−1/C'}` and `|A| ≥ N`, the embedded image
+`ϕ_P(Â)` (viewed in `ℝ^d`) is in `μ`-convex position — otherwise Lemmas
+11–14 produce `a ∈ A` and disjoint nonempty `Ã₁, Ã₂ ⊆ A ∖ {a}` with
+`Σ(Ã₁ − a) = Σ(a − Ã₂)`, contradicting `NonAveraging.subsetSum_eq_zero`.
+Here `C` plays the role of the paper's sufficiently large constants with
+`γ ≤ δ^C` and `δ ≤ μ^C`. -/
+theorem embedded_in_mu_convex_position {ℓ : ℕ} {β c c' δ γ μ C C' : ℝ}
+    (hδ : 0 < δ) (hδ1 : δ < 1) (hγ : 0 < γ) (hγ1 : γ < 1)
+    (hμ : 0 < μ) (hμ1 : μ < 1)
+    (hγδ : γ ≤ δ ^ C) (hδμ : δ ≤ μ ^ C) :
+    ∃ N : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (B : GAP.Box ℓ) (d : ℕ)
+        (W : SubSumWitness A c d),
+      B.IsInterval →
+      NonAveraging A → A ⊆ B.toFinset → (B.card : ℝ) ≤ (A.card : ℝ) ^ β →
+      Irreducible W c' δ γ →
+      (Real.log (A.card : ℝ)) ^ (-(1 : ℝ) / C') ≤ γ →
+      N ≤ A.card →
+      InDeltaConvexPosition
+        (W.imageAh.image fun x i ↦ (x i : ℝ)) μ := by
+  classical
+  -- The threshold `N` is chosen so that `|A| ≥ N` forces `|A| ≥ 3` and
+  -- `log |A| ≥ max (2/c) (1/(c(1−δ)))`, hence `|Â| ≥ |A|/2` and
+  -- `|Â| ≥ δ|A|` (from `W.hAhcard`).
+  refine ⟨⌈Real.exp (max (max (2 / c) (1 / (c * (1 - δ)))) 1)⌉₊ + 3, ?_⟩
+  intro A B d W hBint hNA hAB hBcard hIrred hγlog hN
+  have hc : 0 < c := W.cpos
+  have hN3 : 3 ≤ A.card := (Nat.le_add_left 3 _).trans hN
+  have hA3 : (3 : ℝ) ≤ (A.card : ℝ) := by exact_mod_cast hN3
+  have hApos : (0 : ℝ) < (A.card : ℝ) := by linarith
+  have hexp : Real.exp (max (max (2 / c) (1 / (c * (1 - δ)))) 1)
+      ≤ (A.card : ℝ) :=
+    (Nat.le_ceil _).trans
+      (by exact_mod_cast (Nat.le_add_right _ _).trans hN)
+  have hlogM : max (max (2 / c) (1 / (c * (1 - δ)))) 1
+      ≤ Real.log (A.card : ℝ) :=
+    (Real.le_log_iff_exp_le hApos).mpr hexp
+  have hlog1 : (1 : ℝ) ≤ Real.log (A.card : ℝ) :=
+    (le_max_right _ _).trans hlogM
+  have hlogpos : (0 : ℝ) < Real.log (A.card : ℝ) := by linarith
+  have hclog2 : (2 : ℝ) ≤ c * Real.log (A.card : ℝ) := by
+    have h := (le_max_left _ _).trans ((le_max_left _ _).trans hlogM)
+    rwa [div_le_iff₀ hc, mul_comm] at h
+  have hclogd : (1 : ℝ) ≤ (c * (1 - δ)) * Real.log (A.card : ℝ) := by
+    have h := (le_max_right _ _).trans ((le_max_left _ _).trans hlogM)
+    have hcd : (0 : ℝ) < c * (1 - δ) := mul_pos hc (by linarith)
+    rwa [div_le_iff₀ hcd, mul_comm] at h
+  have hcl : (0 : ℝ) < c * Real.log (A.card : ℝ) := mul_pos hc hlogpos
+  -- `c⁻¹·|A|/log|A| ≤ min(1−δ, 1/2)·|A|`, so `|Â| ≥ δ|A|` and `|Â| ≥ 2`.
+  have hkey : c⁻¹ * (A.card : ℝ) / Real.log (A.card : ℝ)
+      = (A.card : ℝ) * (c * Real.log (A.card : ℝ))⁻¹ := by
+    rw [mul_inv, div_eq_mul_inv]
+    ring
+  have hfracd : c⁻¹ * (A.card : ℝ) / Real.log (A.card : ℝ)
+      ≤ (1 - δ) * (A.card : ℝ) := by
+    have h1d : (0 : ℝ) < 1 - δ := by linarith
+    have hinv : (c * Real.log (A.card : ℝ))⁻¹ ≤ 1 - δ := by
+      rw [inv_le_iff_one_le_mul₀ hcl]
+      calc (1 : ℝ) ≤ (c * (1 - δ)) * Real.log (A.card : ℝ) := hclogd
+        _ = (1 - δ) * (c * Real.log (A.card : ℝ)) := by ring
+    rw [hkey]
+    calc (A.card : ℝ) * (c * Real.log (A.card : ℝ))⁻¹
+        ≤ (A.card : ℝ) * (1 - δ) :=
+          mul_le_mul_of_nonneg_left hinv hApos.le
+      _ = (1 - δ) * (A.card : ℝ) := by ring
+  have hfrach : c⁻¹ * (A.card : ℝ) / Real.log (A.card : ℝ)
+      ≤ (A.card : ℝ) / 2 := by
+    have hinv : (c * Real.log (A.card : ℝ))⁻¹ ≤ (2 : ℝ)⁻¹ :=
+      inv_anti₀ (by norm_num : (0 : ℝ) < 2) hclog2
+    rw [hkey]
+    calc (A.card : ℝ) * (c * Real.log (A.card : ℝ))⁻¹
+        ≤ (A.card : ℝ) * (2 : ℝ)⁻¹ :=
+          mul_le_mul_of_nonneg_left hinv hApos.le
+      _ = (A.card : ℝ) / 2 := by rw [div_eq_mul_inv]
+  have hAhδ : δ * (A.card : ℝ) ≤ (W.imageAh.card : ℝ) := by
+    rw [W.card_imageAh]
+    have := W.hAhcard
+    linarith [hfracd]
+  have hAhh : (A.card : ℝ) / 2 ≤ (W.Ah.card : ℝ) := by
+    have := W.hAhcard
+    linarith [hfrach]
+  -- `P` is proper (from `kP` proper), `P.toFinset` is nonempty, and the
+  -- zero coefficient vector is available, so `0 ∈ ϕ_P(P)`.
+  have hproper : W.P.Proper :=
+    (GAP.proper_smul_iff (by exact_mod_cast W.kpos.ne')).mp W.hproper
+  have h0mem : (0 : Fin d → ℤ) ∈ W.imageP := by
+    have hne : W.P.toFinset.Nonempty :=
+      ⟨0, W.hsub (Finset.mem_union_right _ (Finset.mem_singleton_self 0))⟩
+    have hw : ∀ i, 0 < W.P.width i := by
+      obtain ⟨p, hp⟩ := hne
+      obtain ⟨n, hn, -⟩ := Finset.mem_image.mp hp
+      obtain ⟨m, -, hm⟩ := Finset.mem_image.mp hn
+      intro i
+      have := (m i).isLt
+      omega
+    have h0c : (fun _ ↦ (0 : ℕ)) ∈ W.P.coeffs := by
+      unfold GAP.coeffs
+      apply Finset.mem_image.mpr
+      refine ⟨fun i ↦ ⟨0, hw i⟩, Finset.mem_univ _, ?_⟩
+      funext i
+      rfl
+    have hbase : W.P.base ∈ W.P.toFinset := by
+      apply Finset.mem_image.mpr
+      exact ⟨fun _ ↦ (0 : ℕ), h0c, by simp [GAP.eval]⟩
+    have hptc : W.P.ptCoeff W.P.base hbase = fun _ ↦ (0 : ℕ) := by
+      have heval : W.P.eval (W.P.ptCoeff W.P.base hbase)
+          = W.P.eval (fun _ ↦ (0 : ℕ)) := by
+        rw [GAP.eval_ptCoeff]
+        simp [GAP.eval]
+      exact hproper (W.P.ptCoeff_mem _ _) h0c heval
+    unfold SubSumWitness.imageP GAP.ptCoeffImage
+    apply Finset.mem_image.mpr
+    refine ⟨⟨W.P.base, hbase⟩, Finset.mem_attach _ _, ?_⟩
+    funext i
+    show ((W.P.ptCoeff W.P.base hbase) i : ℤ) = 0
+    rw [hptc]
+    rfl
+  -- Degenerate regimes are vacuous:
+  -- * `C' ≤ 0` makes `γ ≥ (log|A|)^{−1/C'} ≥ 1`, contradicting `γ < 1`;
+  -- * `d = 0` forces `|Â| ≤ 1`, contradicting `|Â| ≥ |A|/2 ≥ 3/2`;
+  -- * `c' ≤ 0` contradicts `W'.cpos` for the witness of `imageAh − 0`.
+  by_cases hC' : C' ≤ 0
+  · exfalso
+    have hexp' : (0 : ℝ) ≤ -(1 : ℝ) / C' := by
+      by_cases h0 : C' = 0
+      · simp [h0]
+      · rw [div_nonneg_iff]
+        exact Or.inr ⟨by norm_num, le_of_lt (lt_of_le_of_ne hC' h0)⟩
+    have : (1 : ℝ) ≤ (Real.log (A.card : ℝ)) ^ (-(1 : ℝ) / C') :=
+      Real.one_le_rpow hlog1 hexp'
+    linarith [hγlog]
+  by_cases hd : d = 0
+  · subst hd
+    exfalso
+    have hAh1 : (W.Ah.card : ℝ) ≤ 1 := by
+      exact_mod_cast W.card_Ah_le_one
+    linarith [hAhh]
+  by_cases hc' : c' ≤ 0
+  · exfalso
+    obtain ⟨⟨W0⟩, -, -⟩ := hIrred.2 W.imageAh 0 (Subset.refl _) hAhδ h0mem
+    linarith [W0.cpos]
+  push_neg at hC' hc' hd
+  -- The main case (`d ≥ 1`, `0 < c'`, `0 < C'`): assume the embedded image
+  -- is not in `μ`-convex position and derive the contradiction of
+  -- `NonAveraging.not_subsetSum_shift_eq` from a nonzero common subset sum.
+  by_contra hconv
+  obtain ⟨a₀, ha₀, B₁, B₂, hB₁e, hB₂e, hdisj, hcover, hw₁, hw₂, w, hw0,
+    hwb, hws, hvec⟩ := W.not_inConvexPosition_imageAh_split hμ hconv
+  suffices hsuff : ∃ v : Fin d → ℤ, v ≠ 0 ∧
+      v ∈ GAP.subsetSumsL (B₁.image (· - a₀)) ∧
+      v ∈ GAP.subsetSumsL (B₂.image (a₀ - ·)) by
+    obtain ⟨v, hv0, hv1, hv2⟩ := hsuff
+    rw [GAP.mem_subsetSumsL] at hv1 hv2
+    obtain ⟨S₁, hS₁, hS1v⟩ := hv1
+    obtain ⟨S₂, hS₂, hS2v⟩ := hv2
+    obtain ⟨Ã₁, hÃ₁sub, hÃ₁eq⟩ := Finset.subset_image_iff.mp hS₁
+    obtain ⟨Ã₂, hÃ₂sub, hÃ₂eq⟩ := Finset.subset_image_iff.mp hS₂
+    have hsum1 : ∑ x ∈ Ã₁, (x - a₀) = v := by
+      have h := hS1v
+      rw [← hÃ₁eq, Finset.sum_image
+        (fun x _ y _ hh ↦ sub_left_injective hh)] at h
+      simpa [id_eq] using h
+    have hsum2 : ∑ y ∈ Ã₂, (a₀ - y) = v := by
+      have h := hS2v
+      rw [← hÃ₂eq, Finset.sum_image
+        (fun x _ y _ hh ↦ sub_right_injective hh)] at h
+      simpa [id_eq] using h
+    have hnonempty : Ã₁.Nonempty ∨ Ã₂.Nonempty := by
+      by_cases h1 : Ã₁.Nonempty
+      · exact Or.inl h1
+      · right
+        by_cases h2 : Ã₂.Nonempty
+        · exact h2
+        · exfalso
+          rw [Finset.not_nonempty_iff_eq_empty] at h1 h2
+          subst h1
+          subst h2
+          simp at hsum1
+          exact hv0 hsum1.symm
+    have hNA' : NonAveraging W.imageAh :=
+      GAP.nonAveraging_ptCoeffImage W.P W.hAhP (NonAveraging.mono W.hAh hNA)
+    exact NonAveraging.not_subsetSum_shift_eq hNA' ha₀
+      (hÃ₁sub.trans hB₁e) (hÃ₂sub.trans hB₂e) (hdisj.mono hÃ₁sub hÃ₂sub)
+      hnonempty (hsum1.trans hsum2.symm)
+  -- === The Lemmas 11–14 core ===
+  -- It remains to produce a nonzero `v ∈ Σ(B₁ − a₀) ∩ Σ(a₀ − B₂)`.
+  -- Irreducibility supplies d-dimensional witnesses `W₁, W₂` for
+  -- `B₁ − a₀` and `a₀ − B₂` with `|Pᵢ| ≥ γ|P|`; the balanced combination
+  -- `T = Σ w_x·(x − a₀) = Σ w_x·(a₀ − x)` lies in both zonotopes; the
+  -- covering lemma (Lemma 14) puts a fat box around `T` inside both
+  -- subset-sum sets modulo the GAP lattices `⟨Pᵢ⟩`, and the covolume
+  -- bound (Lemmas 11–12) forces `⟨P₁⟩ ∩ ⟨P₂⟩` to meet that box off 0.
+  sorry
 
 end Nonaveraging

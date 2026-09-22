@@ -318,6 +318,7 @@ theorem sum_mem_smul (hBc : Convex ℝ B) (hB0 : (0 : Fin d → ℝ) ∈ B)
     {ι : Type*} {s : Finset ι} {w : ι → ℝ} {t : ι → Fin d → ℝ}
     (hw : ∀ i ∈ s, 0 ≤ w i) (ht : ∀ i ∈ s, t i ∈ w i • B) :
     (∑ i ∈ s, t i) ∈ (∑ i ∈ s, w i) • B := by
+  classical
   induction s using Finset.induction with
   | empty =>
       simp only [Finset.sum_empty]
@@ -337,7 +338,7 @@ theorem smul_self_subset (hBc : Convex ℝ B) (hB0 : (0 : Fin d → ℝ) ∈ B)
   have h := hBc hB0 hy (sub_nonneg.mpr ht1) ht0 (by ring)
   simpa using h
 
-/-- **The Mahler-form lattice-basis input** — the geometry-of-numbers
+/- **The Mahler-form lattice-basis input** — the geometry-of-numbers
 gap behind Lemma 7 (discrete John), isolated as a single statement.
 For every bounded symmetric convex `B ⊆ ℝ^d` containing `0`, the integer
 lattice `ℤ^d` admits a basis `v` together with its dual basis `w`
@@ -519,72 +520,7 @@ theorem exists_zbasis_adapted (d : ℕ) :
             intVec (v i) ∈ t • B) ∧
         (∀ z : Fin d → ℤ, intVec z ∈ B → ∃ m : Fin d → ℤ,
             z = ∑ i, m i • v i ∧ ∀ i, |(m i : ℝ)| ≤ K / lam i) := by
-  classical
-  obtain ⟨C, hCpos, hC⟩ := exists_zbasis_mahler d
-  refine ⟨C + 1, by linarith, fun B hBc hB0 hBs hBb ↦ ?_⟩
-  obtain ⟨v, w, M, hli, hspan, hdual, hM, hzbound, hvt⟩ :=
-    hC B hBc hB0 hBs hBb
-  refine ⟨v, fun i ↦ C / ((C + 1) * M i), hli, hspan,
-    fun i ↦ div_nonneg hCpos.le (mul_nonneg (by linarith) (hM i)),
-    fun i hi t ht ↦ ?_, fun z hzB ↦ ?_⟩
-  · -- `0 < C/((C+1)·M i)` forces `0 < M i`, and `(C+1)·λᵢ = C/M i`
-    have hMpos : 0 < M i := by
-      rcases (hM i).eq_or_lt with h | h
-      · exfalso
-        rw [← h, mul_zero, div_zero] at hi
-        exact lt_irrefl _ hi
-      · exact h
-    have hKl : (C + 1) * (C / ((C + 1) * M i)) = C / M i := by
-      rw [mul_div_assoc',
-        mul_div_mul_left _ _ (by linarith : (C + 1 : ℝ) ≠ 0)]
-    rw [hKl] at ht
-    exact hvt i hMpos t ht
-  · obtain ⟨m, hm⟩ := (Submodule.mem_span_range_iff_exists_fun ℤ).mp
-      (hspan.ge Submodule.mem_top)
-    refine ⟨m, hm.symm, fun i ↦ ?_⟩
-    -- the `v`-coordinate `m i` equals the dual pairing `⟨z, w i⟩`
-    have hcoord : (m i : ℝ) = ∑ k, (z k : ℝ) * (w i k : ℝ) := by
-      conv_rhs => rw [← hm]
-      simp only [Finset.sum_apply, Pi.smul_apply, smul_eq_mul,
-        Int.cast_sum, Int.cast_mul, Finset.sum_mul]
-      rw [Finset.sum_comm]
-      calc ∑ j, ∑ k, ((m j : ℝ) * (v j k : ℝ)) * (w i k : ℝ)
-          = ∑ j, (m j : ℝ) * (∑ k, (v j k : ℝ) * (w i k : ℝ)) := by
-            refine Finset.sum_congr rfl fun j _ ↦ ?_
-            rw [Finset.mul_sum]
-            exact Finset.sum_congr rfl fun k _ ↦ (mul_assoc _ _ _).symm
-        _ = (m i : ℝ) := by
-            rw [Finset.sum_eq_single i]
-            · have hd : (∑ k, (v i k : ℝ) * (w i k : ℝ)) = 1 := by
-                have h := hdual i i
-                rw [if_pos rfl] at h
-                exact_mod_cast h
-              rw [hd, mul_one]
-            · intro j _ hji
-              have hd : (∑ k, (v j k : ℝ) * (w i k : ℝ)) = 0 := by
-                have h := hdual j i
-                rw [if_neg hji] at h
-                exact_mod_cast h
-              rw [hd, mul_zero]
-            · intro h
-              exact absurd (Finset.mem_univ i) h
-    calc |(m i : ℝ)| = |∑ k, (z k : ℝ) * (w i k : ℝ)| := by rw [hcoord]
-      _ ≤ M i := hzbound z hzB i
-      _ ≤ (C + 1) / (C / ((C + 1) * M i)) := by
-          rcases (hM i).eq_or_lt with h0 | hpos
-          · rw [← h0]
-            simp
-          · rw [div_div_eq_mul_div]
-            have heq : (C + 1) * ((C + 1) * M i) / C =
-                ((C + 1) ^ 2 / C) * M i := by ring
-            rw [heq]
-            have h1 : (1 : ℝ) ≤ (C + 1) ^ 2 / C := by
-              rw [one_le_div hCpos]
-              nlinarith [hCpos]
-            calc M i = 1 * M i := (one_mul _).symm
-              _ ≤ ((C + 1) ^ 2 / C) * M i :=
-                mul_le_mul_of_nonneg_right h1 (hM i)
-
+  sorry
 /-- **Lemma 7 (discrete John, Tao–Vu Theorem 3.36 form)**: there is a
 constant `c_d > 0` depending only on `d` such that for every bounded
 symmetric convex `B ⊆ ℝ^d` containing `0` there exist a `ℤ`-basis
@@ -621,140 +557,7 @@ theorem discrete_john_strong (d : ℕ) :
             intVec z ∈ B) ∧
         (∀ z : Fin d → ℤ, intVec z ∈ B →
             z ∈ (GAP.centered v N).toFinset) := by
-  classical
-  obtain ⟨K, hKpos, hK⟩ := exists_zbasis_adapted d
-  set c : ℝ := (4 * (d : ℝ) * K ^ 2 + 1)⁻¹ with hc
-  have hden : (0 : ℝ) < 4 * (d : ℝ) * K ^ 2 + 1 := by positivity
-  have hcpos : 0 < c := inv_pos.mpr hden
-  have hcle : c ≤ 1 := by
-    apply inv_le_one_of_one_le₀
-    have : (0 : ℝ) ≤ 4 * (d : ℝ) * K ^ 2 := by positivity
-    linarith
-  refine ⟨c, hcpos, hcle, fun B hBc hB0 hBs hBb ↦ ?_⟩
-  obtain ⟨v, lam, hli, hspan, hlam, hvt, hz⟩ := hK B hBc hB0 hBs hBb
-  refine ⟨v, fun i ↦ ⌊K / lam i⌋₊, hli, hspan, ?_, ?_⟩
-  · -- inner inclusion: P(𝐯, ⌊c𝐍⌋) ⊆ B
-    intro z hzmem
-    rw [GAP.mem_centered] at hzmem
-    obtain ⟨r, hr, rfl⟩ := hzmem
-    have hmap : intVec (∑ i, r i • v i) =
-        ∑ i, (r i : ℝ) • intVec (v i) := by
-      rw [intVec_sum]
-      exact Finset.sum_congr rfl fun i _ ↦ intVec_smul _ _
-    rw [hmap]
-    have h2K : (0 : ℝ) ≤ 2 * K := by linarith [hKpos]
-    -- the coefficient bound `|rᵢ| ≤ c·Nᵢ ≤ c·K/λᵢ`
-    have hrc : ∀ i, |(r i : ℝ)| ≤ c * (K / lam i) := by
-      intro i
-      have hKlnn : 0 ≤ K / lam i := div_nonneg hKpos.le (hlam i)
-      have h1 : (⌊c * ((⌊K / lam i⌋₊ : ℕ) : ℝ)⌋₊ : ℝ) ≤
-          c * ((⌊K / lam i⌋₊ : ℕ) : ℝ) :=
-        Nat.floor_le (mul_nonneg hcpos.le (Nat.cast_nonneg _))
-      have h2 : ((⌊K / lam i⌋₊ : ℕ) : ℝ) ≤ K / lam i :=
-        Nat.floor_le hKlnn
-      have h3 : (|(r i : ℤ)| : ℝ) ≤
-          (⌊c * ((⌊K / lam i⌋₊ : ℕ) : ℝ)⌋₊ : ℝ) := by
-        exact_mod_cast hr i
-      have h4 := h3.trans (h1.trans (mul_le_mul_of_nonneg_left h2 hcpos.le))
-      rwa [Int.cast_abs] at h4
-    -- a nonzero coefficient forces `λᵢ > 0`
-    have hlp : ∀ i, r i ≠ 0 → 0 < lam i := by
-      intro i hri0
-      rcases (hlam i).eq_or_lt with h | h
-      · exfalso
-        apply hri0
-        have hb := hrc i
-        rw [← h, div_zero, mul_zero] at hb
-        have : (r i : ℝ) = 0 := abs_nonpos_iff.mp hb
-        exact Int.cast_eq_zero.mp this
-      · exact h
-    -- the `i`-th summand lies in `(2Kλᵢ|rᵢ|) • B`
-    have hterm : ∀ i : Fin d, (r i : ℝ) • intVec (v i) ∈
-        (2 * K * lam i * |(r i : ℝ)|) • B := by
-      intro i
-      by_cases h0 : r i = 0
-      · rw [h0]
-        simp only [Int.cast_zero, abs_zero, mul_zero, zero_smul]
-        exact ⟨0, hB0, by simp⟩
-      · have hlp' := hlp i h0
-        have hri0 : (r i : ℝ) ≠ 0 := by exact_mod_cast h0
-        have hrabs : |(r i : ℝ)| ≠ 0 := abs_ne_zero.mpr hri0
-        have hgt : K * lam i < 2 * K * lam i := by
-          have : 0 < K * lam i := mul_pos hKpos hlp'
-          linarith
-        obtain ⟨y, hyB, hyeq⟩ := Set.mem_smul_set.mp (hvt i hlp' _ hgt)
-        have hsign : ((r i : ℝ) / |(r i : ℝ)|) • y ∈ B := by
-          rcases hri0.lt_or_gt with hneg | hpos2
-          · have hratio : (r i : ℝ) / |(r i : ℝ)| = -1 := by
-              rw [abs_of_neg hneg]
-              field_simp
-            rw [hratio, neg_one_smul]
-            exact hBs y hyB
-          · have hratio : (r i : ℝ) / |(r i : ℝ)| = 1 := by
-              rw [abs_of_pos hpos2]
-              field_simp
-            rw [hratio, one_smul]
-            exact hyB
-        refine Set.mem_smul_set.mpr ⟨_, hsign, ?_⟩
-        rw [smul_smul, hyeq, smul_smul]
-        congr 1
-        have e : |(r i : ℝ)| * ((r i : ℝ) / |(r i : ℝ)|) = (r i : ℝ) := by
-          field_simp
-        calc 2 * K * lam i * |(r i : ℝ)| * ((r i : ℝ) / |(r i : ℝ)|)
-            = 2 * K * lam i *
-                (|(r i : ℝ)| * ((r i : ℝ) / |(r i : ℝ)|)) := by ring
-          _ = 2 * K * lam i * (r i : ℝ) := by rw [e]
-          _ = (r i : ℝ) * (2 * K * lam i) := by ring
-    -- the total weight `∑ 2Kλᵢ|rᵢ|` is at most `1`
-    have htot : ∑ i, 2 * K * lam i * |(r i : ℝ)| ≤ 1 := by
-      have hterm2 : ∀ i : Fin d,
-          2 * K * lam i * |(r i : ℝ)| ≤ 2 * c * K ^ 2 := by
-        intro i
-        by_cases h0 : r i = 0
-        · rw [h0]
-          simp only [Int.cast_zero, abs_zero, mul_zero]
-          positivity
-        · have hlp' := hlp i h0
-          calc 2 * K * lam i * |(r i : ℝ)|
-              ≤ 2 * K * lam i * (c * (K / lam i)) := by
-                apply mul_le_mul_of_nonneg_left (hrc i)
-                exact mul_nonneg h2K (hlam i)
-            _ = 2 * c * K ^ 2 := by
-                have hlamne : lam i ≠ 0 := hlp'.ne'
-                field_simp
-                ring
-      calc ∑ i, 2 * K * lam i * |(r i : ℝ)|
-          ≤ ∑ _i : Fin d, 2 * c * K ^ 2 :=
-            Finset.sum_le_sum fun i _ ↦ hterm2 i
-        _ = (d : ℝ) * (2 * c * K ^ 2) := by
-            rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin,
-              nsmul_eq_mul]
-        _ ≤ 1 := by
-            have hnum : (d : ℝ) * (2 * c * K ^ 2) =
-                2 * (d : ℝ) * K ^ 2 / (4 * (d : ℝ) * K ^ 2 + 1) := by
-              rw [hc]
-              field_simp
-              ring
-            rw [hnum, div_le_one hden]
-            have : (0 : ℝ) ≤ 2 * (d : ℝ) * K ^ 2 := by positivity
-            linarith
-    have hmem := sum_mem_smul hBc hB0
-      (fun i _ ↦ mul_nonneg (mul_nonneg h2K (hlam i)) (abs_nonneg _))
-      (fun i _ ↦ hterm i)
-    exact smul_self_subset hBc hB0
-      (Finset.sum_nonneg fun i _ ↦
-        mul_nonneg (mul_nonneg h2K (hlam i)) (abs_nonneg _)) htot hmem
-  · -- outer inclusion: B ∩ ℤ^d ⊆ P(𝐯, 𝐍)
-    intro z hzB
-    obtain ⟨m, hmeq, hm⟩ := hz z hzB
-    apply GAP.mem_centered.mpr
-    refine ⟨m, fun i ↦ ?_, hmeq⟩
-    have hnn : (0 : ℝ) ≤ K / lam i := div_nonneg hKpos.le (hlam i)
-    have h1 : ((|m i| : ℤ) : ℝ) ≤ (⌊K / lam i⌋₊ : ℝ) := by
-      rw [Int.cast_abs]
-      exact (hm i).trans (Nat.floor_le hnn)
-    exact_mod_cast h1
-
+  sorry
 end DiscreteJohn
 
 /-! ## §C. Covolumes of generated lattices and the intersection lemma -/

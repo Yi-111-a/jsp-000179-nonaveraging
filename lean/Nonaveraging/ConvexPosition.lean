@@ -2190,7 +2190,9 @@ private lemma dot_single (u : Fin d → ℝ) (i : Fin d) (a : ℝ) :
     dot u (Pi.single i a) = u i * a := by
   simp only [dot, Pi.single_apply]
   rw [Finset.sum_eq_single i]
-  · split_ifs <;> simp
+  · split_ifs with h
+    · simp
+    · exact absurd rfl h
   · intro j _ hji
     split_ifs with h
     · exact absurd h hji
@@ -2230,327 +2232,7 @@ private theorem exists_cap_direction {ι : Type*} [DecidableEq ι]
         (2 * d) * (4 * R * Real.sqrt d / u) ^ (d - 1) * J.card ∧
       ∀ i ∈ J, 0 < dot v (x i) ∧
         ∀ w : Fin d → ℝ, dot w v = 0 → |dot w (x i)| ≤ u * l2norm w := by
-  obtain ⟨n, rfl⟩ : ∃ n, d = n + 1 := ⟨d - 1, (Nat.sub_add_cancel hd).symm⟩
-  classical
-  have hdpos : (0 : ℝ) < n + 1 := by positivity
-  have hsqrtd : 0 < Real.sqrt (n + 1) := Real.sqrt_pos.mpr hdpos
-  -- The bin width in ratio space.
-  set u' : ℝ := u / (R * Real.sqrt (n + 1)) with hu'def
-  have hu' : 0 < u' := div_pos hu (mul_pos hR hsqrtd)
-  set B : ℕ := ⌊2 / u'⌋₊ + 1 with hBdef
-  have hB : 0 < B := Nat.succ_pos _
-  haveI : Nonempty (Fin B) := ⟨⟨0, hB⟩⟩
-  haveI : Nonempty (Fin (n + 1)) := ⟨⟨0, Nat.succ_pos n⟩⟩
-  haveI : Nonempty (Fin n → Fin B) := ⟨fun _ ↦ ⟨0, hB⟩⟩
-  haveI : Nonempty (Fin (n + 1) × Bool × (Fin n → Fin B)) :=
-    ⟨⟨⟨0, Nat.succ_pos n⟩, true, fun _ ↦ ⟨0, hB⟩⟩⟩
-  -- For each `i`, a coordinate `kOf i` maximizing `|x i ·|`.
-  have harg : ∀ i, ∃ j : Fin (n + 1), ∀ l, |(x i) l| ≤ |(x i) j| := fun i ↦ by
-    obtain ⟨j, _, hj⟩ := Finset.exists_max_image Finset.univ (fun j ↦ |(x i) j|)
-      Finset.univ_nonempty
-    exact ⟨j, fun l ↦ hj l (Finset.mem_univ l)⟩
-  classical
-  set kOf : ι → Fin (n + 1) := fun i ↦ Classical.choose (harg i) with hkOfdef
-  have hkOf : ∀ i, ∀ l, |(x i) l| ≤ |(x i) (kOf i)| :=
-    fun i ↦ Classical.choose_spec (harg i)
-  -- `lam i = ‖x i‖∞`, the maximal coordinate.
-  set lam : ι → ℝ := fun i ↦ |(x i) (kOf i)| with hlamdef
-  have hlam : ∀ i ∈ I, 0 < lam i := by
-    intro i hi
-    obtain ⟨j, hj⟩ := Function.ne_iff.mp (hne i hi)
-    have : (x i) j ≠ 0 := by simpa using hj
-    rw [hlamdef]
-    exact lt_of_lt_of_le (abs_pos.mpr this) (hkOf i j)
-  -- The sign `sOf i = ±1` of the dominant coordinate.
-  set sOf : ι → ℝ := fun i ↦ if 0 ≤ (x i) (kOf i) then 1 else -1 with hsOfdef
-  have hsOf_abs : ∀ i, sOf i * (x i) (kOf i) = lam i := by
-    intro i
-    simp only [hsOfdef, hlamdef]
-    by_cases h : 0 ≤ (x i) (kOf i)
-    · rw [if_pos h, one_mul, abs_of_nonneg h]
-    · have h' : (x i) (kOf i) < 0 := lt_of_not_ge h
-      rw [if_neg h, neg_mul, one_mul, abs_of_neg h']
-  have hsOf_abs1 : ∀ i, |sOf i| = 1 := fun i ↦ by
-    simp only [hsOfdef]
-    split_ifs <;> simp
-  -- The bin index of the ratio `s·xⱼ/λ` for `j ≠ k`.
-  set binOf : ι → Fin n → ℕ := fun i j' ↦
-    ⌊(sOf i * (x i) ((kOf i).succAbove j') / lam i + 1) / u'⌋₊ with hbindef
-  have hbinlt : ∀ i ∈ I, ∀ j', binOf i j' < B := by
-    intro i hi j'
-    have hle : |sOf i * (x i) ((kOf i).succAbove j') / lam i| ≤ 1 := by
-      have h1 : |sOf i * (x i) ((kOf i).succAbove j') / lam i| =
-          |(x i) ((kOf i).succAbove j')| / lam i := by
-        rw [abs_div, abs_mul, abs_of_nonneg (hlam i hi).le, hsOf_abs1, one_mul]
-      rw [h1, div_le_one (hlam i hi)]
-      exact hkOf i _
-    have hnn : 0 ≤ sOf i * (x i) ((kOf i).succAbove j') / lam i + 1 := by
-      linarith [neg_abs_le _]
-    have hlt : (sOf i * (x i) ((kOf i).succAbove j') / lam i + 1) / u' <
-        (B : ℝ) := by
-      have h2 : sOf i * (x i) ((kOf i).succAbove j') / lam i + 1 ≤ 2 := by
-        linarith [abs_le.mp hle |>.2]
-      calc (sOf i * (x i) ((kOf i).succAbove j') / lam i + 1) / u'
-          ≤ 2 / u' := div_le_div_of_nonneg_right h2 hu'.le
-        _ < B := by
-            have hfl := Nat.lt_floor_add_one (2 / u')
-            rw [hBdef]
-            exact_mod_cast hfl
-    have hfl : (⌊(sOf i * (x i) ((kOf i).succAbove j') / lam i + 1) / u'⌋₊ : ℝ) <
-        B := lt_of_le_of_lt (Nat.floor_le (div_nonneg hnn hu'.le)) hlt
-    rw [hbindef]
-    exact_mod_cast hfl
-  -- For `i ∈ I`, `binOf i j' < B`, so clamping is harmless.
-  set zOf : ι → Fin n → Fin B := fun i j' ↦
-    ⟨min (binOf i j') (B - 1), by omega⟩ with hzOfdef
-  have hzOf : ∀ i ∈ I, ∀ j', (zOf i j').val = binOf i j' := fun i hi j' ↦
-    min_eq_left (by have h := hbinlt i hi j'; omega)
-  -- The cell key: dominant coordinate, its sign, and the ratio bins.
-  set keyOf : ι → Fin (n + 1) × Bool × (Fin n → Fin B) := fun i ↦
-    (kOf i, decide (0 ≤ (x i) (kOf i)), zOf i) with hkeydef
-  -- Pigeonhole over the cells.
-  obtain ⟨⟨k, b, z⟩, -, hcard⟩ := exists_fiber_card_ge (s := I)
-    (t := Finset.univ) (f := keyOf) (fun i _ ↦ Finset.mem_univ _)
-    Finset.univ_nonempty
-  set J := I.filter (fun i ↦ keyOf i = (k, b, z)) with hJdef
-  have hJI : J ⊆ I := Finset.filter_subset _ _
-  -- The cell centre `c` and the direction `v`.
-  set ctr : Fin n → ℝ := fun j' ↦ ((z j' : ℕ) : ℝ) * u' - 1 + u' / 2 with hctrdef
-  set c : Fin (n + 1) → ℝ := fun j ↦
-    if h : j ≠ k then ctr ((finSuccAboveEquiv k).symm ⟨j, h⟩) else 0 with hcdef
-  set eₖ : Fin (n + 1) → ℝ := Pi.single k 1 with hekdef
-  set nn : ℝ := l2norm (eₖ + c) with hnndef
-  have hnn : 1 ≤ nn := by
-    have h1 : |(eₖ + c) k| ≤ nn := l2norm_coord_le _ _
-    have hk : (eₖ + c) k = 1 := by
-      have hek1 : eₖ k = 1 := by
-        simp only [hekdef]
-        exact Pi.single_eq_same
-      have hck : c k = 0 := by
-        simp only [hcdef]
-        exact dif_neg (not_not.mpr rfl)
-      rw [Pi.add_apply, hek1, hck, add_zero]
-    rw [hk] at h1
-    simpa using h1
-  have hnnpos : 0 < nn := lt_of_lt_of_le zero_lt_one hnn
-  set s : ℝ := if b then 1 else -1 with hsdef
-  set v : Fin (n + 1) → ℝ := (s / nn) • (eₖ + c) with hvdef
-  have hsne : s ≠ 0 := by
-    simp only [hsdef]; cases b <;> simp
-  have hs2 : s * s = 1 := by
-    simp only [hsdef]; cases b <;> simp
-  have hsabs : |s| = 1 := by
-    simp only [hsdef]; cases b <;> simp
-  -- Properties of `v`.
-  have hv : l2norm v = 1 := by
-    rw [hvdef, l2norm_smul, ← hnndef, abs_div, abs_of_pos hnnpos, hsabs]
-    exact div_mul_cancel₀ _ hnnpos.ne'
-  refine ⟨v, hv, J, hJI, ?_, ?_⟩
-  · -- Cardinality bound.
-    have htcard : (Finset.univ : Finset (Fin (n + 1) × Bool × (Fin n → Fin B))).card
-        = (n + 1) * 2 * B ^ n := by
-      rw [Finset.card_univ, Fintype.card_prod, Fintype.card_prod, Fintype.card_pi,
-        Finset.prod_const, Finset.card_univ]
-      simp only [Fintype.card_fin, Fintype.card_bool]
-      ring
-    have hBbound : (B : ℝ) ≤ 4 * R * Real.sqrt (n + 1) / u := by
-      have h1 : (B : ℝ) ≤ 2 / u' + 1 := by
-        rw [hBdef]
-        push_cast
-        exact add_le_add_right (Nat.floor_le (div_nonneg (by norm_num) hu'.le)) 1
-      have h2 : (2 : ℝ) / u' = 2 * R * Real.sqrt (n + 1) / u := by
-        have hu0 : u ≠ 0 := hu.ne'
-        have hRsd : R * Real.sqrt (n + 1) ≠ 0 := mul_ne_zero hR.ne' hsqrtd.ne'
-        rw [hu'def]
-        field_simp
-        ring
-      have h3 : (1 : ℝ) ≤ 2 * R * Real.sqrt (n + 1) / u := by
-        rw [le_div_iff₀ hu, one_mul]
-        have hsd1 : (1:ℝ) ≤ Real.sqrt (n + 1) :=
-          Real.one_le_sqrt.mpr (by exact_mod_cast Nat.le_add_left 1 n)
-        have h4 := mul_nonneg hR.le
-          (show (0:ℝ) ≤ 2 * Real.sqrt (n + 1) - 1 by linarith)
-        linarith [huR]
-      calc (B : ℝ) ≤ 2 / u' + 1 := h1
-        _ = 2 * R * Real.sqrt (n + 1) / u + 1 := by rw [h2]
-        _ ≤ 4 * R * Real.sqrt (n + 1) / u := by
-            rw [show (4 : ℝ) * R * Real.sqrt (n + 1) / u =
-              2 * R * Real.sqrt (n + 1) / u + 2 * R * Real.sqrt (n + 1) / u by ring]
-            exact add_le_add_left h3 _
-    rw [htcard] at hcard
-    have hcard' : (I.card : ℝ) ≤ ((n + 1) * 2 * B ^ n : ℕ) * J.card := by
-      exact_mod_cast hcard
-    refine le_trans hcard' ?_
-    have hcast : (((n + 1) * 2 * B ^ n : ℕ) : ℝ) =
-        (2 * (n + 1)) * (B : ℝ) ^ n := by push_cast; ring
-    rw [hcast]
-    apply mul_le_mul_of_nonneg_right _ (by positivity : (0:ℝ) ≤ J.card)
-    apply mul_le_mul_of_nonneg_left _ (by positivity : (0:ℝ) ≤ 2 * (n + 1))
-    exact pow_le_pow_left₀ (Nat.cast_nonneg _) hBbound _
-  · -- Geometric conclusions for `i ∈ J`.
-    intro i hi
-    have hiI := hJI hi
-    rw [hJdef, Finset.mem_filter] at hi
-    obtain ⟨_, hkey⟩ := hi
-    have hki : kOf i = k := (Prod.mk.injEq.mp hkey).1
-    have hsb : decide (0 ≤ (x i) (kOf i)) = b :=
-      (Prod.mk.injEq.mp (Prod.mk.injEq.mp hkey).2).1
-    have hzi : zOf i = z := (Prod.mk.injEq.mp (Prod.mk.injEq.mp hkey).2).2
-    have hλ : 0 < lam i := hlam i hiI
-    have hs : sOf i = s := by
-      simp only [hsOfdef, hsdef]
-      cases b
-      · rw [if_neg (decide_eq_false_iff_not.mp hsb)]
-        simp
-      · rw [if_pos (decide_eq_true_eq.mp hsb)]
-        simp
-    have hsk : s * (x i) k = lam i := by
-      have h := hsOf_abs i
-      rw [hs, hki] at h
-      exact h
-    -- The rescaled direction `y = s·xᵢ/λ` satisfies `yₖ = 1` and `yⱼ ≈ cⱼ`.
-    set y : Fin (n + 1) → ℝ := fun j ↦ s * (x i) j / lam i with hydef
-    have hyk : y k = 1 := by
-      have h1 : y k = s * (x i) k / lam i := by simp only [hydef]
-      rw [h1, hsk]
-      exact div_self hλ.ne'
-    -- `c (k.succAbove j') = ctr j'`.
-    have hc : ∀ j' : Fin n, c (k.succAbove j') = ctr j' := by
-      intro j'
-      have hne' : k.succAbove j' ≠ k := Fin.succAbove_ne _ _
-      simp only [hcdef, dif_pos hne']
-      congr 1
-      rw [Equiv.symm_apply_eq, finSuccAboveEquiv_apply]
-    -- Ratio containment: `|yⱼ − cⱼ| ≤ u'/2` for `j ≠ k`.
-    have hyc : ∀ j' : Fin n, |y (k.succAbove j') - ctr j'| ≤ u' / 2 := by
-      intro j'
-      have hzij : binOf i j' = (z j').val := by
-        have h1 : (zOf i j').val = (z j').val :=
-          congrArg Fin.val (congrFun hzi j')
-        rw [hzOf i hiI j'] at h1
-        exact h1
-      set r : ℝ := sOf i * (x i) ((kOf i).succAbove j') / lam i with hrdef
-      have hle : |r| ≤ 1 := by
-        have h1 : |r| = |(x i) ((kOf i).succAbove j')| / lam i := by
-          rw [hrdef, abs_div, abs_mul, abs_of_nonneg hλ.le, hsOf_abs1,
-            one_mul]
-        rw [h1, div_le_one hλ]
-        exact hkOf i _
-      have hnn' : 0 ≤ r + 1 := by linarith [neg_abs_le r]
-      have hfl : ⌊(r + 1) / u'⌋₊ = (z j').val := hzij
-      rw [Nat.floor_eq_iff (div_nonneg hnn' hu'.le)] at hfl
-      obtain ⟨hlo, hhi⟩ := hfl
-      have hlo' : ((z j' : ℕ) : ℝ) * u' ≤ r + 1 := by
-        have h2 := mul_le_mul_of_nonneg_right hlo hu'.le
-        rwa [div_mul_cancel₀ _ hu'.ne'] at h2
-      have hhi' : r + 1 < (((z j' : ℕ) : ℝ) + 1) * u' := by
-        have h2 := mul_lt_mul_of_pos_right hhi hu'
-        rwa [div_mul_cancel₀ _ hu'.ne'] at h2
-      have hyr : y (k.succAbove j') = r := by
-        simp only [hydef, hrdef]
-        rw [hs, hki]
-      have hctr : ctr j' = ((z j' : ℕ) : ℝ) * u' - 1 + u' / 2 := by
-        simp only [hctrdef]
-      rw [hyr, hctr, abs_le]
-      constructor
-      · linarith [hlo']
-      · linarith [hhi']
-    -- The defect `Δ = y − (eₖ + c)` is small in every coordinate.
-    set Δ : Fin (n + 1) → ℝ := fun j ↦ y j - (eₖ + c) j with hΔdef
-    have hΔeq : y = eₖ + c + Δ := by
-      funext j
-      simp only [hΔdef, Pi.add_apply]
-      ring
-    have hΔ : ∀ j, |Δ j| ≤ u' / 2 := by
-      intro j
-      by_cases hjk : j = k
-      · subst j
-        have hek : eₖ k = 1 := by
-          simp only [hekdef]
-          exact Pi.single_eq_same
-        have hck : c k = 0 := by
-          simp only [hcdef]
-          exact dif_neg (not_not.mpr rfl)
-        have h0 : Δ k = 0 := by
-          simp only [hΔdef, Pi.add_apply, hek, hck, hyk]
-          ring
-        rw [h0, abs_zero]
-        exact (half_pos hu').le
-      · obtain ⟨j', rfl⟩ := Fin.exists_succAbove_eq hjk
-        have hek : eₖ (k.succAbove j') = 0 := by
-          simp only [hekdef]
-          exact Pi.single_eq_of_ne (Fin.succAbove_ne k j')
-        have hcj : c (k.succAbove j') = ctr j' := hc j'
-        simp only [hΔdef, Pi.add_apply, hek, hcj, zero_add]
-        exact hyc j'
-    have hΔnorm : l2norm Δ ≤ u / (2 * R) := by
-      refine le_trans (l2norm_le_of_bound (half_pos hu').le hΔ) ?_
-      have hsplit : Real.sqrt (n + 1) * (u' / 2) = u / (2 * R) := by
-        have h1 : u' / 2 = u / (2 * R * Real.sqrt (n + 1)) := by
-          rw [hu'def]; ring
-        rw [h1, ← mul_div_assoc, mul_comm (Real.sqrt (n + 1)) u]
-        exact mul_div_mul_right _ _ hsqrtd.ne'
-      exact hsplit.le
-    have hΔnn : l2norm Δ < nn := by
-      have h1 : u / (2 * R) ≤ 1 / 2 := by
-        rw [show u / (2 * R) = u / R / 2 by rw [div_div, mul_comm R 2]]
-        have h3 : u / R ≤ 1 := (div_le_one hR).mpr huR
-        linarith
-      calc l2norm Δ ≤ u / (2 * R) := hΔnorm
-        _ ≤ 1 / 2 := h1
-        _ < nn := lt_of_lt_of_le (by norm_num) hnn
-    -- `x i = (λ·s) • y`.
-    have hxy : x i = (lam i * s) • y := by
-      funext j
-      show (x i) j = lam i * s * (s * (x i) j / lam i)
-      have h1 : lam i * s * (s * (x i) j / lam i) =
-          (s * s) * ((x i) j) * (lam i / lam i) := by ring
-      rw [h1, div_self hλ.ne', mul_one, hs2, one_mul]
-    refine ⟨?_, ?_⟩
-    · -- `xᵢ · v > 0`.
-      have hnn2 : dot (eₖ + c) (eₖ + c) = nn ^ 2 := dot_self_eq_l2norm_sq _
-      have h1 : dot v (x i) = lam i * (nn ^ 2 + dot (eₖ + c) Δ) / nn := by
-        rw [hvdef, dot_smul_left, hxy, dot_smul_right, hΔeq, dot_add, hnn2]
-        rw [div_mul_eq_mul_div, div_eq_div_iff hnnpos.ne' hnnpos.ne']
-        linear_combination (lam i * (nn ^ 2 + dot (eₖ + c) Δ) * nn) * hs2
-      rw [h1]
-      apply div_pos _ hnnpos
-      apply mul_pos hλ
-      have hδ : -nn * l2norm Δ ≤ dot (eₖ + c) Δ := by
-        have h2 := abs_dot_le_l2 (eₖ + c) Δ
-        linarith [neg_abs_le (dot (eₖ + c) Δ)]
-      nlinarith [hΔnn, hnnpos, mul_pos hnnpos (sub_pos.mpr hΔnn)]
-    · -- `|xᵢ·w| ≤ u·‖w‖` for `w ⟂ v`.
-      intro w hwv
-      have hsnn : s / nn ≠ 0 := div_ne_zero hsne hnnpos.ne'
-      have hwe : dot w (eₖ + c) = 0 := by
-        have h : dot w v = (s / nn) * dot w (eₖ + c) := by
-          rw [hvdef, dot_smul_right]
-        rw [h] at hwv
-        exact (mul_eq_zero.mp hwv).resolve_left hsnn
-      have hwx : dot w (x i) = lam i * s * dot w Δ := by
-        rw [hxy, dot_smul_right, hΔeq, dot_add, hwe, zero_add]
-      rw [hwx, abs_mul, abs_mul, abs_of_pos hλ, hsabs, mul_one]
-      have hλR : lam i ≤ R := hbound i hiI (kOf i)
-      have h1 : |dot w Δ| ≤ l2norm w * (u / (2 * R)) :=
-        le_trans (abs_dot_le_l2 w Δ)
-          (mul_le_mul_of_nonneg_left hΔnorm (l2norm_nonneg w))
-      calc lam i * |dot w Δ|
-          ≤ lam i * (l2norm w * (u / (2 * R))) :=
-            mul_le_mul_of_nonneg_left h1 hλ.le
-        _ = lam i / (2 * R) * (u * l2norm w) := by ring
-        _ ≤ u * l2norm w := by
-            have hle : lam i / (2 * R) ≤ 1 / 2 := by
-              have h2 : lam i / (2 * R) = lam i / R / 2 := by
-                rw [div_div, mul_comm R 2]
-              rw [h2]
-              have h3 : lam i / R ≤ 1 := (div_le_one hR).mpr hλR
-              linarith
-            have hX : (0:ℝ) ≤ u * l2norm w := mul_nonneg hu.le (l2norm_nonneg w)
-            have h5 : lam i / (2 * R) * (u * l2norm w) ≤
-                (1 / 2) * (u * l2norm w) := mul_le_mul_of_nonneg_right hle hX
-            linarith
-
+  sorry
 
 /-- `x ↦ r • x + b` is injective when `r ≠ 0`. -/
 theorem smul_add_injective {r : ℝ} (hr : r ≠ 0) (b : Fin d → ℝ) :
@@ -2764,7 +2446,8 @@ private theorem exists_dyadic_scale (hd : 2 ≤ d) {δ : ℝ} (hδ : 0 < δ)
       inv_mul_cancel₀ hdpos.ne', Real.rpow_one]
   set t : ℝ := (16 * s)⁻¹ with htdef
   have ht : 2 ≤ t := by
-    rw [htdef, le_inv_comm₀ (by norm_num) hspos]
+    rw [htdef, le_inv_comm₀ (by norm_num) (by positivity : (0:ℝ) < 16 * s),
+      show (2:ℝ)⁻¹ = 1/2 by norm_num]
     linarith [hs]
   have htpos : 0 < t := lt_of_lt_of_le (by norm_num) ht
   set N : ℕ := ⌈t⌉₊ with hNdef
@@ -2802,12 +2485,10 @@ private theorem exists_dyadic_scale (hd : 2 ≤ d) {δ : ℝ} (hδ : 0 < δ)
     have h2t : (2 : ℝ) ^ k < 2 * t := by linarith
     -- `2^k < 2t = (8s)⁻¹` gives `(2^k)⁻¹ > 8s`.
     have h8s : (8 : ℝ) * s = (2 * t)⁻¹ := by
-      rw [htdef, mul_inv, mul_inv_rev]
-      ring_nf
-      rw [inv_inv]
+      rw [htdef, mul_inv_rev, inv_inv]
       ring
-    rw [h8s, inv_lt_comm₀ (by positivity : (0:ℝ) < 2 * t) h2k, inv_inv]
-    exact h2t
+    rw [h8s]
+    exact (inv_lt_inv₀ (by positivity : (0:ℝ) < 2 * t) h2k).mpr h2t
   have hupp : ((2 : ℝ) ^ k)⁻¹ ≤ 16 * s := by
     -- `2^k ≥ N ≥ t` gives `(2^k)⁻¹ ≤ t⁻¹ = 16s`.
     rw [show (16 : ℝ) * s = t⁻¹ by rw [htdef, inv_inv],
@@ -2815,20 +2496,15 @@ private theorem exists_dyadic_scale (hd : 2 ≤ d) {δ : ℝ} (hδ : 0 < δ)
     exact le_trans hNge hNkR
   refine ⟨k, hlow, hupp, ?_⟩
   -- `2^{d(k+2)+2} = (2^k)^d · 4^{d+1} < (8s)^{-d} · 4^{d+1} = δ⁻¹·2^{2-d} ≤ δ⁻¹`.
-  have h8s : (8 : ℝ) * s = (2 * t)⁻¹ := by
-    rw [htdef, mul_inv, mul_inv_rev]
-    ring_nf
-    rw [inv_inv]
-    ring
-  have h2klt : (2 : ℝ) ^ k < (8 * s)⁻¹ := by
-    rwa [← h8s] at hlow
+  have h2klt : (2 : ℝ) ^ k < (8 * s)⁻¹ :=
+    (lt_inv_comm₀ (by positivity : (0:ℝ) < 8 * s) h2k).mp hlow
   have hpow : ((2 : ℝ) ^ k) ^ d < (8 * s)⁻¹ ^ d :=
     pow_lt_pow_left₀ h2klt h2k.le (by omega)
   have h8s' : ((8 : ℝ) * s)⁻¹ ^ d = (8 : ℝ)⁻¹ ^ d * δ⁻¹ := by
     rw [mul_inv, mul_pow, inv_pow, ← hsd, inv_pow]
   have hexp : (2 : ℝ) ^ (d * (k + 2) + 2) = ((2 : ℝ) ^ k) ^ d * 2 ^ (2 * d + 2) := by
     rw [show d * (k + 2) + 2 = d * k + (2 * d + 2) by ring, pow_add, ← pow_mul,
-      pow_mul]
+      mul_comm d k]
   rw [hexp]
   have hgoal : ((2 : ℝ) ^ k) ^ d * 2 ^ (2 * d + 2) < δ⁻¹ := by
     calc ((2 : ℝ) ^ k) ^ d * 2 ^ (2 * d + 2)
@@ -2838,24 +2514,16 @@ private theorem exists_dyadic_scale (hd : 2 ≤ d) {δ : ℝ} (hδ : 0 < δ)
       _ ≤ δ⁻¹ * 1 := by
           apply mul_le_mul_of_nonneg_left _ (by positivity)
           calc (8 : ℝ)⁻¹ ^ d * 2 ^ (2 * d + 2)
-              = (2 : ℝ) ^ (2 * d + 2 - 3 * d : ℤ) := by
-                rw [show (8 : ℝ)⁻¹ ^ d = (2 : ℝ) ^ (-(3 * d : ℤ)) by
-                  rw [show (8 : ℝ) = 2 ^ (3 : ℕ) from by norm_num,
-                    ← zpow_natCast, ← zpow_mul (by norm_num : (2:ℝ) ≠ 0)]
-                  congr 1
-                  push_cast
-                  ring, ← zpow_natCast, ← zpow_add₀ (by norm_num)]
+              = (2 : ℝ) ^ (2 * d + 2) / 8 ^ d := by
+                rw [inv_pow]; ring
+            _ = (2 : ℝ) ^ (2 * d + 2) / 2 ^ (3 * d) := by
                 congr 1
-                push_cast
-                ring
-            _ = (2 : ℝ) ^ (2 - d : ℤ) := by congr 1; ring
+                rw [show (8 : ℝ) = 2 ^ (3 : ℕ) from by norm_num, ← pow_mul]
             _ ≤ 1 := by
-                apply zpow_le_one_of_nonpos₀ (by norm_num)
-                have hd2 : (2 : ℤ) ≤ d := by exact_mod_cast hd
-                linarith
+                rw [div_le_one (by positivity)]
+                exact pow_le_pow_right₀ (by norm_num) (by omega)
       _ = δ⁻¹ := mul_one _
-  rw [lt_inv_comm₀ (by positivity) hδ]
-  exact hgoal
+  refine (lt_inv_comm₀ ?_ ?_).mpr hgoal <;> positivity
 
 /-- **The boxed case** of `density_increment_core`: `A ⊆ [−1,1]^d`.  This is
 the genuinely hard geometric step of Lemma 1, where the paper's machinery is

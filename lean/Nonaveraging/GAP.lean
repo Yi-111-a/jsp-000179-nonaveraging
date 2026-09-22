@@ -1655,6 +1655,7 @@ theorem cfp_main {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1) :
                 (P.widthScale k).Proper := by
   sorry
 
+set_option maxHeartbeats 800000 in
 /-- **Theorem 3 (CFP structure theorem)**.  For `ℓ, β > 1` and `0 < η < 1`
 there are `c, d > 0` such that for any `A ⊆ B ⊆ ℤ^ℓ`, `|A| = m`, `|B| ≤ m^β`
 and `s ∈ [m^η, c·m/log m]` there exist `Â ⊆ A` with
@@ -1794,9 +1795,9 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
       intro i
       have hle : (B₀ i).card ≤ B₀.card := by
         show (B₀ i).card ≤ ∏ j, (B₀ j).card
-        exact Finset.single_le_prod
-          (fun j _ ↦ (Finset.card_pos.mpr (hB₀ne j) : (1 : ℕ) ≤ (B₀ j).card))
-          (Finset.mem_univ i)
+        have h1 : ∀ j ∈ Finset.univ, (1 : ℕ) ≤ (B₀ j).card :=
+          fun j _ ↦ Finset.card_pos.mpr (hB₀ne j)
+        exact Finset.single_le_prod h1 (Finset.mem_univ i)
       rw [hNcard i, hB₀card] at hle
       omega
     have hA₀bnd : ∀ a ∈ A₀, ∀ j, 0 ≤ a j ∧ a j ≤ (n : ℤ) := by
@@ -1822,10 +1823,11 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
         _ = (n : ℤ) ^ 2 := by rw [pow_two]
         _ ≤ (n : ℤ) ^ κ := pow_le_pow_right₀ (by linarith) hκ2
     -- `ϕ` is injective on the anchored box (sidelengths `Nᵢ ≤ n < H`)
-    have hinj : Set.InjOn (packVec H) ↑B₀.toFinset :=
-      packVec_injOn_box (by linarith) (fun i ↦ hN i) (fun i ↦ by
-        simp only [sub_zero]
-        exact lt_of_le_of_lt (by exact_mod_cast hNle i) hnH)
+    have hinj : Set.InjOn (packVec (ℓ := ℓ) H) (B₀.toFinset : Set (Fin ℓ → ℤ)) :=
+      packVec_injOn_box (H := H) (B := B₀) (lo := fun _ ↦ 0)
+        (hi := fun i ↦ (N i : ℤ)) (by linarith) (fun i ↦ hN i) (fun i ↦ by
+          simp only [sub_zero]
+          exact lt_of_le_of_lt (by exact_mod_cast hNle i) hnH)
     have hϕinj : Set.InjOn (fun a ↦ fun _ : Fin 1 ↦ packVec H a) ↑A₀ :=
       fun a ha b hb hab ↦ hinj (hA₀sub ha) (hA₀sub hb) (congrFun hab 0)
     -- `A₀' = ϕ(A₀) ⊆ [0, n·H^ℓ]`, `|A₀'| = m`
@@ -1845,7 +1847,9 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
             mul_le_mul_of_nonneg_left (geom_sum_le hH2 ℓ) (by positivity)
     set n₀ : ℕ := n * (n ^ κ) ^ ℓ with hn₀def
     set A₀' := A₀.image (fun a ↦ fun _ : Fin 1 ↦ packVec H a) with hA₀'def
-    have hA₀'ne : A₀'.Nonempty := hA₀ne.image _
+    have hA₀'ne : A₀'.Nonempty := by
+      rw [hA₀'def]
+      exact ⟨_, Finset.mem_image.mpr ⟨b₀, hb₀, rfl⟩⟩
     have hA₀'card : A₀'.card = A.card := by
       rw [hA₀'def, Finset.card_image_of_injOn hϕinj]
       refine Finset.card_image_of_injective _ (fun a b h ↦ ?_)
@@ -1888,15 +1892,14 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
       A'₀', hA'₀'sub, hA'₀'card, k, hk0, hkle, t₀, hcont₀, hkP₀⟩ :=
       hcfp A₀' n₀ s hA₀'ne hA₀'bnd hn₀le hs1' hs2'
     -- pull back through `ϕ`
-    obtain ⟨Â₀, hÂ₀sub, hÂ₀im⟩ := Finset.subset_image_iff.mp
-      (t := Â₀') (s := A₀) (f := fun a ↦ fun _ : Fin 1 ↦ packVec H a) (by
-        rw [← hA₀'def]
-        exact hÂ₀'sub)
+    have hÂ₀'sub' : Â₀' ⊆ A₀.image (fun a ↦ fun _ : Fin 1 ↦ packVec H a) := by
+      rw [← hA₀'def]
+      exact hÂ₀'sub
+    obtain ⟨Â₀, hÂ₀sub, hÂ₀im⟩ := Finset.subset_image_iff.mp hÂ₀'sub'
     have hA'₀subA₀ : A'₀' ⊆ A₀.image (fun a ↦ fun _ : Fin 1 ↦ packVec H a) := by
       rw [← hA₀'def]
       exact hA'₀'sub.trans hÂ₀'sub
-    obtain ⟨A'₀, hA'₀sub, hA'₀im⟩ := Finset.subset_image_iff.mp
-      (t := A'₀') (s := A₀) (f := fun a ↦ fun _ : Fin 1 ↦ packVec H a) hA'₀subA₀
+    obtain ⟨A'₀, hA'₀sub, hA'₀im⟩ := Finset.subset_image_iff.mp hA'₀subA₀
     have hmemÂ₀ : ∀ a ∈ A₀, (fun _ : Fin 1 ↦ packVec H a) ∈ Â₀' → a ∈ Â₀ := by
       intro a ha hϕa
       rw [← hÂ₀im] at hϕa
@@ -1964,9 +1967,15 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
           (2 * (c / Real.log 2) + 1) * (n : ℝ) ^ 2 := by
         have hsn : (s : ℝ) * (n : ℝ) ≤ (c / Real.log 2) * (n : ℝ) ^ 2 := by
           have h := mul_le_mul_of_nonneg_right hsR hnR0.le
-          nlinarith [h]
+          calc (s : ℝ) * (n : ℝ) ≤ (c / Real.log 2) * (n : ℝ) * (n : ℝ) := h
+            _ = (c / Real.log 2) * (n : ℝ) ^ 2 := by ring
         have hn2' : (1 : ℝ) ≤ (n : ℝ) ^ 2 := one_le_pow₀ hn1
-        nlinarith [hsn, hn2']
+        have h2sn : 2 * (s : ℝ) * (n : ℝ) ≤
+            2 * ((c / Real.log 2) * (n : ℝ) ^ 2) := by linarith [hsn]
+        calc 2 * (s : ℝ) * (n : ℝ) + 1
+            ≤ 2 * ((c / Real.log 2) * (n : ℝ) ^ 2) + (n : ℝ) ^ 2 := by
+              linarith [h2sn, hn2']
+          _ = (2 * (c / Real.log 2) + 1) * (n : ℝ) ^ 2 := by ring
       have hF5 : (2 * (s : ℝ) * (n : ℝ) + 1) ^ (2 * ℓ) ≤
           ((2 * (c / Real.log 2) + 1) * (n : ℝ) ^ 2) ^ (2 * ℓ) :=
         pow_le_pow_left₀ (by positivity) hF4 _
@@ -2019,7 +2028,8 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
         (by rw [hA'₀card]; exact_mod_cast hA'₀'card)
         hP₀p hP₀s hsub h0 hk0 hcontP₀ hdom
     obtain ⟨P', hP's, hP'mem, t', hcont', hkP'⟩ :=
-      cfp_unshift (lo := lo) hPmem0 hPs hcontP hkP
+      cfp_unshift (P := P) (lo := lo) (k := k) (Â₀ := Â₀) (A'₀ := A'₀)
+        (tdig := tdig) hPmem0 hPs hcontP hkP
     refine ⟨Â₀.image (· + lo), d' + 1, P', ?_, ?_, ?_, hP's, hP'mem,
       A'₀.image (· + lo), ?_, ?_, k, hk0, hkle, t', hcont', hkP'⟩
     · intro x hx

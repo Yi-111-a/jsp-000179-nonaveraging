@@ -2174,10 +2174,17 @@ theorem SubSumCoveringSeed.toPackage {d : ℕ} [NeZero d] {c₁ c₂ : ℝ}
 
 /-! ### §3.3 decomposition of the covering-seed construction
 
-`exists_subSumCoveringSeed` is reduced to the two residual inputs
+`exists_subSumCoveringSeed` is reduced to the residual inputs of
 `exists_lemma11_13_data` and `exists_lemma14_covering` below, whose
 conclusions are exactly the unformalized mathematics of the paper's
-§3.3.  Everything else is proved: the Lemma-11 step bound
+§3.3.  Those two statements are in turn assembled from the five
+atomic residuals `exists_lemma11_rank` (minimal-dimension rank),
+`exists_lemma13_Tz_large` (largeness of the common zonotope point),
+`exists_lemma14_lattice` (the `Āᵢ ⊆ Pᵢ` refinement),
+`exists_lemma14_absorption` (the `discrete_john_strong` sandwich), and
+`exists_lemma14_fatbox` (the `z̄ᵢ + ξ|A|·B ⊆ 𝒵` covering), all sharing
+the hypothesis bundle `lemma33Hypotheses`.  Everything else is proved:
+the Lemma-11 interval box (`exists_int_coord_bound`) and step bound
 (`lemma11_step_bound`, via `step_abs_le_of_subset`), the Lemma-13
 rounding of `Tz` into `⟨P₁⟩ ∩ ⟨P₂⟩`
 (`exists_lattice_intersection_rounding`), the choice of covering radii
@@ -2423,25 +2430,111 @@ theorem fat_box_covering {d : ℕ} {c : ℝ} {X : Finset (Fin d → ℤ)}
           (y i : ℝ) - (W.t i : ℝ) - (t i : ℝ) + (W.t i : ℝ) + (t i : ℝ)
         ring⟩
 
-/-- **Residual input — Lemma 11 second half + Lemma 13 largeness.**  For
-all sufficiently large `|A|`, the minimal-dimension witnesses `W₁`, `W₂`
+/-- The §3.3 hypothesis bundle shared by the residual inputs below:
+`A` is non-averaging with `(δ,γ)`-irreducible structure witness `W`,
+`a₀ ∈ ϕ_P(Â)`, `B₁ ⊔ B₂ = ϕ_P(Â) ∖ {a₀}` is the equitable split with
+`δ|A| ≤ |Bᵢ|`, `Wᵢ` are the minimal witnesses of `Bᵢ ∓ a₀` supplied by
+Lemma 11's first half (`SubSumDim = d`, `|Pᵢ| ≥ γ|P|`), the pieces lie
+in the coefficient box `|x ∓ a₀| ≤ wᵢ`, and `Tz` is the common
+eq.-(13) zonotope point; `N₀` is the ambient largeness threshold. -/
+def lemma33Hypotheses {ℓ : ℕ} {c c' δ γ C' : ℝ} (N₀ : ℕ)
+    (A : Finset (Fin ℓ → ℤ)) (d : ℕ)
+    (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+    (B₁ B₂ : Finset (Fin d → ℤ))
+    (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+    (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+    (Tz : Fin d → ℝ) : Prop :=
+  NonAveraging A ∧ Irreducible W c' δ γ ∧
+    (Real.log (A.card : ℝ)) ^ (-(1 : ℝ) / C') ≤ γ ∧
+    0 < δ ∧ δ < 1 ∧ 0 < γ ∧ γ < 1 ∧ 4 * δ < 1 ∧ N₀ ≤ A.card ∧
+    a₀ ∈ W.imageAh ∧
+    B₁ ⊆ W.imageAh.erase a₀ ∧ B₂ ⊆ W.imageAh.erase a₀ ∧
+    Disjoint B₁ B₂ ∧ B₁ ∪ B₂ = W.imageAh.erase a₀ ∧
+    δ * (A.card : ℝ) ≤ (B₁.card : ℝ) ∧
+    δ * (A.card : ℝ) ≤ (B₂.card : ℝ) ∧
+    (∀ x ∈ B₁, ∀ i, |((x - a₀) i : ℝ)| ≤ (W.P.width i : ℝ)) ∧
+    (∀ x ∈ B₂, ∀ i, |((a₀ - x) i : ℝ)| ≤ (W.P.width i : ℝ)) ∧
+    SubSumDim (B₁.image (· - a₀)) c' = d ∧
+    SubSumDim (B₂.image (a₀ - ·)) c' = d ∧
+    (γ : ℝ) * (W.P.toFinset.card : ℝ) ≤ (W₁.P.toFinset.card : ℝ) ∧
+    (γ : ℝ) * (W.P.toFinset.card : ℝ) ≤ (W₂.P.toFinset.card : ℝ) ∧
+    Tz ∈ zonotope ((B₁.image (· - a₀)).image intVec) ∧
+    Tz ∈ zonotope ((B₂.image (a₀ - ·)).image intVec)
+
+/-- Every finite set of integer vectors has a uniform coordinatewise
+bound — the trivial interval box containing `P.toFinset` used for the
+Lemma-11 `Pᵢ ⊆ C·B` bookkeeping (any bound works here; the paper's
+sharp `C·wⱼ` scale is needed only downstream, inside the
+`∏ (C j).natAbs` covolume bound and the Lemma-13 largeness input). -/
+theorem exists_int_coord_bound {d : ℕ} (S : Finset (Fin d → ℤ)) :
+    ∃ B : ℕ, ∀ x ∈ S, ∀ i, |x i| ≤ (B : ℤ) := by
+  refine ⟨∑ x ∈ S, ∑ i, (x i).natAbs, fun x hx i ↦ ?_⟩
+  have h1 : (x i).natAbs ≤ ∑ j, (x j).natAbs :=
+    Finset.single_le_sum (fun j _ ↦ Nat.zero_le _) (Finset.mem_univ i)
+  have h2 : ∑ j, (x j).natAbs ≤ ∑ y ∈ S, ∑ j, (y j).natAbs :=
+    Finset.single_le_sum (fun y _ ↦ Finset.sum_nonneg fun j _ ↦
+      Nat.zero_le _) hx
+  have h3 := h1.trans h2
+  rw [← Nat.cast_natAbs]
+  exact_mod_cast h3
+
+/-- **Residual input — Lemma 11 second half (rank).**  For `|A|` large,
+the steps of the minimal-dimension witnesses `Wᵢ.P` are `ℤ`-linearly
+independent.  In the paper this is the minimal-dimension argument: a
+rank-deficient `⟨Pᵢ⟩` would place `Pᵢ` in a lower-dimensional
+sublattice and (via the `Pᵢ ⊆ C·B` containment) compress it to a
+witness of dimension `< d`, contradicting `SubSumDim (Bᵢ ∓ a₀) c' = d`.
+(Per the caveat at `SubSumWitness.two_le_width`, minimality alone does
+not imply step independence in this formalization, so this remains an
+input.) -/
+theorem exists_lemma11_rank {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      lemma33Hypotheses N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      LinearIndependent ℤ W₁.P.step ∧ LinearIndependent ℤ W₂.P.step :=
+  sorry
+
+/-- **Residual input — Lemma 13 (largeness of the common point).**  For
+`|A|` large, the common eq.-(13) zonotope point `Tz` exceeds, in some
+coordinate `i₀`, the covolume bound `2^d·(d!·∏ Cⱼ)²` of
+`⟨P₁⟩ ∩ ⟨P₂⟩` plus the intersection-lattice rounding slack, so that
+its `exists_lattice_intersection_rounding` image `T` still satisfies
+`T_big`. -/
+theorem exists_lemma13_Tz_large {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ) (C : Fin d → ℤ)
+        (hli₁ : LinearIndependent ℤ W₁.P.step)
+        (hli₂ : LinearIndependent ℤ W₂.P.step),
+      lemma33Hypotheses N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      ∃ i₀, (2 : ℝ) ^ d *
+          (((d.factorial * ∏ j, (C j).natAbs) *
+            (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) +
+        intersectionRoundingSlack hli₁ hli₂ i₀ < |(Tz i₀ : ℝ)| :=
+  sorry
+
+/-- **Lemma 11 second half + Lemma 13 largeness** (assembled).  For all
+sufficiently large `|A|`, the minimal-dimension witnesses `W₁`, `W₂`
 supplied by Lemma 11's first half satisfy:
 
 * (`Pᵢ ⊆` translate of `C·B`, step bounds) each `Pᵢ.toFinset` is
   contained in an integer coordinate box `∏ [loᵢ, hiᵢ]` whose widths are
   bounded by the column bound `C` — feeding `lemma11_step_bound` and
-  `index_gapLattice_le`;
-* (rank) each `Pᵢ.step` is `ℤ`-linearly independent — in the paper this
-  is the minimal-dimension argument (a rank-deficient `⟨Pᵢ⟩` would allow
-  a lower-dimensional witness);
+  `index_gapLattice_le`.  This part is proved: every finite point set
+  sits in a symmetric coordinate box (`exists_int_coord_bound`), and
+  `C` is chosen to dominate both box widths;
+* (rank) each `Pᵢ.step` is `ℤ`-linearly independent — the residual
+  `exists_lemma11_rank`;
 * (`Tz` dominates the covolume bound plus the intersection-lattice
-  rounding slack) — the largeness of the common eq.-(13) zonotope point,
-  so that its `exists_lattice_intersection_rounding` image `T` still
-  exceeds `2^d·(d!·∏ Cⱼ)²` in some coordinate.
-
-The first two items are the Lemma-11 second half; the third is the
-Lemma-13 largeness of `Tz` (the rounding itself is proved —
-`exists_lattice_intersection_rounding`). -/
+  rounding slack) — the residual `exists_lemma13_Tz_large` (the rounding
+  itself is proved — `exists_lattice_intersection_rounding`). -/
 theorem exists_lemma11_13_data {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
@@ -2478,23 +2571,143 @@ theorem exists_lemma11_13_data {ℓ : ℕ} {c c' δ γ C' : ℝ} :
         ∃ i₀, (2 : ℝ) ^ d *
             (((d.factorial * ∏ j, (C j).natAbs) *
               (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) +
-          intersectionRoundingSlack hli₁ hli₂ i₀ < |(Tz i₀ : ℝ)| :=
+          intersectionRoundingSlack hli₁ hli₂ i₀ < |(Tz i₀ : ℝ)| := by
+  classical
+  obtain ⟨N₁, hN₁⟩ := exists_lemma11_rank (ℓ := ℓ) (c := c) (c' := c')
+    (δ := δ) (γ := γ) (C' := C')
+  obtain ⟨N₂, hN₂⟩ := exists_lemma13_Tz_large (ℓ := ℓ) (c := c)
+    (c' := c') (δ := δ) (γ := γ) (C' := C')
+  refine ⟨max N₁ N₂, ?_⟩
+  intro A d _ W a₀ B₁ B₂ W₁ W₂ Tz hNA hIrred hγlog hδ hδ1 hγ hγ1 hδ4
+    hN ha₀ hB₁e hB₂e hdisj hcover hδB₁ hδB₂ hb₁ hb₂ hdim₁ hdim₂ hP₁ hP₂
+    hTz₁ hTz₂
+  obtain ⟨hli₁, hli₂⟩ := hN₁ A d W a₀ B₁ B₂ W₁ W₂ Tz
+    ⟨hNA, hIrred, hγlog, hδ, hδ1, hγ, hγ1, hδ4,
+      (le_max_left N₁ N₂).trans hN, ha₀, hB₁e, hB₂e, hdisj, hcover,
+      hδB₁, hδB₂, hb₁, hb₂, hdim₁, hdim₂, hP₁, hP₂, hTz₁, hTz₂⟩
+  obtain ⟨m₁, hm₁⟩ := exists_int_coord_bound W₁.P.toFinset
+  obtain ⟨m₂, hm₂⟩ := exists_int_coord_bound W₂.P.toFinset
+  obtain ⟨i₀, hi₀⟩ := hN₂ A d W a₀ B₁ B₂ W₁ W₂ Tz
+    (fun _ ↦ 2 * (max (m₁ : ℤ) (m₂ : ℤ))) hli₁ hli₂
+    ⟨hNA, hIrred, hγlog, hδ, hδ1, hγ, hγ1, hδ4,
+      (le_max_right N₁ N₂).trans hN, ha₀, hB₁e, hB₂e, hdisj, hcover,
+      hδB₁, hδB₂, hb₁, hb₂, hdim₁, hdim₂, hP₁, hP₂, hTz₁, hTz₂⟩
+  refine ⟨fun _ ↦ 2 * (max (m₁ : ℤ) (m₂ : ℤ)),
+    fun _ ↦ -(m₁ : ℤ), fun _ ↦ (m₁ : ℤ),
+    fun _ ↦ -(m₂ : ℤ), fun _ ↦ (m₂ : ℤ), hli₁, hli₂,
+    ?_, ?_, ?_, ?_, i₀, hi₀⟩
+  · intro x hx
+    rw [Fintype.mem_piFinset]
+    intro i
+    rw [Finset.mem_Icc]
+    have h := hm₁ x hx i
+    rw [abs_le] at h
+    exact h
+  · intro x hx
+    rw [Fintype.mem_piFinset]
+    intro i
+    rw [Finset.mem_Icc]
+    have h := hm₂ x hx i
+    rw [abs_le] at h
+    exact h
+  · intro j i
+    have hle : (m₁ : ℤ) ≤ max (m₁ : ℤ) (m₂ : ℤ) := le_max_left _ _
+    show (m₁ : ℤ) - -(m₁ : ℤ) ≤ 2 * max (m₁ : ℤ) (m₂ : ℤ)
+    omega
+  · intro j i
+    have hle : (m₂ : ℤ) ≤ max (m₁ : ℤ) (m₂ : ℤ) := le_max_right _ _
+    show (m₂ : ℤ) - -(m₂ : ℤ) ≤ 2 * max (m₁ : ℤ) (m₂ : ℤ)
+    omega
+
+/-- **Residual input — Lemma 14, the `Āᵢ ⊆ Pᵢ` refinement (lattice
+membership).**  For `|A|` large, the whole shifted pieces `Bᵢ ∓ a₀`
+(not merely `Wᵢ.Ah ⊆ Bᵢ ∓ a₀`) lie in the lattices `⟨Pᵢ⟩`.  In the
+paper this is the refinement step of Lemma 11/14: the minimal witness
+`Pᵢ` is chosen so that `Āᵢ ⊆ Pᵢ`, and `x ∓ a₀ ∈ ⟨Pᵢ⟩` follows for the
+coefficient image of every point of `Bᵢ`. -/
+theorem exists_lemma14_lattice {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      lemma33Hypotheses N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      (∀ a ∈ B₁.image (· - a₀), a ∈ gapLattice W₁.P) ∧
+      (∀ a ∈ B₂.image (a₀ - ·), a ∈ gapLattice W₂.P) :=
   sorry
 
-/-- **Residual input — Lemma 14 (eq. (15) covering).**  For all
-sufficiently large `|A|`:
+/-- **Residual input — Lemma 14, absorption.**  For `|A|` large, a
+lattice point `s ∈ ⟨Pᵢ⟩` coordinatewise bounded by `d·w` is absorbed:
+`s + t ∈ kᵢ·Pᵢ` for every `t ∈ (kᵢ/2)·Pᵢ`.  In the paper this is the
+`discrete_john_strong` sandwich on `⟨Pᵢ⟩` combined with
+`kᵢ ≈ s(A)` being large (the rounding error `r` of Lemma 13 satisfies
+`r + (kᵢ/2)Pᵢ ⊆ kᵢPᵢ` coefficientwise). -/
+theorem exists_lemma14_absorption {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      lemma33Hypotheses N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      (∀ s : Fin d → ℤ, s ∈ gapLattice W₁.P →
+        (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
+        ∀ t ∈ (((W₁.k : ℤ) / 2) • W₁.P).toFinset,
+          s + t ∈ ((W₁.k : ℤ) • W₁.P).toFinset) ∧
+      (∀ s : Fin d → ℤ, s ∈ gapLattice W₂.P →
+        (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
+        ∀ t ∈ (((W₂.k : ℤ) / 2) • W₂.P).toFinset,
+          s + t ∈ ((W₂.k : ℤ) • W₂.P).toFinset) :=
+  sorry
 
-* (`Āᵢ ⊆ Pᵢ` refinement) the shifted pieces `Bᵢ ∓ a₀` lie in the
-  lattices `⟨Pᵢ⟩`;
-* (absorption) a lattice point `s ∈ ⟨Pᵢ⟩` coordinatewise bounded by
-  `d·w` is absorbed: `s + t ∈ kᵢ·Pᵢ` for every `t ∈ (kᵢ/2)·Pᵢ` — in the
-  paper this is the `discrete_john_strong` sandwich on `⟨Pᵢ⟩` combined
-  with `kᵢ ≈ s(A)` being large;
-* (fat-box covering) for the Lemma-11 column bound `C`, the Lemma-13
-  rounding `T` of `Tz` (within `intersectionRoundingSlack`), and any
-  covolume-scale radii `r`, the box `T + ∏[−rᵢ, rᵢ]` is covered:
-  `y − tᵢ − t ∈ 𝒵_{Xᵢ∖A'ᵢ}` for some `t ∈ (kᵢ/2)·Pᵢ` — the paper's
-  `z̄ᵢ + ξ|A|·B ⊆ 𝒵_{Xᵢ∖A'ᵢ}` fat-box containment.
+/-- **Residual input — Lemma 14, the fat-box covering.**  For `|A|`
+large, for the Lemma-11 column bound `C`, the Lemma-13 rounding `T` of
+`Tz` (within `intersectionRoundingSlack`), and any covolume-scale radii
+`r`, the box `T + ∏[−rᵢ, rᵢ]` is covered:
+`y − tᵢ − t ∈ 𝒵_{Xᵢ∖A'ᵢ}` for some `t ∈ (kᵢ/2)·Pᵢ` — the paper's
+`z̄ᵢ + ξ|A|·B ⊆ 𝒵_{Xᵢ∖A'ᵢ}` fat-box containment. -/
+theorem exists_lemma14_fatbox {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      lemma33Hypotheses N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      ∀ (C : Fin d → ℤ)
+        (hli₁ : LinearIndependent ℤ W₁.P.step)
+        (hli₂ : LinearIndependent ℤ W₂.P.step)
+        (T : Fin d → ℤ) (r : Fin d → ℝ),
+        T ∈ gapLattice W₁.P → T ∈ gapLattice W₂.P →
+        (∀ i, |(T i : ℝ) - Tz i| ≤
+          intersectionRoundingSlack hli₁ hli₂ i) →
+        (∀ i, 0 ≤ r i) →
+        (∀ i, r i ≤ (2 : ℝ) ^ d *
+            (((d.factorial * ∏ j, (C j).natAbs) *
+              (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) + 1) →
+        (∀ y : Fin d → ℤ, (∀ i, |((y - T) i : ℝ)| ≤ r i) →
+          ∃ t ∈ (((W₁.k : ℤ) / 2) • W₁.P).toFinset,
+            (fun i ↦ (y i : ℝ) - (W₁.t i : ℝ) - (t i : ℝ)) ∈
+              zonotope (((B₁.image (· - a₀)) \ W₁.A').image
+                fun x i ↦ (x i : ℝ))) ∧
+        (∀ y : Fin d → ℤ, (∀ i, |((y - T) i : ℝ)| ≤ r i) →
+          ∃ t ∈ (((W₂.k : ℤ) / 2) • W₂.P).toFinset,
+            (fun i ↦ (y i : ℝ) - (W₂.t i : ℝ) - (t i : ℝ)) ∈
+              zonotope (((B₂.image (a₀ - ·)) \ W₂.A').image
+                fun x i ↦ (x i : ℝ))) :=
+  sorry
+
+/-- **Lemma 14 (eq. (15) covering)** — assembled from the three
+residual inputs above:
+
+* (`Āᵢ ⊆ Pᵢ` refinement) `exists_lemma14_lattice`: the shifted pieces
+  `Bᵢ ∓ a₀` lie in the lattices `⟨Pᵢ⟩`;
+* (absorption) `exists_lemma14_absorption`: a lattice point
+  `s ∈ ⟨Pᵢ⟩` coordinatewise bounded by `d·w` is absorbed:
+  `s + t ∈ kᵢ·Pᵢ` for every `t ∈ (kᵢ/2)·Pᵢ`;
+* (fat-box covering) `exists_lemma14_fatbox`: the box
+  `T + ∏[−rᵢ, rᵢ]` is covered, `y − tᵢ − t ∈ 𝒵_{Xᵢ∖A'ᵢ}`.
 
 Together with `fat_box_covering` these give the `cov₁`/`cov₂` fields of
 `SubSumCoveringSeed`. -/
@@ -2552,8 +2765,35 @@ theorem exists_lemma14_covering {ℓ : ℕ} {c c' δ γ C' : ℝ} :
           ∃ t ∈ (((W₂.k : ℤ) / 2) • W₂.P).toFinset,
             (fun i ↦ (y i : ℝ) - (W₂.t i : ℝ) - (t i : ℝ)) ∈
               zonotope (((B₂.image (a₀ - ·)) \ W₂.A').image
-                fun x i ↦ (x i : ℝ))) :=
-  sorry
+                fun x i ↦ (x i : ℝ))) := by
+  classical
+  obtain ⟨N₁, hN₁⟩ := exists_lemma14_lattice (ℓ := ℓ) (c := c)
+    (c' := c') (δ := δ) (γ := γ) (C' := C')
+  obtain ⟨N₂, hN₂⟩ := exists_lemma14_absorption (ℓ := ℓ) (c := c)
+    (c' := c') (δ := δ) (γ := γ) (C' := C')
+  obtain ⟨N₃, hN₃⟩ := exists_lemma14_fatbox (ℓ := ℓ) (c := c)
+    (c' := c') (δ := δ) (γ := γ) (C' := C')
+  refine ⟨max (max N₁ N₂) N₃, ?_⟩
+  intro A d _ W a₀ B₁ B₂ W₁ W₂ Tz hNA hIrred hγlog hδ hδ1 hγ hγ1 hδ4
+    hN ha₀ hB₁e hB₂e hdisj hcover hδB₁ hδB₂ hb₁ hb₂ hdim₁ hdim₂ hP₁ hP₂
+    hTz₁ hTz₂
+  have hle₁ : N₁ ≤ A.card :=
+    ((le_max_left N₁ N₂).trans (le_max_left _ N₃)).trans hN
+  have hle₂ : N₂ ≤ A.card :=
+    ((le_max_right N₁ N₂).trans (le_max_left _ N₃)).trans hN
+  have hle₃ : N₃ ≤ A.card := (le_max_right _ N₃).trans hN
+  obtain ⟨hlat₁, hlat₂⟩ := hN₁ A d W a₀ B₁ B₂ W₁ W₂ Tz
+    ⟨hNA, hIrred, hγlog, hδ, hδ1, hγ, hγ1, hδ4, hle₁, ha₀,
+      hB₁e, hB₂e, hdisj, hcover, hδB₁, hδB₂, hb₁, hb₂, hdim₁, hdim₂,
+      hP₁, hP₂, hTz₁, hTz₂⟩
+  obtain ⟨habs₁, habs₂⟩ := hN₂ A d W a₀ B₁ B₂ W₁ W₂ Tz
+    ⟨hNA, hIrred, hγlog, hδ, hδ1, hγ, hγ1, hδ4, hle₂, ha₀,
+      hB₁e, hB₂e, hdisj, hcover, hδB₁, hδB₂, hb₁, hb₂, hdim₁, hdim₂,
+      hP₁, hP₂, hTz₁, hTz₂⟩
+  exact ⟨hlat₁, hlat₂, habs₁, habs₂, hN₃ A d W a₀ B₁ B₂ W₁ W₂ Tz
+    ⟨hNA, hIrred, hγlog, hδ, hδ1, hγ, hγ1, hδ4, hle₃, ha₀,
+      hB₁e, hB₂e, hdisj, hcover, hδB₁, hδB₂, hb₁, hb₂, hdim₁, hdim₂,
+      hP₁, hP₂, hTz₁, hTz₂⟩⟩
 
 /-- **The Lemmas 11 (second half)–14 core** — the single remaining
 faithful input for Theorem 4.  For all sufficiently large `|A|`, the data

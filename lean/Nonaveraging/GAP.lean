@@ -94,6 +94,80 @@ theorem smul_eval (k : ℤ) (P : GAP ℓ d) (n : Fin d → ℕ) :
   refine congrArg _ (Finset.sum_congr rfl fun i _ ↦ ?_)
   exact (smul_comm k _ _).symm
 
+/-- Width-scaling `cs·P` (the `csP`/`cQ` of Conlon–Fox–Pham, CFP23): same
+base and steps, each width multiplied by `k`.  This is the
+coefficient-interval scaling — *not* the pointwise dilation `k • P`
+(`GAP.smul`), which scales the base and steps instead.  For `k ≥ 1` the
+widened progression contains `P` itself (coefficientwise), which is the
+`P ⊆ csP` inclusion the Appendix-A decode needs. -/
+def widthScale (P : GAP ℓ d) (k : ℕ) : GAP ℓ d :=
+  ⟨P.base, P.step, fun i ↦ k * P.width i⟩
+
+@[simp] theorem widthScale_base (P : GAP ℓ d) (k : ℕ) :
+    (P.widthScale k).base = P.base := rfl
+
+@[simp] theorem widthScale_step (P : GAP ℓ d) (k : ℕ) :
+    (P.widthScale k).step = P.step := rfl
+
+@[simp] theorem widthScale_width (P : GAP ℓ d) (k : ℕ) :
+    (P.widthScale k).width = fun i ↦ k * P.width i := rfl
+
+/-- Evaluating a width-scaled GAP is the same coefficient map. -/
+theorem widthScale_eval (P : GAP ℓ d) (k : ℕ) (n : Fin d → ℕ) :
+    (P.widthScale k).eval n = P.eval n := rfl
+
+/-- Width-scaling commutes with translation. -/
+theorem widthScale_translate (P : GAP ℓ d) (k : ℕ) (t : Fin ℓ → ℤ) :
+    (P.widthScale k).translate t = (P.translate t).widthScale k := rfl
+
+/-- `widthScale 1` is the identity. -/
+theorem widthScale_one (P : GAP ℓ d) : P.widthScale 1 = P := by
+  show GAP.mk P.base P.step (fun i ↦ 1 * P.width i) =
+    GAP.mk P.base P.step P.width
+  congr 1
+  funext i
+  exact one_mul _
+
+/-- Nested width-scalings compose multiplicatively. -/
+theorem widthScale_widthScale (P : GAP ℓ d) (j k : ℕ) :
+    (P.widthScale j).widthScale k = P.widthScale (k * j) := by
+  show GAP.mk P.base P.step (fun i ↦ k * (j * P.width i)) =
+    GAP.mk P.base P.step (fun i ↦ (k * j) * P.width i)
+  congr 1
+  funext i
+  exact (mul_assoc k j (P.width i)).symm
+
+/-- For `1 ≤ k`, the coefficients of `P` remain coefficients of the widened
+progression (`wᵢ ≤ k·wᵢ`). -/
+theorem coeffs_subset_widthScale (P : GAP ℓ d) {k : ℕ} (hk : 1 ≤ k) :
+    P.coeffs ⊆ (P.widthScale k).coeffs := by
+  intro n hn
+  obtain ⟨m, -, hm⟩ := Finset.mem_image.mp hn
+  refine Finset.mem_image.mpr ⟨fun i ↦ ⟨(m i : ℕ), ?_⟩, Finset.mem_univ _, ?_⟩
+  · exact lt_of_lt_of_le (m i).isLt (Nat.le_mul_of_pos_left _ hk)
+  · rw [← hm]
+    funext i
+    rfl
+
+/-- For `1 ≤ k`, `P ⊆ widthScale k P` pointwise — the `P ⊆ csP` inclusion
+of CFP23 (the undilated steps `qᵢ` and `0` are points of `csP`, used in the
+Appendix-A decode to bound digit vectors). -/
+theorem toFinset_subset_widthScale (P : GAP ℓ d) {k : ℕ} (hk : 1 ≤ k) :
+    P.toFinset ⊆ (P.widthScale k).toFinset := by
+  intro x hx
+  obtain ⟨n, hn, rfl⟩ := Finset.mem_image.mp hx
+  exact Finset.mem_image.mpr ⟨n, P.coeffs_subset_widthScale hk hn, rfl⟩
+
+/-- Properness of the widened progression implies properness of `P` (its
+coefficients form a subset).  The converse fails — widening can create
+collisions — so `csP` properness is a genuine extra conclusion of CFP23's
+theorem.  Note also that `widthScale` does not preserve `Symmetric` in
+general (the widened center need not be integral), which is why the decode
+returns `P` symmetric and `csP` proper separately. -/
+theorem Proper.of_widthScale {P : GAP ℓ d} {k : ℕ} (hk : 1 ≤ k)
+    (h : (P.widthScale k).Proper) : P.Proper :=
+  h.mono (P.coeffs_subset_widthScale hk)
+
 /-- The coefficient index set has cardinality `∏ widthᵢ`. -/
 theorem card_coeffs (P : GAP ℓ d) : P.coeffs.card = ∏ i, P.width i := by
   have hinj : Set.InjOn (fun n : Π i, Fin (P.width i) ↦ fun i ↦ (n i : ℕ))
@@ -1444,27 +1518,25 @@ theorem geom_sum_le {H : ℤ} (hH : 2 ≤ H) :
 
 /-- **Residual input — the Appendix-A decode** (Pham–Zakharov
 arXiv:2410.14624v2, Appendix A).  Given a proper, symmetric `P₀ : GAP 1 d'`
-covering the `packVec`-image of `Â₀ ⊆ [0,n]^ℓ` together with a `k`-dilated
-containment `(k • P₀).translate t ⊆ Σ(ϕ A'₀)`, the conclusion is a decoded
-`P : GAP ℓ d'` — symmetric, containing `Â₀ ∪ {0}` — with `k • P` proper and
-a translate of `k • P` inside `Σ(A'₀)`.
+covering the `packVec`-image of `Â₀ ⊆ [0,n]^ℓ` together with the
+*width-scaled* containment `(widthScale k P₀).translate t ⊆ Σ(ϕ A'₀)`
+(the `x₀ + csP₀ ⊆ Σ(A'₀)` of the paper, where `csP₀` is CFP23's
+coefficient-scaled `cQ`), the conclusion is a decoded `P : GAP ℓ d'` —
+symmetric, containing `Â₀ ∪ {0}` — with `widthScale k P` proper and a
+translate of `widthScale k P` inside `Σ(A'₀)`.
 
-The paper proves this verbatim: there the one-dimensional input is
-`x₀ + cs·P₀ ⊆ Σ(A'₀)` where `cs·P₀` is the **coefficient-scaled** GAP
-(CFP23's `cQ`), so `P₀ ⊆ csP₀` (as `0 ∈ P₀`), giving `q_{0i} ∈ csP₀ − csP₀ ⊆
-2sQ`; unpacking `q_{0i}` yields digit vectors `dig i : Fin ℓ → ℤ` of the
-undilated steps with `|dig i j| ≤ 2sn`, and the decoded GAP is
+The paper's proof in this form: `P₀ ⊆ widthScale k P₀`
+(`toFinset_subset_widthScale`, using `k ≥ 1`), so the undilated steps
+`q_{0i} ∈ P₀ − P₀ ⊆ widthScale k P₀ − widthScale k P₀ ⊆ 2s·Q`-type subset
+sums; unpacking `q_{0i}` via `packVec` yields digit vectors
+`dig i : Fin ℓ → ℤ` with `|dig i j| ≤ 2sn`, and the decoded GAP is
 `unpack dig (−∑ n⁰ᵢ • dig i) P₀.width` where `n⁰` is the coefficient of `0`
-(`Proper.unpack` + `subsetSumsL_smul_translate_unpack` +
-`unpack_symmetric`), `hdom` being the paper's domination `cH > ns²(sn)^ℓ`.
-
-With `cfp_main`'s **pointwise** dilation `k • P₀` (base and steps scaled by
-`k`), only `k·q_{0i} ∈ Σ(A'₀) − Σ(A'₀)` is available; a `≤ 2sn` digit
-vector for `q_{0i}` exists iff `k` divides `u_i` componentwise, which the
-dilated containment does not give.  This hypothesis gap — together with a
-digit vector for the symmetry center `m₀` (which is automatic for centered
-`P₀`, the shape the paper's Theorem 5 returns) — is the missing input
-isolated in this lemma. -/
+(`Proper.unpack` + `subsetSumsL_translate_unpack` + `unpack_symmetric`),
+`hdom` being the paper's domination `cH > ns²(sn)^ℓ`.  The symmetry center
+digit vector `m₀` still needs the centered form the paper's Theorem 5
+returns (or a parity argument on the coefficient of `0`), and dimensions
+with `k·wᵢ = 1` (dead steps, `wᵢ = k = 1`) must be pruned or zeroed before
+unpacking — these are the remaining inputs isolated in this lemma. -/
 theorem appendix_decode {ℓ : ℕ} (hℓ : 0 < ℓ) {H : ℤ} (hH : 1 < H)
     {n s : ℕ} {Â₀ A'₀ : Finset (Fin ℓ → ℤ)}
     (hÂ : ∀ a ∈ Â₀, ∀ j, 0 ≤ a j ∧ a j ≤ (n : ℤ))
@@ -1474,20 +1546,20 @@ theorem appendix_decode {ℓ : ℕ} (hℓ : 0 < ℓ) {H : ℤ} (hH : 1 < H)
     (hsub : ∀ a ∈ Â₀, (fun _ : Fin 1 ↦ packVec H a) ∈ P₀.toFinset)
     (h0 : (0 : Fin 1 → ℤ) ∈ P₀.toFinset)
     {k : ℕ} (hk : 0 < k) {t : Fin 1 → ℤ}
-    (hcont : ((k • P₀).translate t).toFinset ⊆
+    (hcont : ((P₀.widthScale k).translate t).toFinset ⊆
       subsetSumsL (A'₀.image fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x))
     (hdom : (8 : ℤ) * ((k : ℤ) + 1) * ((s : ℤ) + 1) * ((n : ℤ) + 1) *
       (2 * (s : ℤ) * (n : ℤ) + 1) ^ (2 * ℓ) < H) :
     ∃ P : GAP ℓ d', P.Symmetric ∧ (Â₀ ∪ {0}) ⊆ P.toFinset ∧
-      ∃ tdig : Fin ℓ → ℤ, ((k • P).translate tdig).toFinset ⊆
-        subsetSumsL A'₀ ∧ (k • P).Proper := by
+      ∃ tdig : Fin ℓ → ℤ, ((P.widthScale k).translate tdig).toFinset ⊆
+        subsetSumsL A'₀ ∧ (P.widthScale k).Proper := by
   sorry
 
 /-- **Residual input — the unanchored-box lift.**  If the Appendix-A
 conclusion holds for the anchored translate `A₀ = A − lo`, it lifts to `A`
 itself: a padded `P'` (dimension `d' + 1`, the extra `padStep` absorbing
-the corner `lo`) containing `(Â₀ + lo) ∪ {0}`, and a translate of `k • P'`
-inside `Σ(A'₀ + lo)`.
+the corner `lo`) containing `(Â₀ + lo) ∪ {0}`, and a translate of
+`widthScale k P'` inside `Σ(A'₀ + lo)`.
 
 The obstruction is the translation non-invariance of `Σ`: an element of
 `Σ(A'₀)` is a `j`-element subset sum of `A'₀` shifted by `j • lo`, with `j`
@@ -1495,17 +1567,18 @@ varying over the point, so a *uniform* translate inside `Σ(A'₀ + lo)`
 requires the fixed-cardinality machinery of `subsetSumsL_translate_of_card`
 — which `cfp_main`'s all-cardinality `Σ` conclusion does not supply.  For
 `lo = 0` (the paper's `WLOG B = [n]^ℓ`) it is immediate
-(`P' = P.padStep 0 1`, `t = tdig`); the general case is the WLOG step the
-paper elides. -/
+(`P' = P.padStep 0 1`, `t = tdig`; `widthScale` commutes with `padStep`
+and `translate`, and `P.padStep 0 1` has the same point set as `P`); the
+general case is the WLOG step the paper elides. -/
 theorem cfp_unshift {ℓ d' : ℕ} {P : GAP ℓ d'} {lo : Fin ℓ → ℤ} {k : ℕ}
     {Â₀ A'₀ : Finset (Fin ℓ → ℤ)} {tdig : Fin ℓ → ℤ}
     (hPmem : Â₀ ∪ {0} ⊆ P.toFinset) (hPs : P.Symmetric)
-    (hcont : ((k • P).translate tdig).toFinset ⊆ subsetSumsL A'₀)
-    (hkP : (k • P).Proper) :
+    (hcont : ((P.widthScale k).translate tdig).toFinset ⊆ subsetSumsL A'₀)
+    (hkP : (P.widthScale k).Proper) :
     ∃ P' : GAP ℓ (d' + 1), P'.Symmetric ∧
       (Â₀.image (· + lo) ∪ {0}) ⊆ P'.toFinset ∧
-      ∃ t : Fin ℓ → ℤ, ((k • P').translate t).toFinset ⊆
-        subsetSumsL (A'₀.image (· + lo)) ∧ (k • P').Proper := by
+      ∃ t : Fin ℓ → ℤ, ((P'.widthScale k).translate t).toFinset ⊆
+        subsetSumsL (A'₀.image (· + lo)) ∧ (P'.widthScale k).Proper := by
   sorry
 
 end GAP
@@ -1519,7 +1592,9 @@ For `A ⊆ [n] ⊆ ℤ` with `|A| = m`, `n ≤ m^β` and
 `s ∈ [m^η, c·m / log m]`, it gives `Â ⊆ A` with
 `|Â| ≥ m − c⁻¹·s·log m`, a proper `d'`-dimensional (`d' ≤ d`) GAP `P` with
 `Â ∪ {0} ⊆ P`, and `A' ⊆ Â` with `|A'| ≤ s` such that `Σ(A')` contains a
-homogeneous translate of a `≤ c·s` dilation of `P`, which remains proper.
+homogeneous translate of a `≤ c·s` *width-scaling* `cs·P` of `P` (CFP23's
+coefficient scaling `cQ`, `GAP.widthScale` — not the pointwise dilation
+`k • P`), which remains proper.
 
 We phrase it for `ℓ = 1` in the ambient `Fin 1 → ℤ` model used by `GAP`, so
 that `cfp_structure` is literally its `ℓ`-dimensional extension obtained by
@@ -1541,8 +1616,8 @@ theorem cfp_main {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1) :
           ∃ A' ⊆ Â, A'.card ≤ s ∧
             ∃ k : ℕ, 0 < k ∧ (k : ℝ) ≤ c * s ∧
               ∃ t : Fin 1 → ℤ,
-                ((k • P).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
-                (k • P).Proper := by
+                ((P.widthScale k).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
+                (P.widthScale k).Proper := by
   sorry
 
 /-- **Theorem 3 (CFP structure theorem)**.  For `ℓ, β > 1` and `0 < η < 1`
@@ -1560,7 +1635,13 @@ boxes (`GAP.Box.IsInterval`), matching the paper's "axis-aligned box":
 with arbitrary finsets the statement is false (e.g. `A = {2^i}` inside a
 one-element-per-coordinate box forces `s ≥ m − O(d log m)`, contradicting
 `s ≈ m^η`), and `A` is required nonempty (`A = ∅`, `s = 0` would force
-`0 < k ≤ c·s = 0`).  See
+`0 < k ≤ c·s = 0`).  A *largeness* hypothesis `N₀(c,ℓ) < |A|` with
+`N₀(c,ℓ) = 16·(c+1)·(c/log 2 + 1)²·(2c/log 2 + 1)^{2ℓ}` implements the
+paper's "choose `n₀` large" step: it is exactly what makes the
+Appendix-A domination `8(k+1)(s+1)(n+1)(2sn+1)^{2ℓ} < n^{10ℓ³} = H`
+provable (`s ≤ c·m/log m ≤ (c/log 2)·n`, `k ≤ c·s`, `m ≤ n` bound the
+left side by `N₀·n^{4ℓ+3}`, and `10ℓ³ ≥ 4ℓ+4` absorbs `N₀` once
+`n > N₀`).  See
 `discovery/JSP-000179/scratch/cfp_derivation_report.md` for the full
 analysis, including the Appendix-A `H`-sizing (`κ = 10ℓ³`, `H = n^κ`,
 `cH > n s² (sn)^ℓ`) and the translation subtlety for non-anchored boxes
@@ -1570,31 +1651,26 @@ use symmetric boxes — a faithful derivation must resolve this, e.g. by
 padding the decoded GAP to absorb the shift).
 
 **Proof status / missing input.**  The decode lemmas `GAP.gap_pullback`,
-`GAP.subsetSumsL_smul_translate_unpack` require digit vectors
+`GAP.subsetSumsL_translate_unpack` require digit vectors
 `dig i : Fin ℓ → ℤ` of the *undilated* steps `P₀.step i 0` — the paper's
-`q_{0i} ∈ 2sQ` step.  There `csP₀` is the `cs`-fold *sumset* (CFP23's
-`cQ`, coefficient-interval scaling), which contains `P₀` itself since
+`q_{0i} ∈ 2sQ` step.  There `csP₀` is the coefficient-interval scaling
+(CFP23's `cQ`, here `GAP.widthScale`), which contains `P₀` itself since
 `0 ∈ P₀`; hence `q_{0i} ∈ P₀ ⊆ csP₀ ⊆ Σ(A'₀) − x₀ ⊆ 2sQ` is a `2s`-fold
 sum of `ϕ`-images of `≤ n`-bounded vectors, so `dig i` exists with
-`|dig i| ≤ 2sn`.  Here `cfp_main` instead yields the pointwise *dilation*
-`k • P₀ = {k • p}` (`GAP.smul` scales the base and steps, keeping the
-widths), so only `k·q_{0i} = σ_{eᵢ} − σ₀ ∈ 4sQ` is available — a digit
-vector of `k·q_{0i}`, not of `q_{0i}`.  A small digit vector for `q_{0i}`
-exists iff `k` divides that digit vector componentwise, which the dilated
-containment does not give.  Two further gaps: the decoded GAP is symmetric
-only when the center digit vector `2·bdig + ∑ (wᵢ − 1) • dig i` is
-componentwise even (automatic for odd widths / centered `P₀`, but
-`cfp_main` does not provide `P₀` in centered form), and for non-anchored
-`B` the shift back by `lo` needs fixed-cardinality subset sums
-(`subsetSumsL_translate_of_card`), which `cfp_main`'s conclusion does not
-supply.  Closing this placeholder therefore needs a `cfp_main` with the
-sumset-shaped containment `x₀ + csP ⊆ Σ(A')` of the papers (with `P`
-returned centered), plus a treatment of the unanchored shift. -/
+`|dig i| ≤ 2sn`.  `cfp_main` now supplies the width-scaled containment
+`(widthScale k P₀).translate t₀ ⊆ Σ(ϕ A'₀)`, matching the paper's shape;
+the remaining gaps are isolated in `appendix_decode` (digit vectors of the
+undilated steps, the symmetry-center parity, dead dimensions `k·wᵢ = 1`)
+and `cfp_unshift` (for non-anchored `B` the shift back by `lo` needs
+fixed-cardinality subset sums `subsetSumsL_translate_of_card`, which
+`cfp_main`'s all-cardinality `Σ` conclusion does not supply). -/
 theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1) :
     ∃ c d : ℝ, 0 < c ∧ 0 < d ∧ ∀ (A : Finset (Fin ℓ → ℤ)) (B : GAP.Box ℓ) (s : ℕ),
       A.Nonempty → B.IsInterval →
       A ⊆ B.toFinset → (B.card : ℝ) ≤ (A.card : ℝ) ^ β →
       (A.card : ℝ) ^ η ≤ s → (s : ℝ) ≤ c * A.card / Real.log A.card →
+      16 * (c + 1) * (c / Real.log 2 + 1) ^ 2 *
+        (2 * (c / Real.log 2) + 1) ^ (2 * ℓ) < (A.card : ℝ) →
       ∃ (Â : Finset (Fin ℓ → ℤ)) (d' : ℕ) (P : GAP ℓ d'),
         Â ⊆ A ∧ (A.card : ℝ) - c⁻¹ * s * Real.log A.card ≤ Â.card ∧
         (d' : ℝ) ≤ d ∧ P.Symmetric ∧
@@ -1602,8 +1678,8 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
         ∃ A' ⊆ Â, A'.card ≤ s ∧
           ∃ k : ℕ, 0 < k ∧ (k : ℝ) ≤ c * s ∧
             ∃ t : Fin ℓ → ℤ,
-              ((k • P).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
-              (k • P).Proper := by
+              ((P.widthScale k).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
+              (P.widthScale k).Proper := by
   classical
   -- Packing pushes the ambient exponent to `β' = (10ℓ⁴ + 1)·β` (the packed
   -- range is `n·H^ℓ = n^{10ℓ⁴ + 1}` with `H = n^κ`, `κ = 10ℓ³` a high power
@@ -1613,7 +1689,7 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
       have h10 : (1 : ℝ) ≤ 10 * (ℓ : ℝ) ^ 4 + 1 := by positivity
       exact (hβ).trans_le (le_mul_of_one_le_right (zero_le_one.trans hβ.le) h10)) hη hη1
   refine ⟨c, d + 1, hc, by linarith, ?_⟩
-  intro A B s hA hB hAB hBcard hs1 hs2
+  intro A B s hA hB hAB hBcard hs1 hs2 hlarge
   rcases ℓ.eq_zero_or_pos with hℓ0 | hℓ
   · -- `ℓ = 0`: `Fin 0 → ℤ` is a subsingleton, so `A.card = 1` and the
     -- hypothesis `s ≤ c·1/log 1 = 0` contradicts `1 = 1^η ≤ s`.
@@ -1635,9 +1711,9 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
     linarith
   · -- `ℓ ≥ 1`: the Appendix-A base-`H` packing argument of Pham–Zakharov.
     -- The surrounding derivation (anchoring, packing, `cfp_main` numerics,
-    -- cardinalities) is complete; the two paper steps that the `k • P`
-    -- formulation of `cfp_main` does not supply are isolated in the
-    -- documented residual lemmas `appendix_decode` and `cfp_unshift`.
+    -- cardinalities) is complete; the two paper steps that need more than
+    -- the width-scaled `cfp_main` output are isolated in the documented
+    -- residual lemmas `appendix_decode` and `cfp_unshift`.
     choose lo hi hBi using (show ∀ i, ∃ lo hi, B i = Finset.Icc lo hi from hB)
     obtain ⟨a₀, ha₀⟩ := hA
     have hlohi : ∀ i, lo i ≤ hi i := by
@@ -1807,17 +1883,95 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
     have h0 : (0 : Fin 1 → ℤ) ∈ P₀.toFinset :=
       hmemP₀ (Finset.mem_union.mpr (Or.inr
         (Finset.mem_singleton_self (0 : Fin 1 → ℤ))))
-    have hcontP₀ : ((k • P₀).translate t₀).toFinset ⊆
+    have hcontP₀ : ((P₀.widthScale k).translate t₀).toFinset ⊆
         subsetSumsL (A'₀.image fun x ↦ fun _ : Fin 1 ↦ packVec H x) := by
       rw [← hA'₀im] at hcont₀
       exact hcont₀
-    -- the Appendix-A domination `H > ns²(sn)^ℓ`: it follows from
-    -- `H = n^{10ℓ³}`, `s ≤ c·m`, `k ≤ c·s` and `n ≤ m^β` once `m ≥ m₀(c)`,
-    -- but is not derivable for `m` below that threshold — the residual of
-    -- the paper's "choose `n₀` large" step for small `|A|`.
+    -- the Appendix-A domination `H > ns²(sn)^ℓ`: with the largeness
+    -- hypothesis `hlarge` (`m` above the explicit threshold `N₀(c,ℓ)`)
+    -- it follows from `H = n^{10ℓ³}`, `s ≤ c·m/log m ≤ (c/log 2)·n`,
+    -- `k ≤ c·s` and `m ≤ n`: every factor is a constant times a power of
+    -- `n`, so `LHS ≤ N₀·n^{4ℓ+3}`, and `10ℓ³ ≥ 4ℓ+4` lets `n > N₀`
+    -- absorb the constant.
     have hdom : (8 : ℤ) * ((k : ℤ) + 1) * ((s : ℤ) + 1) * ((n : ℤ) + 1) *
         (2 * (s : ℤ) * (n : ℤ) + 1) ^ (2 * ℓ) < H := by
-      sorry
+      have hL2 : (0 : ℝ) < Real.log 2 := Real.log_pos (by norm_num)
+      have hmR : (2 : ℝ) ≤ (A.card : ℝ) := by exact_mod_cast hm2
+      have hnR : (2 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn2
+      have hnR0 : (0 : ℝ) < (n : ℝ) := by linarith
+      have hn1 : (1 : ℝ) ≤ (n : ℝ) := by linarith
+      have hlogm : Real.log 2 ≤ Real.log (A.card : ℝ) :=
+        Real.log_le_log (by norm_num) hmR
+      have hc2nn : (0 : ℝ) ≤ c / Real.log 2 := (div_pos hc hL2).le
+      -- `s ≤ (c / log 2) · n` from `s ≤ c·m / log m`, `log 2 ≤ log m`, `m ≤ n`
+      have hsR : (s : ℝ) ≤ (c / Real.log 2) * (n : ℝ) := by
+        calc (s : ℝ) ≤ c * (A.card : ℝ) / Real.log (A.card : ℝ) := hs2
+          _ ≤ c * (A.card : ℝ) / Real.log 2 :=
+              div_le_div_of_nonneg_left (mul_nonneg hc.le (by positivity)) hL2 hlogm
+          _ ≤ c * (n : ℝ) / Real.log 2 :=
+              div_le_div_of_nonneg_right
+                (mul_le_mul_of_nonneg_left (by exact_mod_cast hBn) hc.le) hL2.le
+          _ = (c / Real.log 2) * (n : ℝ) := by ring
+      -- factor bounds, each a constant times a power of `n`
+      have hF1 : (k : ℝ) + 1 ≤ (c + 1) * (c / Real.log 2 + 1) * (n : ℝ) := by
+        have hks : (k : ℝ) ≤ c * ((c / Real.log 2) * (n : ℝ)) :=
+          hkle.trans (mul_le_mul_of_nonneg_left hsR hc.le)
+        nlinarith [hks, hn1, mul_nonneg hc.le hnR0.le, mul_nonneg hc2nn hnR0.le]
+      have hF2 : (s : ℝ) + 1 ≤ (c / Real.log 2 + 1) * (n : ℝ) := by
+        nlinarith [hsR, hn1]
+      have hF3 : (n : ℝ) + 1 ≤ 2 * (n : ℝ) := by linarith
+      have hF4 : 2 * (s : ℝ) * (n : ℝ) + 1 ≤
+          (2 * (c / Real.log 2) + 1) * (n : ℝ) ^ 2 := by
+        have hsn : (s : ℝ) * (n : ℝ) ≤ (c / Real.log 2) * (n : ℝ) ^ 2 := by
+          have h := mul_le_mul_of_nonneg_right hsR hnR0.le
+          nlinarith [h]
+        have hn2' : (1 : ℝ) ≤ (n : ℝ) ^ 2 := one_le_pow₀ hn1
+        nlinarith [hsn, hn2']
+      have hF5 : (2 * (s : ℝ) * (n : ℝ) + 1) ^ (2 * ℓ) ≤
+          ((2 * (c / Real.log 2) + 1) * (n : ℝ) ^ 2) ^ (2 * ℓ) :=
+        pow_le_pow_left₀ (by positivity) hF4 _
+      have hmul : (8 : ℝ) * ((k : ℝ) + 1) * ((s : ℝ) + 1) * ((n : ℝ) + 1) *
+          (2 * (s : ℝ) * (n : ℝ) + 1) ^ (2 * ℓ) ≤
+          (8 : ℝ) * ((c + 1) * (c / Real.log 2 + 1) * (n : ℝ)) *
+            ((c / Real.log 2 + 1) * (n : ℝ)) * (2 * (n : ℝ)) *
+            ((2 * (c / Real.log 2) + 1) * (n : ℝ) ^ 2) ^ (2 * ℓ) :=
+        mul_le_mul
+          (mul_le_mul
+            (mul_le_mul
+              (mul_le_mul (le_refl (8 : ℝ)) hF1 (by positivity) (by positivity))
+              hF2 (by positivity) (by positivity))
+            hF3 (by positivity) (by positivity))
+          hF5 (by positivity) (by positivity)
+      have hpow : ((2 * (c / Real.log 2) + 1) * (n : ℝ) ^ 2) ^ (2 * ℓ) =
+          (2 * (c / Real.log 2) + 1) ^ (2 * ℓ) * (n : ℝ) ^ (4 * ℓ) := by
+        rw [mul_pow, ← pow_mul, show 2 * (2 * ℓ) = 4 * ℓ from by ring]
+      have hC₀ltn : 16 * (c + 1) * (c / Real.log 2 + 1) ^ 2 *
+          (2 * (c / Real.log 2) + 1) ^ (2 * ℓ) < (n : ℝ) :=
+        lt_of_lt_of_le hlarge (by exact_mod_cast hBn)
+      have hExp : 4 * ℓ + 3 + 1 ≤ κ := by
+        have hℓ3 : ℓ ≤ ℓ ^ 3 := le_self_pow₀ (by omega) (by norm_num)
+        rw [hκdef]
+        omega
+      have key : (8 : ℝ) * ((k : ℝ) + 1) * ((s : ℝ) + 1) * ((n : ℝ) + 1) *
+          (2 * (s : ℝ) * (n : ℝ) + 1) ^ (2 * ℓ) < (n : ℝ) ^ κ := by
+        calc (8 : ℝ) * ((k : ℝ) + 1) * ((s : ℝ) + 1) * ((n : ℝ) + 1) *
+            (2 * (s : ℝ) * (n : ℝ) + 1) ^ (2 * ℓ)
+            ≤ (8 : ℝ) * ((c + 1) * (c / Real.log 2 + 1) * (n : ℝ)) *
+              ((c / Real.log 2 + 1) * (n : ℝ)) * (2 * (n : ℝ)) *
+              ((2 * (c / Real.log 2) + 1) * (n : ℝ) ^ 2) ^ (2 * ℓ) := hmul
+          _ = (16 * (c + 1) * (c / Real.log 2 + 1) ^ 2 *
+              (2 * (c / Real.log 2) + 1) ^ (2 * ℓ)) * (n : ℝ) ^ (4 * ℓ + 3) := by
+            rw [hpow, pow_add]
+            ring
+          _ < (n : ℝ) ^ κ := by
+            calc (16 * (c + 1) * (c / Real.log 2 + 1) ^ 2 *
+                (2 * (c / Real.log 2) + 1) ^ (2 * ℓ)) * (n : ℝ) ^ (4 * ℓ + 3)
+                < (n : ℝ) * (n : ℝ) ^ (4 * ℓ + 3) :=
+                  mul_lt_mul_of_pos_right hC₀ltn (pow_pos hnR0 _)
+              _ = (n : ℝ) ^ (4 * ℓ + 3 + 1) := by rw [← pow_succ']
+              _ ≤ (n : ℝ) ^ κ := pow_le_pow_right₀ hn1 hExp
+      rw [hHdef]
+      exact_mod_cast key
     obtain ⟨P, hPs, hPmem0, tdig, hcontP, hkP⟩ :=
       appendix_decode hℓ (by linarith)
         (fun a ha j ↦ hA₀bnd a (hÂ₀sub ha) j)
@@ -1853,8 +2007,9 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
       exact hA'₀'card
 
 /-- **Corollary 5**: Theorem 3 at `s = ⌊m / log² m⌋`; `P` may be taken
-symmetric and `kP` proper.  Requires `m ≥ C` so that `s` lies in the
-admissible range `[m^{1/2}, c·m/log m]` of Theorem 3. -/
+symmetric and `csP` proper.  Requires `m ≥ C` so that `s` lies in the
+admissible range `[m^{1/2}, c·m/log m]` of Theorem 3 and the largeness
+threshold `N₀(c,ℓ)` is met. -/
 theorem cfp_structure_cor (ℓ : ℕ) {β : ℝ} (hβ : 1 < β) :
     ∃ c d C : ℝ, 0 < c ∧ 0 < d ∧ 0 < C ∧ ∀ (A : Finset (Fin ℓ → ℤ))
       (B : GAP.Box ℓ),
@@ -1869,8 +2024,8 @@ theorem cfp_structure_cor (ℓ : ℕ) {β : ℝ} (hβ : 1 < β) :
           ∃ k : ℕ, 0 < k ∧
             (k : ℝ) ≤ c * (A.card / (Real.log A.card) ^ 2) ∧
             ∃ t : Fin ℓ → ℤ,
-              ((k • P).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
-              (k • P).Proper := by
+              ((P.widthScale k).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
+              (P.widthScale k).Proper := by
   obtain ⟨c, d, hc, hd, hcfp⟩ :=
     cfp_structure ℓ hβ (by norm_num : (0 : ℝ) < 1 / 2)
       (by norm_num : (1 : ℝ) / 2 < 1)
@@ -1895,8 +2050,14 @@ theorem cfp_structure_cor (ℓ : ℕ) {β : ℝ} (hβ : 1 < β) :
     Real.tendsto_log_atTop.eventually_ge_atTop (1 / c)
   obtain ⟨C₁, hC₁⟩ := eventually_atTop.mp
     (evLog.and (ev64.and (evlog.and (eventually_ge_atTop (16 : ℝ)))))
-  refine ⟨c, d, max C₁ 1, hc, hd,
-    lt_of_lt_of_le zero_lt_one (le_max_right _ _), fun A B hBint hsub hB hCm ↦ ?_⟩
+  -- enlarge `C` so the largeness hypothesis of `cfp_structure` holds
+  have hC₀pos : (0 : ℝ) < 16 * (c + 1) * (c / Real.log 2 + 1) ^ 2 *
+      (2 * (c / Real.log 2) + 1) ^ (2 * ℓ) + 1 := by
+    have hL2 : (0 : ℝ) < Real.log 2 := Real.log_pos (by norm_num)
+    positivity
+  refine ⟨c, d, max C₁ (16 * (c + 1) * (c / Real.log 2 + 1) ^ 2 *
+      (2 * (c / Real.log 2) + 1) ^ (2 * ℓ) + 1), hc, hd,
+    lt_of_lt_of_le hC₀pos (le_max_right _ _), fun A B hBint hsub hB hCm ↦ ?_⟩
   obtain ⟨hlog2, h64, h1c, hm16⟩ :=
     hC₁ (A.card : ℝ) (le_trans (le_max_left _ _) hCm)
   have hmpos : (0 : ℝ) < (A.card : ℝ) := lt_of_lt_of_le (by norm_num) hm16
@@ -1962,9 +2123,13 @@ theorem cfp_structure_cor (ℓ : ℕ) {β : ℝ} (hβ : 1 < β) :
       _ = c * (A.card : ℝ) * Real.log (A.card : ℝ) ^ 2 := by ring
   have hAne : A.Nonempty :=
     Finset.card_pos.mp (Nat.cast_pos.mp (lt_of_lt_of_le (by norm_num) hm16))
+  have hlarge : 16 * (c + 1) * (c / Real.log 2 + 1) ^ 2 *
+      (2 * (c / Real.log 2) + 1) ^ (2 * ℓ) < (A.card : ℝ) :=
+    lt_of_lt_of_le (lt_add_of_pos_right _ zero_lt_one)
+      (le_trans (le_max_right _ _) hCm)
   obtain ⟨Â, d', P, hÂsub, hÂcard, hd'le, hSym, hsub0,
     A', hA'sub, hA'card, k, hkpos, hkle, t, htrans, hprop⟩ :=
-    hcfp A B s hAne hBint hsub hB hs_ge hs_le2
+    hcfp A B s hAne hBint hsub hB hs_ge hs_le2 hlarge
   have hcinv : (0 : ℝ) < c⁻¹ := inv_pos.mpr hc
   have hst : (s : ℝ) * Real.log (A.card : ℝ)
       ≤ (A.card : ℝ) / Real.log (A.card : ℝ) := by

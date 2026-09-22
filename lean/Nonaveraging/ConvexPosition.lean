@@ -2745,6 +2745,118 @@ theorem of_smul_add_image {δ τ ε : ℝ} {r : ℝ} (hr : r ≠ 0) (b : Fin d �
 
 end DensityIncrementGoal
 
+/-- **Dyadic scale selection**: for `δ > 0` with `δ^{1/d} ≤ 1/32` there is a
+dyadic scale `k : ℕ` with `8·δ^{1/d} < 2^{-k} ≤ 16·δ^{1/d}` (the paper's
+`r = C δ^{1/d}` with `C ∈ (8,16]`).  The scale is coarse enough that
+`2^{-(d(k+2)+2)} > δ`, i.e. the mass level `2^{-j}` selected by
+`exists_dyadic_box_scale` satisfies `|A|/2^{j+1} > δ·|A|`, which is what
+makes `dilatedBox_notsubset_convexHull` applicable to the heavy boxes. -/
+private theorem exists_dyadic_scale (hd : 2 ≤ d) {δ : ℝ} (hδ : 0 < δ)
+    (hs : δ ^ ((d : ℝ)⁻¹) ≤ 1 / 32) :
+    ∃ k : ℕ, 8 * δ ^ ((d : ℝ)⁻¹) < ((2 : ℝ) ^ k)⁻¹ ∧
+      ((2 : ℝ) ^ k)⁻¹ ≤ 16 * δ ^ ((d : ℝ)⁻¹) ∧
+      δ < ((2 : ℝ) ^ (d * (k + 2) + 2))⁻¹ := by
+  have hdpos : (0 : ℝ) < d := by exact_mod_cast (by omega : 0 < d)
+  set s : ℝ := δ ^ ((d : ℝ)⁻¹) with hsdef
+  have hspos : 0 < s := Real.rpow_pos_of_pos hδ _
+  have hsd : s ^ d = δ := by
+    rw [hsdef, ← Real.rpow_natCast, ← Real.rpow_mul hδ.le,
+      inv_mul_cancel₀ hdpos.ne', Real.rpow_one]
+  set t : ℝ := (16 * s)⁻¹ with htdef
+  have ht : 2 ≤ t := by
+    rw [htdef, le_inv_comm₀ (by norm_num) hspos]
+    linarith [hs]
+  have htpos : 0 < t := lt_of_lt_of_le (by norm_num) ht
+  set N : ℕ := ⌈t⌉₊ with hNdef
+  have hNge : (t : ℝ) ≤ N := Nat.le_ceil t
+  have hN2 : 2 ≤ N := by
+    exact_mod_cast le_trans ht (Nat.le_ceil t)
+  set k : ℕ := Nat.clog 2 N with hkdef
+  have hkpos : 0 < k := Nat.clog_pos (by norm_num) (by omega)
+  have hNk : N ≤ 2 ^ k := by
+    have h := (Nat.clog_le_iff_le_pow (b := 2) (by norm_num) (x := N)
+      (y := k)).mp (le_refl _)
+    exact h
+  have hNk' : (2 : ℕ) ^ (k - 1) < N := by
+    have h := (Nat.lt_clog_iff_pow_lt (b := 2) (by norm_num) (x := N)
+      (y := k - 1)).mp (by omega)
+    exact h
+  -- Real-valued versions of the power bounds.
+  have hNkR : (N : ℝ) ≤ (2 : ℝ) ^ k := by exact_mod_cast hNk
+  have hNkR' : ((2 : ℝ) ^ (k - 1)) < N := by exact_mod_cast hNk'
+  have h2k : (0 : ℝ) < (2 : ℝ) ^ k := by positivity
+  have hlow : 8 * s < ((2 : ℝ) ^ k)⁻¹ := by
+    -- `2^k < 2t`: `2^{k-1} ≤ N - 1` in ℕ, and `N < t + 1`.
+    have h1 : (2 : ℕ) ^ k ≤ 2 * (N - 1) := by
+      have h2 : (2 : ℕ) ^ k = 2 * 2 ^ (k - 1) := by
+        rw [← pow_succ', Nat.sub_add_cancel hkpos]
+      rw [h2]
+      exact Nat.mul_le_mul_left 2 (Nat.le_pred_of_lt hNk')
+    have h1R : (2 : ℝ) ^ k ≤ 2 * ((N : ℝ) - 1) := by
+      have h2 : ((2 * (N - 1) : ℕ) : ℝ) = 2 * ((N : ℝ) - 1) := by
+        push_cast [Nat.cast_sub (by omega : 1 ≤ N)]
+        ring
+      calc (2 : ℝ) ^ k ≤ (2 * (N - 1) : ℕ) := by exact_mod_cast h1
+        _ = 2 * ((N : ℝ) - 1) := h2
+    have hNlt : (N : ℝ) < t + 1 := Nat.ceil_lt_add_one (le_trans (by norm_num) ht)
+    have h2t : (2 : ℝ) ^ k < 2 * t := by linarith
+    -- `2^k < 2t = (8s)⁻¹` gives `(2^k)⁻¹ > 8s`.
+    have h8s : (8 : ℝ) * s = (2 * t)⁻¹ := by
+      rw [htdef, mul_inv, mul_inv_rev]
+      ring_nf
+      rw [inv_inv]
+      ring
+    rw [h8s, inv_lt_comm₀ (by positivity : (0:ℝ) < 2 * t) h2k, inv_inv]
+    exact h2t
+  have hupp : ((2 : ℝ) ^ k)⁻¹ ≤ 16 * s := by
+    -- `2^k ≥ N ≥ t` gives `(2^k)⁻¹ ≤ t⁻¹ = 16s`.
+    rw [show (16 : ℝ) * s = t⁻¹ by rw [htdef, inv_inv],
+      inv_le_inv₀ h2k htpos]
+    exact le_trans hNge hNkR
+  refine ⟨k, hlow, hupp, ?_⟩
+  -- `2^{d(k+2)+2} = (2^k)^d · 4^{d+1} < (8s)^{-d} · 4^{d+1} = δ⁻¹·2^{2-d} ≤ δ⁻¹`.
+  have h8s : (8 : ℝ) * s = (2 * t)⁻¹ := by
+    rw [htdef, mul_inv, mul_inv_rev]
+    ring_nf
+    rw [inv_inv]
+    ring
+  have h2klt : (2 : ℝ) ^ k < (8 * s)⁻¹ := by
+    rwa [← h8s] at hlow
+  have hpow : ((2 : ℝ) ^ k) ^ d < (8 * s)⁻¹ ^ d :=
+    pow_lt_pow_left₀ h2klt h2k.le (by omega)
+  have h8s' : ((8 : ℝ) * s)⁻¹ ^ d = (8 : ℝ)⁻¹ ^ d * δ⁻¹ := by
+    rw [mul_inv, mul_pow, inv_pow, ← hsd, inv_pow]
+  have hexp : (2 : ℝ) ^ (d * (k + 2) + 2) = ((2 : ℝ) ^ k) ^ d * 2 ^ (2 * d + 2) := by
+    rw [show d * (k + 2) + 2 = d * k + (2 * d + 2) by ring, pow_add, ← pow_mul,
+      pow_mul]
+  rw [hexp]
+  have hgoal : ((2 : ℝ) ^ k) ^ d * 2 ^ (2 * d + 2) < δ⁻¹ := by
+    calc ((2 : ℝ) ^ k) ^ d * 2 ^ (2 * d + 2)
+        < (8 * s)⁻¹ ^ d * 2 ^ (2 * d + 2) :=
+          mul_lt_mul_of_pos_right hpow (by positivity)
+      _ = δ⁻¹ * (8⁻¹ ^ d * 2 ^ (2 * d + 2)) := by rw [h8s']; ring
+      _ ≤ δ⁻¹ * 1 := by
+          apply mul_le_mul_of_nonneg_left _ (by positivity)
+          calc (8 : ℝ)⁻¹ ^ d * 2 ^ (2 * d + 2)
+              = (2 : ℝ) ^ (2 * d + 2 - 3 * d : ℤ) := by
+                rw [show (8 : ℝ)⁻¹ ^ d = (2 : ℝ) ^ (-(3 * d : ℤ)) by
+                  rw [show (8 : ℝ) = 2 ^ (3 : ℕ) from by norm_num,
+                    ← zpow_natCast, ← zpow_mul (by norm_num : (2:ℝ) ≠ 0)]
+                  congr 1
+                  push_cast
+                  ring, ← zpow_natCast, ← zpow_add₀ (by norm_num)]
+                congr 1
+                push_cast
+                ring
+            _ = (2 : ℝ) ^ (2 - d : ℤ) := by congr 1; ring
+            _ ≤ 1 := by
+                apply zpow_le_one_of_nonpos₀ (by norm_num)
+                have hd2 : (2 : ℤ) ≤ d := by exact_mod_cast hd
+                linarith
+      _ = δ⁻¹ := mul_one _
+  rw [lt_inv_comm₀ (by positivity) hδ]
+  exact hgoal
+
 /-- **The boxed case** of `density_increment_core`: `A ⊆ [−1,1]^d`.  This is
 the genuinely hard geometric step of Lemma 1, where the paper's machinery is
 needed: the dyadic `r`-box decomposition (`r ~ δ^{1/d}`), the observation

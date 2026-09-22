@@ -1757,7 +1757,7 @@ bookkeeping used by the paper's eq. (15): `0 ∈ P` puts `P.toFinset`,
 
 *Caveat.*  Full `ℤ`-linear independence of `P.step` — equivalently
 `(gapLattice P).index ≠ 0` — does **not** follow from minimality in this
-formalization: a dependent-step GAP can be proper and yet admit no
+formalization: a dependent-step GAP can be proper and yet possess no
 lower-dimensional structure witness, because the two conditions on a
 witness pull in opposite directions (`Â ⊆ P.toFinset` needs large
 widths, while `kP + t ⊆ Σ(A')` needs a small point set).  See the

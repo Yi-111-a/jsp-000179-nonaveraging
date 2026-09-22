@@ -42,7 +42,7 @@ This file kills that escape and builds the honest scaffolding of Lemma 10
   *universal constants* (quantified outside `∀ A`, as supplied by
   `cfp_structure_cor`/`subSumDim_exists`), `d̃ ≤ D` is recorded, and `Wt`'s
   `hAhcard` field reads `|At| − c₀⁻¹·|At|/log|At| ≤ |Ât|` with `c₀`
-  independent of `A`.  The proof is `sorry`: it needs Lemmas 6/8
+  independent of `A`.  The proof is a gap: it needs Lemmas 6/8
   (`|P(A)| ≪_d |P|`, `|P|·s(A)^{−(d₁−d)}` bounds) plus the paper's
   equation-(8)/(9)/(10) termination bookkeeping.
 -/
@@ -957,10 +957,18 @@ theorem lem68_initial_bound {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
 /-- **Uniform Cor-5 with bounded dimension** — a single `c'` that is a
 Cor-5 constant for every `(d,β')`-class with `d ≤ D`, *and* whose
 witnesses may be taken at dimension `d' ≤ D`.  This combines
-`uniform_cor5_exists` (the constant-rigidity input) with the
-`cfp_structure_cor` dimension bound `(d' : ℝ) ≤ d`; `D` must dominate
+`uniform_cor5_exists` (the constant-rigidity input) with a dimension
+bound on the produced GAP; `D` must dominate
 the class bounds over the reachable ambient dimensions — the paper's
-"`d̄` sufficiently large in `β`". -/
+"`d̄` sufficiently large in `β`".
+
+**Status note (round 6).**  Beyond the constant rigidity documented at
+`uniform_cor5_exists`, the `d' ≤ d` clause is a second obstruction:
+`cfp_structure_cor` supplies only `(d' : ℝ) ≤ d_real` with `d_real` a
+real *constant* (`O_{d,β'}(1)`), not the ambient dimension, and proper
+GAPs of rank `> d` exist in `ℤ^d` (e.g. steps `3,5,7` with widths
+`2,2,2` form a proper `GAP 1 3`), so `SubSumDim X c' ≤ d` is not
+derivable and no width-1 dropping reaches it. -/
 theorem uniform_cor5_bounded_exists {β' : ℝ} (hβ' : 1 < β') :
     ∃ (c' : ℝ) (D : ℕ) (C₀ : ℕ → ℝ), 0 < c' ∧ ℓ ≤ D ∧
       ∀ ⦃d : ℕ⦄, d ≤ D → ∀ {X : Finset (Fin d → ℤ)} {B' : GAP.Box d},
@@ -1057,7 +1065,23 @@ the move count is `i + 1 ≥ ε·log|A| / (2·log(1/δ))`; the eq.-(8) bound
 bounds `nd ≤ dinit + sd`, `nu ≤ sd` then give
 `ns·log(1/γ) ≤ O_β(log|A|)`, hence `γ^{i−O_β(1)} ≤ |A|^{O_β(1)}` —
 contradicting `γ ≤ δ^K` once `K ≥ C_{β,ε}` (`hKbig`, the threshold the
-ambient hypotheses do not supply). -/
+ambient hypotheses do not supply).
+
+**Status note (round 6).**  As stated the hypotheses are *consistent*, so
+the conclusion is not derivable from them: `sd` is unbounded, and the
+move-count lower bound `nd + nu + ns > (ε/2)·log|A|/log(1/δ)` supplied by
+`hsize`/`hsmall` can be met entirely by `nd + nu ≤ dinit + 2·sd` with
+`ns = 0`, while `hPb`/`hP1` stay satisfiable (e.g. `C₆₈ = 1`, `sMin = 2`,
+`sd = 600`, `nd = nu = 600`, `dinit = 8`, `P0 = |A|^{2ℓ+β+2}`:
+`1 ≤ 2^{-600}·|A|^6` holds for `|A| = 2^{100}`, and
+`δ^{1208}|A| ≤ |X'| < |A|^{1−ε/2}` holds for `|X'| = 2^{50}`).  The paper
+escapes because its `sMin` is `s(A_j) ≥ |A|^{1−ε}` — growing with `|A|` —
+so `sd·log sMin` outruns `(nd+nu)·log C₆₈ + log P₀` and forces
+`sd = O_β(1)`; here `sMin` is a free constant `> 1` and `|A|` has no
+largeness hypothesis, so that mechanism is absent.  Minimal missing
+inputs: (i) `(A.card:ℝ)^(1-ε) ≤ sMin` (or any `|A|`-growth of `sMin`)
+and (ii) `1 ≤ (A.card:ℝ)`-type largeness together with strictness room
+in `hKbig`. -/
 theorem size_stop_absurd {A : Finset (Fin ℓ → ℤ)} {δ ε γ K : ℝ} {β : ℝ}
     {c' sMin C₆₈ : ℝ} {d' : ℕ} {X' : Finset (Fin d' → ℤ)}
     {nd nu ns sd dinit : ℕ} {W' : SubSumWitness X' c' (SubSumDim X' c')}
@@ -1084,7 +1108,16 @@ at the terminal stage the accumulated multiplier
 `|P̃| ≲ |A|^{−(1−ε)(d̃−ℓ)}·|B|` for `d̃ > ℓ` (each net dimension increase
 costs a factor `sMin^{-1}` paid for by the `|A|^{−(1−ε)}` shrink),
 `|P̃| ≲ (|Ã|/|A|)^K·|B|` for `d̃ = ℓ` (all moves were shrink-moves), and
-`|P̃| ≲ |B|` for `d̃ < ℓ`. -/
+`|P̃| ≲ |B|` for `d̃ < ℓ`.
+
+**Status note (round 6).**  Not derivable from the recorded invariants:
+`C₆₈^{nd+nu}` is uncontrolled (no `C₆₈² < sMin` here), `sMin^{-sd}` cannot
+deliver `|A|^{-(1-ε)(d̃-ℓ)}` since `sMin` is a constant rather than
+`≈ |A|^{1-ε}`, and the `d̃ = ℓ` bound needs `δ^{ns} ≤ |X̃|/|A|` while
+`s.hsz` only controls `δ^{nd+nu+ns}` jointly (the `nd + nu > 0` slack is
+not absorbable: `ns = 0`, `nu = 1`, `sd = sdd = 1`, `dinit = ℓ` is a
+legal stage with `|X̃|/|A| = δ`, where `hPb` gives `|P̃| ≤ sMin^{-1}|B|`
+but the goal wants `|P̃| ≤ C₆₈·δ^K·|B|`). -/
 theorem final_P_bounds {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
     {δ ε γ K : ℝ} {c' sMin C₆₈ : ℝ} {β β' : ℝ} {D : ℕ} {P0 : ℝ} {dinit : ℕ}
     (s : L10Stage A δ ε γ c' D sMin C₆₈ P0 dinit)

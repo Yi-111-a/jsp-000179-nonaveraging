@@ -611,7 +611,7 @@ lemmas consume it.
   helpers needed by the assembly.
 * `Lemma10Data`: the faithful output of Lemma 10 (compare
   `Nonaveraging/Structure.lean`'s `irreduciblization`).  The two
-  strengthenings relative to the current sorry-statement are the `d̃`
+  strengthenings relative to the current gap-statement are the `d̃`
   index of the ambient dimension and, crucially, a *usable* lower bound
   `|Ã|/2 ≤ |ϕ(Â)|` on the embedded image — the present
   `SubSumWitness.hAhcard` only gives `|Â| ≥ |Ã| − ct⁻¹|Ã|/log|Ã|` with an
@@ -861,7 +861,7 @@ theorem lemma10_data {ε K : ℝ} (hε : 0 < ε) (hε3 : ε < 1 / 3)
     exact (hdown hlt).trans
       (mul_le_mul_of_nonneg_right (le_max_left _ _) (Nat.cast_nonneg _))
 
-/-- **Case 1 assembly** (`d̃ > d`, genuine, sorry-free): under the
+/-- **Case 1 assembly** (`d̃ > d`, genuine, gap-free): under the
 Lemma-10 up-move bound `|P̃| = ∏ w̃ᵢ ≤ C·|A|^{-(1-ε)(d̃-d)}·|B|` and the
 Observation-15 uniform bound, the embedded image `Ā = ϕ_{P̃}(Â)` inside
 `B' = coeffBox P̃` is a non-averaging counterexample at slack
@@ -985,7 +985,7 @@ the largeness `N ≤ |A|` absorb Theorem 4's threshold), `density_increment`
 `θ'(ζ,d,|A|) ≍ log log log |A| / log |A|` — hence the hypothesis
 `incr ≤ ι / log |A|`.
 
-**This is the single remaining sorry of the iteration step.** -/
+**This is the single remaining gap of the iteration step.** -/
 theorem residual_density_step
     {d n : ℕ} {A : Finset (Fin d → ℤ)} {B : GAP.Box d}
     {At : Finset (Fin n → ℤ)} {ct c' δ γ C σ : ℝ}

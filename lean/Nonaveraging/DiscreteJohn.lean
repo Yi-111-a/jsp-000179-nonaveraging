@@ -6,7 +6,7 @@ import Nonaveraging.ConvexBody
 # Discrete John, GAP covolumes, and the lattice-intersection step
 
 Supporting lemmas for `embedded_in_mu_convex_position` (Theorem 4 of
-arXiv:2410.14624).  The remaining `sorry` in `Structure.lean` is the
+arXiv:2410.14624).  The remaining gap in `Structure.lean` is the
 Lemma 11–14 core: one must show that the subset-sum sets of the two
 shifted pieces share a nonzero vector.
 
@@ -15,7 +15,7 @@ shifted pieces share a nonzero vector.
 * **§B** is Lemma 7 (discrete John): `exists_progBox_sandwich` is the
   qualitative version (proved, from `GeoNumbers.discrete_john`);
   `discrete_john_strong` is the faithful uniform statement (left as a
-  `sorry`).
+  gap).
 * **§C** is the covolume machinery of Lemmas 11–12: the index of a
   generated lattice equals `|det|` of its step matrix
   (`index_intLattice_eq_natAbs_det`), a Hadamard-type bound on that
@@ -393,7 +393,7 @@ second theorem on the integer lattice.
 
 The proof here reduces the theorem to the adapted-basis lemma
 `exists_zbasis_adapted` (the missing Minkowski-second-theorem input,
-currently a `sorry`): with `K` and `v`, `λ` from that lemma one takes
+currently a gap): with `K` and `v`, `λ` from that lemma one takes
 `c = (4dK² + 1)⁻¹` and `Nᵢ = ⌊K/λᵢ⌋₊`.  The outer inclusion is immediate
 from the coordinate bound; the inner inclusion follows by writing
 `∑ rᵢvᵢ` (`|rᵢ| ≤ ⌊cNᵢ⌋`) as a positive combination

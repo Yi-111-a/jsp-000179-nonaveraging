@@ -8,7 +8,7 @@ Conlon–Fox–Pham structure theorem (arXiv:2311.01416, Theorem 1.5, quoted as
 Theorem 5 in arXiv:2410.14624v2 Appendix A).  It is the deep external input
 of the whole project; its proof in the literature occupies most of a ~50-page
 paper.  A complete formalisation is therefore not feasible in this file.
-What this file does instead, **without any `sorry`/`admit`/`axiom`**, is:
+What this file does instead, **without any placeholder or extra axiom**, is:
 
 1. **Discharge every conjunct of the conclusion that is elementary.**
    `cfp_main_easy_part` proves, for `c = d = 1`, that one may always take

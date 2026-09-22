@@ -758,7 +758,7 @@ abbrev StepConclusionB {d : ℕ} (A : Finset (Fin d → ℤ)) (B : GAP.Box d)
     (d' = d → (B'.card : ℝ) ≤ ρ ^ κ * (B.card : ℝ))
 
 /-- **Case-1 assembly, bookkeeping form** (`d̃ > d`, genuine,
-sorry-free).  As `Thm2.step_up` — the embedded image `Ā = ϕ_{P̃}(Â)`
+gap-free).  As `Thm2.step_up` — the embedded image `Ā = ϕ_{P̃}(Â)`
 inside `B' = coeffBox P̃` is a non-averaging counterexample — but the
 increment used is the *uniform* `ι` itself (admissible since
 `ι ≤ c₀/16` and `α_{d̃} + ζ + ι ≤ 1` are hypotheses here rather than

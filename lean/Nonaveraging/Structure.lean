@@ -2230,6 +2230,53 @@ theorem homogeneous {d : ℕ} {c : ℝ} {X : Finset (Fin ℓ → ℤ)}
   simp_rw [← neg_smul]
   rw [Finset.sum_neg_distrib]
 
+/-- **Compression lemma** — the algebraic half of Lemma 11's rank
+argument.  If a `d`-dimensional witness `W` admits a *sandwich* — a
+proper lower-dimensional GAP `Q` with `W.Ah ∪ {0} ⊆ Q ⊆ W.P` (pointwise)
+— then the same data `(Ah, A', k, t)` form a witness at the lower
+dimension: `Q ⊇ Ah ∪ {0}` by assumption, `kQ + t ⊆ kP + t ⊆ Σ(A')` since
+`Q ⊆ P`, and `kQ` is proper since `Q` is and `k ≠ 0`.
+
+In the paper this is the mechanism by which a rank-deficient `⟨P⟩`
+(which confines `P` to a coset of a lower-dimensional lattice) would
+contradict `SubSumDim = d`; the remaining geometric input is the
+*existence* of the sandwich, which the paper obtains from the
+`P ⊆` translate-of-`C·B` containment of Lemma 11. -/
+theorem compress_of_subgap {d r : ℕ} {c : ℝ} {X : Finset (Fin ℓ → ℤ)}
+    (W : SubSumWitness X c d) (Q : GAP ℓ r) (hQ : Q.Proper)
+    (hAh : (W.Ah ∪ {0}) ⊆ Q.toFinset)
+    (hfit : Q.toFinset ⊆ W.P.toFinset) :
+    Nonempty (SubSumWitness X c r) := by
+  refine ⟨{ Ah := W.Ah, A' := W.A', P := Q, k := W.k, t := W.t,
+    cpos := W.cpos, kpos := W.kpos, hk := W.hk, hAh := W.hAh,
+    hA' := W.hA', hA'card := W.hA'card, hAhcard := W.hAhcard,
+    hsub := hAh, htranslate := ?_, hproper := ?_ }⟩
+  · intro x hx
+    apply W.htranslate
+    rw [GAP.mem_translate_iff] at hx ⊢
+    have himg : (W.k • Q).toFinset ⊆ (W.k • W.P).toFinset := by
+      rw [GAP.nsmul_eq_zsmul W.k Q, GAP.nsmul_eq_zsmul W.k W.P,
+        GAP.toFinset_smul, GAP.toFinset_smul]
+      intro y hy
+      obtain ⟨z, hz, rfl⟩ := Finset.mem_image.mp hy
+      exact Finset.mem_image.mpr ⟨z, hfit hz, rfl⟩
+    exact himg hx
+  · rw [GAP.nsmul_eq_zsmul]
+    exact (GAP.proper_smul_iff
+      (show (W.k : ℤ) ≠ 0 by exact_mod_cast W.kpos.ne')).mpr hQ
+
+/-- A minimal-dimension witness admits no proper lower-dimensional
+sandwich: `compress_of_subgap` would give `SubSumDim X c ≤ r < d`,
+contradicting `SubSumDim X c = d`.  This is the precise point at which
+`exists_lemma11_rank` consumes its geometric input. -/
+theorem no_sandwich_of_minimal {d : ℕ} {c : ℝ} {X : Finset (Fin ℓ → ℤ)}
+    (W : SubSumWitness X c d) (hdim : SubSumDim X c = d) :
+    ¬ ∃ (r : ℕ) (Q : GAP ℓ r), r < d ∧ Q.Proper ∧
+        (W.Ah ∪ {0}) ⊆ Q.toFinset ∧ Q.toFinset ⊆ W.P.toFinset := by
+  rintro ⟨r, Q, hr, hQ, hAh, hfit⟩
+  have hle := subSumDim_le (W.compress_of_subgap Q hQ hAh hfit)
+  omega
+
 end SubSumWitness
 
 /-- **Lemma 11, second half** (the step bound): a nonempty `d`-dimensional
@@ -2371,6 +2418,25 @@ theorem intersectionRoundingSlack_spec {d : ℕ} [NeZero d]
   Classical.choose_spec
     (exists_lattice_intersection_rounding hli₁ hli₂) Tz
 
+/-- The rounding slack is nonnegative: the spec at `Tz = 0` yields
+`0 ≤ |(T i : ℝ)| ≤ ρ i`.  This records that the conclusion of
+`exists_lemma13_Tz_large` can never hold at `Tz = 0` (both the covolume
+term and the slack are nonnegative), so the largeness of `Tz` is a
+genuine input about the eq.-(13) point — not a consequence of the
+zonotope memberships (which hold at `Tz = 0` by `zero_mem_zonotope`). -/
+theorem intersectionRoundingSlack_nonneg {d : ℕ} [NeZero d]
+    {P₁ P₂ : GAP d d}
+    (hli₁ : LinearIndependent ℤ P₁.step)
+    (hli₂ : LinearIndependent ℤ P₂.step) (i : Fin d) :
+    0 ≤ intersectionRoundingSlack hli₁ hli₂ i := by
+  obtain ⟨T, -, -, hT⟩ :=
+    intersectionRoundingSlack_spec hli₁ hli₂ (0 : Fin d → ℝ)
+  have h : |(T i : ℝ)| ≤ intersectionRoundingSlack hli₁ hli₂ i := by
+    have hTi := hT i
+    simp only [Pi.zero_apply, sub_zero] at hTi
+    exact hTi
+  exact (abs_nonneg _).trans h
+
 /-- The covering radii: given the Lemma-11 column bound `C` and a common
 lattice point `T` exceeding the covolume bound `2^d·(d!·∏ Cⱼ)²` in
 coordinate `i₀`, the radii `r_{i₀} = 2^d·(d!·∏ Cⱼ)²`, `rᵢ = 1` (else)
@@ -2508,9 +2574,19 @@ independent.  In the paper this is the minimal-dimension argument: a
 rank-deficient `⟨Pᵢ⟩` would place `Pᵢ` in a lower-dimensional
 sublattice and (via the `Pᵢ ⊆ C·B` containment) compress it to a
 witness of dimension `< d`, contradicting `SubSumDim (Bᵢ ∓ a₀) c' = d`.
-(Per the caveat at `SubSumWitness.two_le_width`, minimality alone does
-not imply step independence in this formalization, so this remains an
-input.) -/
+
+The algebraic half of that compression is proved:
+`SubSumWitness.compress_of_subgap` builds a lower-dimensional
+`SubSumWitness` from a *sandwich* GAP `Q` (proper, `r < d`, with
+`Wᵢ.Ah ∪ {0} ⊆ Q ⊆ Wᵢ.P` pointwise), and
+`SubSumWitness.no_sandwich_of_minimal` shows such a `Q` cannot exist at
+`SubSumDim = d`.  The genuine missing input is thus exactly: rank
+deficiency of `⟨Pᵢ⟩` (which confines `Pᵢ` to a lower-dimensional lattice
+coset) produces such a sandwich — the paper supplies it through the
+`Pᵢ ⊆` translate-of-`C·B` containment, which is not among the
+hypotheses here (no bound on `Pᵢ` at all is assumed).  (Per the caveat
+at `SubSumWitness.two_le_width`, minimality alone does not imply step
+independence in this formalization, so this remains an input.) -/
 theorem exists_lemma11_rank {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
@@ -2527,7 +2603,21 @@ theorem exists_lemma11_rank {ℓ : ℕ} {c c' δ γ C' : ℝ} :
 coordinate `i₀`, the covolume bound `2^d·(d!·∏ Cⱼ)²` of
 `⟨P₁⟩ ∩ ⟨P₂⟩` plus the intersection-lattice rounding slack, so that
 its `exists_lattice_intersection_rounding` image `T` still satisfies
-`T_big`. -/
+`T_big`.
+
+*Caveat*: the hypothesis bundle `lemma33Hypotheses` places no lower
+bound on `Tz` — `Tz = 0` satisfies both zonotope memberships
+(`zero_mem_zonotope`), while the conclusion would then read
+`bound + slack i₀ < 0`, impossible since both terms are nonnegative
+(`intersectionRoundingSlack_nonneg`).  So this is irreducibly an input
+about the *specific* eq.-(13) point (in the paper
+`z₁ = μ|A|·Σ_{x∈A₁} c_x(x−a)` carries `≈ μ|A|/2` of total weight; its
+largeness is part of that construction).  An alternative faithful route
+in the paper avoids largeness entirely: `z₁ + ξ'|A|·B` contains at least
+two distinct points of `⟨P₁⟩ ∩ ⟨P₂⟩` by the covolume bound alone (and
+at most one of them is `0`), i.e. the nondegeneracy could also be
+obtained from a two-points variant of
+`exists_ne_zero_mem_inf_mem_box`. -/
 theorem exists_lemma13_Tz_large {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)

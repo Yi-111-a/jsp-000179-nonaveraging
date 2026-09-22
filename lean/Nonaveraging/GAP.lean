@@ -1536,7 +1536,42 @@ sums; unpacking `q_{0i}` via `packVec` yields digit vectors
 digit vector `m₀` still needs the centered form the paper's Theorem 5
 returns (or a parity argument on the coefficient of `0`), and dimensions
 with `k·wᵢ = 1` (dead steps, `wᵢ = k = 1`) must be pruned or zeroed before
-unpacking — these are the remaining inputs isolated in this lemma. -/
+unpacking — these are the remaining inputs isolated in this lemma.
+
+**Status (round 15).**  The statement is *not* derivable from the listed
+hypotheses — two inputs are missing that `cfp_main`'s conclusion does not
+supply:
+
+(a) `(P₀.widthScale k).Proper`.  Without it the conclusion is *false*:
+take `Â₀ = A'₀ = ∅`, `d' = 1`, `P₀ = ⟨0, 0, 1⟩` (point set `{0}`, proper
+and symmetric), `k = 2`, `t = 0`, `hdom` met for large `H`.  Then
+`Σ(A'₀) = {0}` and `hcont` holds, but any `P` containing `0` has
+`P.width i ≥ 1`, so a proper `P.widthScale 2` has `≥ 2` points and no
+translate fits in `{0}`.  The caller `cfp_structure` *does* have this
+input in scope (`hkP₀`, currently unused).
+
+(b) A *zero-centred* symmetry `∀ x ∈ P₀.toFinset, -x ∈ P₀.toFinset`
+(equivalently odd widths, or a parity input).  The decoded
+`P = unpack dig bdig P₀.width` is symmetric iff the vector
+`V = 2·bdig + Σᵢ (P₀.width i - 1) • dig i` is componentwise even; the
+∃-centre `P₀.Symmetric` only gives `packVec V = 2·m₀ 0` even, and bounded
+`packVec`-decodes are unique (`packVec_inj_of_sub_lt`), so no choice of
+subset-sum witnesses can repair an odd `V` for `ℓ ≥ 2`.  With `0`-centred
+symmetry the centre `M = 0` works directly (the reflection
+`eval m ↦ -eval m` is realised on coefficients, and
+`u_{m'} - u_{n⁰} = -(u_m - u_{n⁰})` by `packVec`-injectivity on the
+bounded box).  This is a statement-fidelity gap in `cfp_main`: CFP23's
+`P` may be taken centred (widths `2Nᵢ+1`); see its docstring.
+
+With (a) and (b) the lemma *is* provable: for `n ∈ (P₀.widthScale k).coeffs`
+choose `Sₙ ⊆ A'₀` with `packVec (u n) = eval n 0 + t 0`,
+`u n := Σ_{a ∈ Sₙ} a` bounded by `sn`; then `dig i := u(eᵢ) - u(0)`
+(`k·wᵢ ≥ 2`), `bdig := u(0) - u(n⁰)`, `tdig := u(n⁰)` where `n⁰` is the
+coefficient of `0` (so `t = eval n⁰ + t ∈ Σ(ϕA'₀)` itself, giving the
+bounded decode of `t`).  Induction on `Σ nᵢ` using
+`u_{n-eᵢ} + u_{eᵢ} = u_n + u_0` (both sides `packVec`-equal and `≤ 3sn`)
+gives `eval n = u_n - u_{n⁰}`, hence `|eval n j| ≤ 2sn` and the translate
+point is *exactly* `u_n ∈ Σ(A'₀)`. -/
 theorem appendix_decode {ℓ : ℕ} (hℓ : 0 < ℓ) {H : ℤ} (hH : 1 < H)
     {n s : ℕ} {Â₀ A'₀ : Finset (Fin ℓ → ℤ)}
     (hÂ : ∀ a ∈ Â₀, ∀ j, 0 ≤ a j ∧ a j ≤ (n : ℤ))

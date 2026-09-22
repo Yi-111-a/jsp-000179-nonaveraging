@@ -683,6 +683,25 @@ abbrev StepConclusion {d : ℕ} (A : Finset (Fin d → ℤ))
     (A.card : ℝ) ^ q ≤ (A'.card : ℝ) ∧ ρ * (A.card : ℝ) ≤ (A'.card : ℝ) ∧
     0 < ρ
 
+/-- The conclusion of the non-shrink `d̃ = d` density-increment step
+(`residual_density_step`): a `StepConclusion` whose witness stays in the
+*same* ambient dimension `d`, and which additionally reports `ρ ≤ 1`
+and the diagonal box-shrinkage `|B'| ≤ ρ^κ·|B|` — the two extra fields
+the bookkeeping-enriched step `StepPropB` (UpperBound.lean) tracks for
+`d' = d` steps.  Faithfully, the §4 pipeline (Theorem 4 → Lemma 1 →
+Lemma 7) produces `A' ⊆ B̃ ⊆ ℤ^d` with `|B̃| ≪ η·ρ̃^K·|B|`, `η ≤ 1`; the
+slack `2κ ≤ K` and largeness absorb the implied constant, giving
+`|B̃| ≤ ρ^κ·|B|` for `ρ` the reported retention factor.  Packaged as an
+`abbrev` so the existential is transparent at use sites. -/
+abbrev StepConclusionD {d : ℕ} (A : Finset (Fin d → ℤ)) (B : GAP.Box d)
+    (ζ incr q κ : ℝ) : Prop :=
+  ∃ (A' : Finset (Fin d → ℤ)) (B' : GAP.Box d) (ζ' ρ : ℝ),
+    B'.IsInterval ∧ NonAveraging A' ∧ A' ⊆ B'.toFinset ∧
+    A'.card ≤ A.card ∧ ζ + incr ≤ ζ' ∧
+    (B'.card : ℝ) ^ (αd d + ζ') < (A'.card : ℝ) ∧
+    (A.card : ℝ) ^ q ≤ (A'.card : ℝ) ∧ ρ * (A.card : ℝ) ≤ (A'.card : ℝ) ∧
+    0 < ρ ∧ ρ ≤ 1 ∧ (B'.card : ℝ) ≤ ρ ^ κ * (B.card : ℝ)
+
 /-- **Lemma-10 output bundle** (faithful form).  For the parameters
 `ε K`, a non-averaging `A ⊆ B ⊆ ℤ^d` with `|B| ≤ |A|⁴` produces a derived
 `Ã ⊆ ℤⁿ` with canonical witness `Wt` of dimension `d̃` such that:
@@ -1017,12 +1036,23 @@ inside `Ω'` into a `GAP.Box` with `|B̃| ≪ ρ̃^K |B|`.  The bare bound
 `hp` alone cannot produce the counterexample either:
 `|P̃|^{α_d+ζ+incr} < |Ã̂|` would need
 `2C^{e'}ρ̃^{Ke'-1} < |A|^{-(e'/e - 1)}`, whose LHS is `≥ 1` while the
-RHS is `< 1`. -/
+RHS is `< 1`.
+
+Round-15 note — the conclusion was strengthened from `StepConclusion`
+to `StepConclusionD` (same ambient dimension `d`, `ρ ≤ 1`, and the
+diagonal box-shrinkage `|B'| ≤ ρ^κ·|B|` at slack `2κ ≤ K`), so that the
+same leaf serves both `residual_step` (which projects the extra fields)
+and `residual_step_bookkeeping` (which needs them for `StepConclusionB`).
+The strengthened form is what the paper's pipeline delivers: the new
+counterexample `A' ⊆ B̃ ⊆ ℤ^{d}` lives in dimension `d` with
+`|B̃| ≪ η·ρ̃^K·|B|`, `η ≤ 1`, and `ρ ≤ μ^{c(d)}` absorbs constants into
+`ρ^κ` once `K ≥ 2κ` and `|A|` is large.  The two extra hypotheses
+`hκ`, `hKκ` record that parameter relation. -/
 theorem residual_density_step
     {d n : ℕ} {A : Finset (Fin d → ℤ)} {B : GAP.Box d}
     {At : Finset (Fin n → ℤ)} {ct c' δ γ C σ : ℝ}
     (Wt : SubSumWitness At ct d)
-    {ζ incr q ε K ι : ℝ} {N : ℕ}
+    {ζ incr q ε K ι κ : ℝ} {N : ℕ}
     (hd : 1 ≤ d) (hζ : 0 < ζ) (hαζ : αd d + ζ < 1)
     (hBint : B.IsInterval) (hNA : NonAveraging A)
     (hsub : A ⊆ B.toFinset)
@@ -1043,8 +1073,9 @@ theorem residual_density_step
     (hp : (Wt.P.coeffBox.card : ℝ) ≤
       C * ((At.card : ℝ) / (A.card : ℝ)) ^ K * (B.card : ℝ))
     (hσ : 0 < σ)
-    (hρ : (A.card : ℝ) ^ (-σ) < (At.card : ℝ) / (A.card : ℝ)) :
-    StepConclusion A ζ incr q := by
+    (hρ : (A.card : ℝ) ^ (-σ) < (At.card : ℝ) / (A.card : ℝ))
+    (hκ : 0 < κ) (hKκ : 2 * κ ≤ K) :
+    StepConclusionD A B ζ incr q κ := by
   sorry
 
 /-- **Residual §4 leaf**: given the Lemma-10 bundle, produce the step

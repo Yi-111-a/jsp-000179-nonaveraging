@@ -58,6 +58,60 @@ def translate (t : Fin ℓ → ℤ) : GAP ℓ d := ⟨t + P.base, P.step, P.widt
 /-- `P` is *symmetric*: there is a center `m` with `x ↦ 2m − x` preserving `P`. -/
 def Symmetric : Prop := ∃ m : Fin ℓ → ℤ, ∀ x ∈ P.toFinset, (2 • m - x) ∈ P.toFinset
 
+@[simp] theorem smul_base (k : ℤ) (P : GAP ℓ d) : (k • P).base = k • P.base := rfl
+
+@[simp] theorem smul_step (k : ℤ) (P : GAP ℓ d) :
+    (k • P).step = fun i ↦ k • P.step i := rfl
+
+@[simp] theorem smul_width (k : ℤ) (P : GAP ℓ d) : (k • P).width = P.width := rfl
+
+theorem smul_coeffs (k : ℤ) (P : GAP ℓ d) : (k • P).coeffs = P.coeffs := rfl
+
+theorem nsmul_eq_zsmul (k : ℕ) (P : GAP ℓ d) : (k • P) = ((k : ℤ) • P) := rfl
+
+@[simp] theorem translate_base (P : GAP ℓ d) (t : Fin ℓ → ℤ) :
+    (P.translate t).base = t + P.base := rfl
+
+@[simp] theorem translate_step (P : GAP ℓ d) (t : Fin ℓ → ℤ) :
+    (P.translate t).step = P.step := rfl
+
+@[simp] theorem translate_width (P : GAP ℓ d) (t : Fin ℓ → ℤ) :
+    (P.translate t).width = P.width := rfl
+
+theorem translate_coeffs (P : GAP ℓ d) (t : Fin ℓ → ℤ) :
+    (P.translate t).coeffs = P.coeffs := rfl
+
+/-- Evaluating a translate splits off the shift. -/
+theorem translate_eval (P : GAP ℓ d) (t : Fin ℓ → ℤ) (n : Fin d → ℕ) :
+    (P.translate t).eval n = t + P.eval n := add_assoc _ _ _
+
+/-- Evaluating a dilation distributes over the coefficients. -/
+theorem smul_eval (k : ℤ) (P : GAP ℓ d) (n : Fin d → ℕ) :
+    (k • P).eval n = k • P.eval n := by
+  show (k • P.base) + ∑ i, (n i : ℤ) • (k • P.step i) =
+    k • (P.base + ∑ i, (n i : ℤ) • P.step i)
+  rw [smul_add, Finset.smul_sum]
+  refine congrArg _ (Finset.sum_congr rfl fun i _ ↦ ?_)
+  exact (smul_comm k _ _).symm
+
+/-- The coefficient index set has cardinality `∏ widthᵢ`. -/
+theorem card_coeffs (P : GAP ℓ d) : P.coeffs.card = ∏ i, P.width i := by
+  have hinj : Set.InjOn (fun n : Π i, Fin (P.width i) ↦ fun i ↦ (n i : ℕ))
+      (Finset.univ : Finset (Π i, Fin (P.width i))) := by
+    intro a _ b _ hab
+    funext i
+    exact Fin.ext (congrFun hab i)
+  show (Finset.univ.image fun n : Π i, Fin (P.width i) ↦ fun i ↦ (n i : ℕ)).card
+      = ∏ i, P.width i
+  rw [Finset.card_image_of_injOn hinj, Finset.card_univ, Fintype.card_pi]
+  exact Finset.prod_congr rfl fun i _ ↦ Fintype.card_fin _
+
+/-- Properness gives the sharp cardinality `|P| = ∏ widthᵢ`. -/
+theorem card_toFinset_of_proper (P : GAP ℓ d) (hP : P.Proper) :
+    P.toFinset.card = ∏ i, P.width i := by
+  show (P.coeffs.image P.eval).card = ∏ i, P.width i
+  rw [Finset.card_image_of_injOn hP, card_coeffs]
+
 /-- Cardinality bound: `|P| ≤ ∏ widthᵢ`, with equality iff `P` is proper. -/
 theorem card_toFinset_le : P.toFinset.card ≤ ∏ i, P.width i := by
   unfold toFinset
@@ -251,6 +305,122 @@ theorem packVec_image_card {H : ℤ} (hH : 0 < H) {K : ℤ} (h2K : 2 * K < H) {�
     (S.image (packVec H)).card = S.card :=
   Finset.card_image_of_injOn (packVec_injOn hH h2K S hS)
 
+/-- Triangle inequality for a difference of integers. -/
+theorem abs_sub_le_abs_add {a b : ℤ} : |a - b| ≤ |a| + |b| := by
+  rw [sub_eq_add_neg]
+  exact (abs_add_le a (-b)).trans_eq (by rw [abs_neg])
+
+/-! ### Tight digit bound and interval-box injectivity
+
+`packVec_inj` requires both vectors in the *balanced* box `|a_j| ≤ K` with
+`2K < H`.  The Appendix-A applications instead control *differences*: two
+points of an interval box `∏ᵢ [loᵢ, hiᵢ]` differ coordinatewise by at most
+`hiᵢ − loᵢ`, so `ϕ` is injective as soon as `H` exceeds every sidelength.
+The kernel formulation (`packVec_eq_zero`) only needs `|c_j| < H`. -/
+
+/-- **Tight digit uniqueness**: `packVec` has trivial kernel on the strict
+box `|c_j| < H`.  Sharper than `packVec_inj` (which needs `2K < H`) because
+it applies to a single difference vector rather than two balanced vectors. -/
+theorem packVec_eq_zero {H : ℤ} (hH : 0 < H) :
+    ∀ {ℓ : ℕ} {c : Fin ℓ → ℤ}, (∀ j, |c j| < H) → packVec H c = 0 → c = 0 := by
+  intro ℓ
+  induction ℓ with
+  | zero => intro c _ _; exact Subsingleton.elim _ _
+  | succ ℓ ih =>
+    intro c hc hpack
+    have hsplit : ∀ v : Fin (ℓ + 1) → ℤ,
+        packVec H v = v 0 + H * packVec H (fun j ↦ v j.succ) := by
+      intro v
+      unfold packVec
+      rw [Fin.sum_univ_succ]
+      simp only [Fin.val_zero, pow_zero, mul_one, Fin.val_succ, pow_succ]
+      rw [Finset.mul_sum]
+      congr 1
+      apply Finset.sum_congr rfl
+      intro j _
+      ring
+    rw [hsplit c] at hpack
+    have hp : packVec H (fun j ↦ c j.succ) = 0 := by
+      by_contra hne
+      have hlt : |c 0| < H := hc 0
+      have heq : c 0 = -(H * packVec H (fun j ↦ c j.succ)) := by linarith
+      rw [heq, abs_neg, abs_mul, abs_of_pos hH] at hlt
+      have hge : (1 : ℤ) ≤ |packVec H (fun j ↦ c j.succ)| := abs_pos.mpr hne
+      have hle : H * 1 ≤ H * |packVec H (fun j ↦ c j.succ)| :=
+        mul_le_mul_of_nonneg_left hge hH.le
+      linarith
+    have hc0 : c 0 = 0 := by
+      have heq : c 0 = -(H * packVec H (fun j ↦ c j.succ)) := by linarith
+      rw [heq, hp, mul_zero, neg_zero]
+    have htail : (fun j : Fin ℓ ↦ c j.succ) = 0 :=
+      ih (fun j ↦ hc j.succ) hp
+    funext j
+    refine Fin.cases hc0 (fun i ↦ ?_) j
+    exact congrFun htail i
+
+/-- Injectivity of `ϕ` under a coordinate-difference bound: if `a` and `b`
+differ by less than `H` in every coordinate then `ϕ a = ϕ b` gives `a = b`. -/
+theorem packVec_inj_of_sub_lt {H : ℤ} (hH : 0 < H) {ℓ : ℕ} {a b : Fin ℓ → ℤ}
+    (h : ∀ j, |a j - b j| < H) (hab : packVec H a = packVec H b) : a = b := by
+  have h0 : packVec H (a - b) = 0 := by rw [packVec_sub, hab, sub_self]
+  have hcb := packVec_eq_zero hH (fun j ↦ by rw [Pi.sub_apply]; exact h j) h0
+  exact sub_eq_zero.mp hcb
+
+/-- `ϕ` is injective on a product of intervals `∏ᵢ [loᵢ, hiᵢ]` whenever `H`
+strictly exceeds every sidelength `hiᵢ − loᵢ`.  This is the form used in
+Appendix A (`ϕ : (−H/2, H/2]^ℓ → ℤ` is injective). -/
+theorem packVec_injOn_Icc {H : ℤ} (hH : 0 < H) {ℓ : ℕ} {lo hi : Fin ℓ → ℤ}
+    (hw : ∀ i, hi i - lo i < H) :
+    Set.InjOn (packVec H)
+      (↑(Fintype.piFinset fun i ↦ Finset.Icc (lo i) (hi i)) :
+        Set (Fin ℓ → ℤ)) := by
+  intro a ha b hb hab
+  apply packVec_inj_of_sub_lt hH _ hab
+  intro j
+  have ha' := Finset.mem_Icc.mp (Fintype.mem_piFinset.mp ha j)
+  have hb' := Finset.mem_Icc.mp (Fintype.mem_piFinset.mp hb j)
+  have hwj := hw j
+  rw [abs_lt]
+  constructor <;> omega
+
+/-- Range bound: `|ϕ a| ≤ M·ℓ·H^ℓ` when `|a_j| ≤ M` and `1 ≤ H`. -/
+theorem abs_packVec_le {ℓ : ℕ} {H : ℤ} (hH : 1 ≤ H) {a : Fin ℓ → ℤ} {M : ℤ}
+    (hM : 0 ≤ M) (ha : ∀ j, |a j| ≤ M) :
+    |packVec H a| ≤ M * ℓ * H ^ ℓ := by
+  unfold packVec
+  calc |∑ j : Fin ℓ, a j * H ^ j.val|
+      ≤ ∑ j : Fin ℓ, |a j * H ^ j.val| := Finset.abs_sum_le_sum_abs _ _
+    _ ≤ ∑ j : Fin ℓ, M * H ^ ℓ := by
+        apply Finset.sum_le_sum
+        intro j _
+        rw [abs_mul, abs_pow, abs_of_nonneg (by linarith : (0:ℤ) ≤ H)]
+        calc |a j| * H ^ j.val ≤ M * H ^ j.val :=
+              mul_le_mul_of_nonneg_right (ha j) (pow_nonneg (by linarith) _)
+          _ ≤ M * H ^ ℓ :=
+              mul_le_mul_of_nonneg_left (pow_le_pow_right₀ hH j.isLt.le) hM
+    _ = M * ℓ * H ^ ℓ := by
+        rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+        ring
+
+/-- Nonnegativity: `ϕ a ≥ 0` when all coordinates are nonnegative. -/
+theorem packVec_nonneg {ℓ : ℕ} {H : ℤ} (hH : 0 ≤ H) {a : Fin ℓ → ℤ}
+    (ha : ∀ j, 0 ≤ a j) : 0 ≤ packVec H a :=
+  Finset.sum_nonneg fun j _ ↦ mul_nonneg (ha j) (pow_nonneg hH _)
+
+/-- **Digit vectors exist**: a sum of `ϕ`-images of vectors bounded by `N`
+is the `ϕ`-image of the coordinatewise sum, bounded by `s.card * N`.  This
+produces the `qᵢ = ϕ⁻¹(q_{0i})` of Appendix A from `q_{0i} ∈ 2sQ` (a `2s`-fold
+sum of `ϕ`-images of `[−n, n]^ℓ`). -/
+theorem exists_digitVec_of_sum {H : ℤ} {ℓ : ℕ} {s : Finset (Fin ℓ → ℤ)}
+    {N : ℤ} (_hN : 0 ≤ N) (hs : ∀ a ∈ s, ∀ j, |a j| ≤ N) :
+    ∃ v : Fin ℓ → ℤ, packVec H v = ∑ a ∈ s, packVec H a ∧
+      ∀ j, |v j| ≤ s.card * N := by
+  refine ⟨∑ a ∈ s, a, packVec_sum H s, fun j ↦ ?_⟩
+  rw [Finset.sum_apply]
+  calc |∑ a ∈ s, a j| ≤ ∑ a ∈ s, |a j| := Finset.abs_sum_le_sum_abs _ _
+    _ ≤ ∑ a ∈ s, N := Finset.sum_le_sum fun a ha ↦ hs a ha j
+    _ = s.card * N := by rw [Finset.sum_const, nsmul_eq_mul]
+
 /-- An axis-aligned box in `ℤ^ℓ`: a product of intervals. -/
 def Box (ℓ : ℕ) := Fin ℓ → Finset ℤ
 
@@ -294,6 +464,49 @@ theorem Symmetric.isInterval {B : Box ℓ} (h : B.Symmetric) : B.IsInterval := b
   exact ⟨-(N : ℤ), (N : ℤ), hN⟩
 
 end Box
+
+/-- **Interval-box injectivity** (Appendix A): `ϕ` is injective on
+`B.toFinset` whenever `B` is the interval box `∏ᵢ [loᵢ, hiᵢ]` and `H`
+strictly exceeds every sidelength `hiᵢ − loᵢ`. -/
+theorem packVec_injOn_box {H : ℤ} (hH : 0 < H) {ℓ : ℕ} {B : Box ℓ}
+    {lo hi : Fin ℓ → ℤ} (hB : ∀ i, B i = Finset.Icc (lo i) (hi i))
+    (hw : ∀ i, hi i - lo i < H) :
+    Set.InjOn (packVec H) (B.toFinset : Set (Fin ℓ → ℤ)) := by
+  have e : B.toFinset = Fintype.piFinset fun i ↦ Finset.Icc (lo i) (hi i) := by
+    show Fintype.piFinset B = _
+    congr 1
+    funext i
+    exact hB i
+  rw [e]
+  exact packVec_injOn_Icc hH hw
+
+/-- The same, packaged against `Box.IsInterval`. -/
+theorem packVec_injOn_isInterval {H : ℤ} (hH : 0 < H) {ℓ : ℕ} {B : Box ℓ}
+    (hB : B.IsInterval)
+    (hw : ∀ i lo hi, B i = Finset.Icc lo hi → hi - lo < H) :
+    Set.InjOn (packVec H) (B.toFinset : Set (Fin ℓ → ℤ)) := by
+  choose lo hi hB' using hB
+  exact packVec_injOn_box hH hB' fun i ↦ hw i (lo i) (hi i) (hB' i)
+
+/-- **Range bound on a box**: `ϕ` maps an interval box into
+`[−MℓH^ℓ, MℓH^ℓ]` when `|loᵢ|, |hiᵢ| ≤ M`. -/
+theorem packVec_mem_Icc_box {H : ℤ} (hH : 1 ≤ H) {ℓ : ℕ} {B : Box ℓ}
+    {lo hi : Fin ℓ → ℤ} (hB : ∀ i, B i = Finset.Icc (lo i) (hi i)) {M : ℤ}
+    (hM0 : 0 ≤ M) (hM : ∀ i, |lo i| ≤ M ∧ |hi i| ≤ M) :
+    B.toFinset.image (packVec H) ⊆
+      Finset.Icc (-(M * ℓ * H ^ ℓ)) (M * ℓ * H ^ ℓ) := by
+  intro z hz
+  obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp hz
+  rw [Finset.mem_Icc]
+  have habs : ∀ j, |a j| ≤ M := by
+    intro j
+    have haj := Fintype.mem_piFinset.mp ha j
+    rw [hB j] at haj
+    obtain ⟨hlo, hhi⟩ := Finset.mem_Icc.mp haj
+    obtain ⟨hl, hh⟩ := hM j
+    rw [abs_le] at hl hh ⊢
+    constructor <;> linarith
+  exact abs_le.mp (abs_packVec_le hH hM0 habs)
 
 /-- `A` is an `(ℓ, β)`-set: a subset of `ℤ^ℓ` contained in an interval box of
 size `|B| ≤ |A|^β` (arXiv:2410.14624v2, §3). -/
@@ -780,6 +993,438 @@ theorem unpack_homogeneous {P₀ : GAP 1 d} {H : ℤ} (hH : 0 < H)
   rw [hbdig, hc, packVec_sum' Finset.univ, Finset.sum_apply]
   refine Finset.sum_congr rfl fun i _ ↦ ?_
   rw [Pi.smul_apply, smul_eq_mul, packVec_smul, hdig i]
+
+/-! ### Pullback of a `GAP 1` through `ϕ` (Appendix A)
+
+The decoded GAP `P = unpack dig bdig P₀.width` satisfies `ϕ(P) = P₀` at
+coordinate `0` (`packVec_unpack_eval`).  The lemmas below assemble the
+Appendix-A pullback:
+
+* `Proper.unpack` — properness transfers unconditionally;
+* `mem_unpack_of_eval`, `subset_unpack_toFinset`, `zero_mem_unpack` — a
+  bounded set `T` with `ϕ(T) ⊆ P₀` is contained in the decoded GAP
+  (the `Â ∪ {0} ⊆ P` step);
+* `unpack_symmetric` — symmetry transfers when the center has a digit
+  vector and decoded points are bounded;
+* `packVec_sum_smul_dig`, `unpack_digSum_homogeneous` — the homogeneous
+  base choice `bdig = ∑ cᵢ • digᵢ` needs no size condition;
+* `subsetSumsL_translate_unpack`, `subsetSumsL_smul_translate_unpack` — the
+  subset-sum decode `kP₀ + t ⊆ Σ(ϕ A') ⟹ kP + t' ⊆ Σ(A')`;
+* `gap_pullback` — the packaged statement. -/
+
+/-- Properness of `P₀` transfers to the decoded GAP unconditionally:
+`eval n = eval m` in `ℤ^ℓ` implies equality of `ϕ`-images, hence of the
+`P₀`-evaluations, hence of the coefficients. -/
+theorem Proper.unpack {P₀ : GAP 1 d} {H : ℤ} {dig : Fin d → Fin ℓ → ℤ}
+    {bdig : Fin ℓ → ℤ} (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0) (hP : P₀.Proper) :
+    (unpack dig bdig P₀.width).Proper := by
+  intro n hn m hm h
+  have hn' : n ∈ P₀.coeffs := by rwa [unpack_coeffs] at hn
+  have hm' : m ∈ P₀.coeffs := by rwa [unpack_coeffs] at hm
+  apply hP hn' hm'
+  apply eval_one_eq.mpr
+  rw [← packVec_unpack_eval hdig hbdig n,
+    ← packVec_unpack_eval hdig hbdig m, h]
+
+/-- `packVec` commutes with `translate`/`eval` on the decoded GAP. -/
+theorem packVec_translate_eval {P₀ : GAP 1 d} {H : ℤ}
+    {dig : Fin d → Fin ℓ → ℤ} {bdig : Fin ℓ → ℤ}
+    (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0)
+    {t₀ : Fin 1 → ℤ} {tdig : Fin ℓ → ℤ} (ht : packVec H tdig = t₀ 0)
+    (n : Fin d → ℕ) :
+    packVec H (((unpack dig bdig P₀.width).translate tdig).eval n) =
+      ((P₀.translate t₀).eval n) 0 := by
+  rw [translate_eval, packVec_add, ht, packVec_unpack_eval hdig hbdig n,
+    translate_eval, Pi.add_apply]
+
+/-- **Lifting a point through `ϕ`**: if `ϕ x` agrees with the `0`-coordinate
+of a `P₀`-coefficient point `eval n`, and `x` is coordinatewise within `H`
+of the decoded point `eval n`, then `x` lies in the decoded GAP.  This is
+the lifting step `Â ∪ {0} ⊆ P` of Appendix A. -/
+theorem mem_unpack_of_eval {P₀ : GAP 1 d} {H : ℤ} (hH : 0 < H)
+    {dig : Fin d → Fin ℓ → ℤ} {bdig : Fin ℓ → ℤ}
+    (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0)
+    {n : Fin d → ℕ} (hn : n ∈ P₀.coeffs) {x : Fin ℓ → ℤ}
+    (hx : (P₀.eval n) 0 = packVec H x)
+    (hclose : ∀ j, |x j - (unpack dig bdig P₀.width).eval n j| < H) :
+    x ∈ (unpack dig bdig P₀.width).toFinset := by
+  apply Finset.mem_image.mpr
+  refine ⟨n, ?_, ?_⟩
+  · show n ∈ (unpack dig bdig P₀.width).coeffs
+    rw [unpack_coeffs]; exact hn
+  · show (unpack dig bdig P₀.width).eval n = x
+    apply packVec_inj_of_sub_lt hH _ _
+    · intro j; rw [abs_sub_comm]; exact hclose j
+    · rw [packVec_unpack_eval hdig hbdig n]; exact hx
+
+/-- **GAP pullback — containment**: if `ϕ(T) ⊆ P₀` (read at coordinate `0`),
+every decoded coefficient point is coordinatewise `≤ K`, `T` is
+coordinatewise `≤ Kx`, and `K + Kx < H`, then `T` is contained in the
+decoded GAP. -/
+theorem subset_unpack_toFinset {P₀ : GAP 1 d} {H : ℤ} (hH : 0 < H)
+    {dig : Fin d → Fin ℓ → ℤ} {bdig : Fin ℓ → ℤ}
+    (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0)
+    {T : Finset (Fin ℓ → ℤ)}
+    (hT : ∀ x ∈ T, (fun _ : Fin 1 ↦ packVec H x) ∈ P₀.toFinset)
+    {K : ℤ} (hbound : ∀ n ∈ P₀.coeffs, ∀ j,
+      |(unpack dig bdig P₀.width).eval n j| ≤ K)
+    {Kx : ℤ} (hx : ∀ x ∈ T, ∀ j, |x j| ≤ Kx)
+    (hKH : K + Kx < H) :
+    T ⊆ (unpack dig bdig P₀.width).toFinset := by
+  intro x hxT
+  obtain ⟨n, hn, heval⟩ := Finset.mem_image.mp (hT x hxT)
+  have hx0 : (P₀.eval n) 0 = packVec H x := congrFun heval 0
+  apply mem_unpack_of_eval hH hdig hbdig hn hx0
+  intro j
+  have h1 := abs_sub_le_abs_add (a := x j)
+    (b := (unpack dig bdig P₀.width).eval n j)
+  linarith [h1, hx x hxT j, hbound n hn j]
+
+/-- `0` lies in the decoded GAP when the constant-`0` point lies in `P₀`
+and decoded points are bounded by `K < H`. -/
+theorem zero_mem_unpack {P₀ : GAP 1 d} {H : ℤ} (hH : 0 < H)
+    {dig : Fin d → Fin ℓ → ℤ} {bdig : Fin ℓ → ℤ}
+    (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0)
+    (h0 : (fun _ : Fin 1 ↦ (0 : ℤ)) ∈ P₀.toFinset)
+    {K : ℤ} (hbound : ∀ n ∈ P₀.coeffs, ∀ j,
+      |(unpack dig bdig P₀.width).eval n j| ≤ K)
+    (hKH : K < H) :
+    (0 : Fin ℓ → ℤ) ∈ (unpack dig bdig P₀.width).toFinset := by
+  obtain ⟨n, hn, heval⟩ := Finset.mem_image.mp h0
+  have hx0 : (P₀.eval n) 0 = packVec H (0 : Fin ℓ → ℤ) := by
+    rw [packVec_zero]; exact congrFun heval 0
+  apply mem_unpack_of_eval hH hdig hbdig hn hx0
+  intro j
+  rw [Pi.zero_apply, zero_sub, abs_neg]
+  exact lt_of_le_of_lt (hbound n hn j) hKH
+
+/-- Symmetry transfers to the decoded GAP when the center has a digit
+vector and decoded points are bounded (`2Km + 2K < H`). -/
+theorem unpack_symmetric {P₀ : GAP 1 d} {H : ℤ} (hH : 0 < H)
+    {dig : Fin d → Fin ℓ → ℤ} {bdig : Fin ℓ → ℤ}
+    (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0)
+    {m₀ : Fin 1 → ℤ} (hm₀ : ∀ x ∈ P₀.toFinset, (2 • m₀ - x) ∈ P₀.toFinset)
+    {mdig : Fin ℓ → ℤ} (hm : packVec H mdig = m₀ 0)
+    {K Km : ℤ} (hbound : ∀ n ∈ P₀.coeffs, ∀ j,
+      |(unpack dig bdig P₀.width).eval n j| ≤ K)
+    (hmdig : ∀ j, |mdig j| ≤ Km) (hH2 : 2 * Km + 2 * K < H) :
+    (unpack dig bdig P₀.width).Symmetric := by
+  have h2v : ∀ v : Fin ℓ → ℤ, packVec H (2 • v) = 2 * packVec H v := by
+    intro v
+    unfold packVec
+    rw [Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro j _
+    simp only [Pi.smul_apply, Int.nsmul_eq_mul, Nat.cast_ofNat]
+    ring
+  refine ⟨mdig, fun x hx ↦ ?_⟩
+  obtain ⟨n, hn, rfl⟩ := Finset.mem_image.mp hx
+  have hn₀ : n ∈ P₀.coeffs := by rwa [unpack_coeffs] at hn
+  have hmem : P₀.eval n ∈ P₀.toFinset := Finset.mem_image.mpr ⟨n, hn₀, rfl⟩
+  obtain ⟨n', hn', hnn'⟩ := Finset.mem_image.mp (hm₀ _ hmem)
+  have hn'' : n' ∈ (unpack dig bdig P₀.width).coeffs := by
+    rwa [unpack_coeffs]
+  refine Finset.mem_image.mpr ⟨n', hn'', ?_⟩
+  apply packVec_inj_of_sub_lt hH
+  · intro j
+    rw [abs_sub_comm]
+    have habs : |(2 • mdig - (unpack dig bdig P₀.width).eval n) j -
+        (unpack dig bdig P₀.width).eval n' j| ≤
+        2 * |mdig j| + |(unpack dig bdig P₀.width).eval n j| +
+          |(unpack dig bdig P₀.width).eval n' j| := by
+      have e1 : (2 • mdig - (unpack dig bdig P₀.width).eval n) j =
+          2 * mdig j - (unpack dig bdig P₀.width).eval n j := by
+        simp [Pi.sub_apply, Nat.cast_ofNat]
+      rw [e1]
+      have h2a := abs_sub_le_abs_add
+        (a := 2 * mdig j - (unpack dig bdig P₀.width).eval n j)
+        (b := (unpack dig bdig P₀.width).eval n' j)
+      have h2b := abs_sub_le_abs_add (a := 2 * mdig j)
+        (b := (unpack dig bdig P₀.width).eval n j)
+      have h2c : |2 * mdig j| = 2 * |mdig j| := by
+        rw [abs_mul]; norm_num
+      linarith
+    linarith [habs, hbound n hn₀ j, hbound n' hn' j, hmdig j]
+  · rw [packVec_sub, h2v mdig, hm, packVec_unpack_eval hdig hbdig n,
+      packVec_unpack_eval hdig hbdig n']
+    have e : (P₀.eval n') 0 = 2 * m₀ 0 - (P₀.eval n) 0 := by
+      have e := congrFun hnn' 0
+      simpa [Pi.sub_apply, Pi.smul_apply, smul_eq_mul, Int.nsmul_eq_mul,
+        Nat.cast_ofNat] using e
+    exact e
+
+/-- The homogeneous base choice: `ϕ(∑ cᵢ • digᵢ) = ∑ cᵢ • wᵢ = P₀.base 0`
+when `P₀` is homogeneous with coefficients `c`.  No size condition is
+needed since the base is *defined* by the digit combination. -/
+theorem packVec_sum_smul_dig {P₀ : GAP 1 d} {H : ℤ}
+    {dig : Fin d → Fin ℓ → ℤ} {c : Fin d → ℤ}
+    (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hc : P₀.base = ∑ i, c i • P₀.step i) :
+    packVec H (∑ i, c i • dig i) = P₀.base 0 := by
+  rw [hc, packVec_sum' Finset.univ, Finset.sum_apply]
+  exact Finset.sum_congr rfl fun i _ ↦ by
+    rw [Pi.smul_apply, smul_eq_mul, packVec_smul, hdig i]
+
+/-- The decoded GAP with homogeneous base `∑ cᵢ • digᵢ` is homogeneous
+with the same coefficients. -/
+theorem unpack_digSum_homogeneous {dig : Fin d → Fin ℓ → ℤ} {c : Fin d → ℤ}
+    {w : Fin d → ℕ} :
+    (unpack dig (∑ i, c i • dig i) w).Homogeneous := ⟨c, rfl⟩
+
+/-- Bound on decoded coefficient points: `|eval n| ≤ Kb + (∑ wᵢ)·Kd` when the
+base digits are `≤ Kb` and the step digits `≤ Kd`.  Feeds the `H`-domination
+hypotheses of the pullback lemmas; in Appendix A `Kd ≤ 2sn`
+(`qᵢ ∈ [−2sn, 2sn]^ℓ`) and `wᵢ ≤ (sn)^ℓ`. -/
+theorem abs_unpack_eval_le {P₀ : GAP 1 d} {dig : Fin d → Fin ℓ → ℤ}
+    {bdig : Fin ℓ → ℤ} (n : Fin d → ℕ) (hn : n ∈ P₀.coeffs)
+    {Kb Kd : ℤ} (hb : ∀ j, |bdig j| ≤ Kb)
+    (hd : ∀ i, ∀ j, |dig i j| ≤ Kd) (_hKd : 0 ≤ Kd) (j : Fin ℓ) :
+    |(unpack dig bdig P₀.width).eval n j| ≤
+      Kb + (∑ i, (P₀.width i : ℤ)) * Kd := by
+  have h1 : (unpack dig bdig P₀.width).eval n j =
+      bdig j + ∑ i, (n i : ℤ) * dig i j := by
+    show (bdig + ∑ i, (n i : ℤ) • dig i) j = _
+    rw [Pi.add_apply, Finset.sum_apply]
+    refine congrArg _ (Finset.sum_congr rfl fun i _ ↦ ?_)
+    rw [Pi.smul_apply, smul_eq_mul]
+  rw [h1]
+  have hbound : |∑ i : Fin d, (n i : ℤ) * dig i j| ≤
+      ∑ i : Fin d, (P₀.width i : ℤ) * Kd := by
+    calc |∑ i, (n i : ℤ) * dig i j| ≤ ∑ i, |(n i : ℤ) * dig i j| :=
+        Finset.abs_sum_le_sum_abs _ _
+      _ ≤ ∑ i, (P₀.width i : ℤ) * Kd := by
+        apply Finset.sum_le_sum
+        intro i _
+        have hni : (n i : ℤ) ≤ (P₀.width i : ℤ) := by
+          exact_mod_cast (coeff_mem_width hn i).le
+        have hnn : (0 : ℤ) ≤ (n i : ℤ) := by positivity
+        rw [abs_mul, abs_of_nonneg hnn]
+        exact mul_le_mul hni (hd i j) (abs_nonneg _) (by positivity)
+  calc |bdig j + ∑ i, (n i : ℤ) * dig i j|
+      ≤ |bdig j| + |∑ i, (n i : ℤ) * dig i j| := abs_add_le _ _
+    _ ≤ Kb + ∑ i, (P₀.width i : ℤ) * Kd := add_le_add (hb j) hbound
+    _ = Kb + (∑ i, (P₀.width i : ℤ)) * Kd := by rw [Finset.sum_mul]
+
+/-- **Subset-sum decode** (Appendix A): a translate of `P₀` contained in
+`Σ(ϕ A')` pulls back to a translate of the decoded GAP contained in
+`Σ(A')`.  The hypotheses say: `A'` has coordinates `≤ Ka` with `2Ka < H`
+(so `ϕ` is injective on `A'`), `tdig` is a digit vector of `t₀`, and for
+every coefficient tuple `|tdig| + |eval| + |A'|·Ka < H` — the domination
+bound that upgrades `ϕ`-equality to pointwise equality. -/
+theorem subsetSumsL_translate_unpack {P₀ : GAP 1 d} {H : ℤ} (hH : 0 < H)
+    {dig : Fin d → Fin ℓ → ℤ} {bdig : Fin ℓ → ℤ}
+    (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0)
+    {t₀ : Fin 1 → ℤ} {tdig : Fin ℓ → ℤ} (ht : packVec H tdig = t₀ 0)
+    {A' : Finset (Fin ℓ → ℤ)} {Ka : ℤ} (hKa0 : 0 ≤ Ka)
+    (hKa : ∀ a ∈ A', ∀ j, |a j| ≤ Ka) (h2K : 2 * Ka < H)
+    (hsub : (P₀.translate t₀).toFinset ⊆
+      subsetSumsL (A'.image fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x))
+    (hbound : ∀ n ∈ P₀.coeffs, ∀ j,
+      |tdig j| + |(unpack dig bdig P₀.width).eval n j| +
+        (A'.card : ℤ) * Ka < H) :
+    ((unpack dig bdig P₀.width).translate tdig).toFinset ⊆ subsetSumsL A' := by
+  intro y hy
+  obtain ⟨n, hn, hny⟩ := Finset.mem_image.mp hy
+  have hn₀ : n ∈ P₀.coeffs := by rwa [translate_coeffs, unpack_coeffs] at hn
+  -- `ϕ y` is the `0`-coordinate of the corresponding `P₀`-translate point.
+  have hmem : (fun _ : Fin 1 ↦ packVec H y) ∈ (P₀.translate t₀).toFinset := by
+    apply Finset.mem_image.mpr
+    refine ⟨n, by rwa [translate_coeffs], ?_⟩
+    funext i
+    rw [Fin.eq_zero i]
+    show ((P₀.translate t₀).eval n) 0 = packVec H y
+    rw [← packVec_translate_eval hdig hbdig ht n, hny]
+  obtain ⟨S₀, hS₀, hsum₀⟩ := mem_subsetSumsL.mp (hsub hmem)
+  -- Pull `S₀ ⊆ ϕ(A')` back to a subset `S ⊆ A'`.
+  obtain ⟨S, hS, rfl⟩ := Finset.subset_image_iff.mp hS₀
+  -- `ϕ` is injective on `A'` (coordinates differ by at most `2Ka < H`).
+  have hinj : Set.InjOn (fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x)
+      ↑A' := by
+    intro a ha b hb hab
+    apply packVec_inj_of_sub_lt hH _ (congrFun hab 0)
+    intro j
+    have h1 := abs_le.mp (hKa a ha j)
+    have h2 := abs_le.mp (hKa b hb j)
+    rw [abs_lt]; constructor <;> linarith
+  have hinjS := hinj.mono (Finset.coe_subset.mpr hS)
+  -- `ϕ y = ϕ (∑ S)`: both sides agree at coordinate `0`.
+  have hpk : packVec H y = packVec H (∑ a ∈ S, a) := by
+    have e1 : (∑ b ∈ S.image
+        (fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x), b) 0 =
+          packVec H y := by
+      have hh := congrFun hsum₀ 0
+      rw [Finset.sum_apply] at hh ⊢
+      exact hh
+    have e2 : (∑ b ∈ S.image
+        (fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x), b) =
+        ∑ a ∈ S, (fun _ : Fin 1 ↦ packVec H a) :=
+      Finset.sum_image hinjS
+    have e3 : (∑ a ∈ S, (fun _ : Fin 1 ↦ packVec H a)) 0 =
+        packVec H (∑ a ∈ S, a) := by
+      rw [Finset.sum_apply]
+      exact (packVec_sum H S).symm
+    rw [← e3, ← e2, e1]
+  -- `|σ_j| ≤ |A'|·Ka` for `σ = ∑ S`.
+  have hσ : ∀ j, |(∑ a ∈ S, a) j| ≤ (A'.card : ℤ) * Ka := by
+    intro j
+    rw [Finset.sum_apply]
+    calc |∑ a ∈ S, a j| ≤ ∑ a ∈ S, |a j| := Finset.abs_sum_le_sum_abs _ _
+      _ ≤ ∑ a ∈ S, Ka := Finset.sum_le_sum fun a ha ↦ hKa a (hS ha) j
+      _ = (S.card : ℤ) * Ka := by rw [Finset.sum_const, nsmul_eq_mul]
+      _ ≤ (A'.card : ℤ) * Ka := mul_le_mul_of_nonneg_right
+          (by exact_mod_cast Finset.card_le_card hS) hKa0
+  have hclose : ∀ j, |y j - (∑ a ∈ S, a) j| < H := by
+    intro j
+    have hyj : y j = tdig j + (unpack dig bdig P₀.width).eval n j := by
+      rw [← hny, translate_eval, Pi.add_apply]
+    rw [hyj]
+    have htr : |tdig j + (unpack dig bdig P₀.width).eval n j - (∑ a ∈ S, a) j|
+        ≤ |tdig j| + |(unpack dig bdig P₀.width).eval n j| +
+          |(∑ a ∈ S, a) j| := by
+      have e1 := abs_sub_le_abs_add (a := tdig j +
+        (unpack dig bdig P₀.width).eval n j) (b := (∑ a ∈ S, a) j)
+      have e2 := abs_add_le (tdig j) ((unpack dig bdig P₀.width).eval n j)
+      linarith
+    have hb := hbound n hn₀ j
+    have hσj := hσ j
+    linarith
+  have hyeq : y = ∑ a ∈ S, a := packVec_inj_of_sub_lt hH hclose hpk
+  exact mem_subsetSumsL.mpr ⟨S, hS, hyeq.symm⟩
+
+/-- `k • unpack` is the decode of `k • P₀`. -/
+theorem smul_unpack (k : ℤ) (dig : Fin d → Fin ℓ → ℤ) (bdig : Fin ℓ → ℤ)
+    (w : Fin d → ℕ) :
+    k • unpack dig bdig w = unpack (fun i ↦ k • dig i) (k • bdig) w := rfl
+
+/-- Properness of `k • P₀` transfers to `k •` the decoded GAP. -/
+theorem Proper.smul_unpack {P₀ : GAP 1 d} {H : ℤ} (k : ℤ)
+    {dig : Fin d → Fin ℓ → ℤ} {bdig : Fin ℓ → ℤ}
+    (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0)
+    (hP : (k • P₀).Proper) : (k • GAP.unpack dig bdig P₀.width).Proper := by
+  have hdig' : ∀ i, packVec H (k • dig i) = (k • P₀).step i 0 := fun i ↦ by
+    rw [packVec_smul, hdig i]; rfl
+  have hbdig' : packVec H (k • bdig) = (k • P₀).base 0 := by
+    rw [packVec_smul, hbdig]; rfl
+  change (GAP.unpack (fun i ↦ k • dig i) (k • bdig) P₀.width).Proper
+  exact Proper.unpack (P₀ := k • P₀) hdig' hbdig' hP
+
+/-- **Subset-sum decode, dilated form**: `k • P₀ + t₀ ⊆ Σ(ϕ A')` pulls back
+to `k • P + tdig ⊆ Σ(A')` where `P` is the decoded GAP.  This is the
+`x + csP ⊆ Σ(A')` conclusion of Appendix A (with `t = ϕ⁻¹(x₀)` playing the
+role of `x`). -/
+theorem subsetSumsL_smul_translate_unpack {P₀ : GAP 1 d} {H : ℤ} (hH : 0 < H)
+    (k : ℤ) {dig : Fin d → Fin ℓ → ℤ} {bdig : Fin ℓ → ℤ}
+    (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    (hbdig : packVec H bdig = P₀.base 0)
+    {t₀ : Fin 1 → ℤ} {tdig : Fin ℓ → ℤ} (ht : packVec H tdig = t₀ 0)
+    {A' : Finset (Fin ℓ → ℤ)} {Ka : ℤ} (hKa0 : 0 ≤ Ka)
+    (hKa : ∀ a ∈ A', ∀ j, |a j| ≤ Ka) (h2K : 2 * Ka < H)
+    (hsub : ((k • P₀).translate t₀).toFinset ⊆
+      subsetSumsL (A'.image fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x))
+    (hbound : ∀ n ∈ P₀.coeffs, ∀ j,
+      |tdig j| + |(k • unpack dig bdig P₀.width).eval n j|
+        + (A'.card : ℤ) * Ka < H) :
+    ((k • unpack dig bdig P₀.width).translate tdig).toFinset ⊆
+      subsetSumsL A' := by
+  have hdig' : ∀ i, packVec H (k • dig i) = (k • P₀).step i 0 := fun i ↦ by
+    rw [packVec_smul, hdig i]; rfl
+  have hbdig' : packVec H (k • bdig) = (k • P₀).base 0 := by
+    rw [packVec_smul, hbdig]; rfl
+  rw [smul_unpack]
+  exact subsetSumsL_translate_unpack hH hdig' hbdig' ht hKa0 hKa h2K hsub hbound
+
+/-- `ϕ` commutes with subset sums: `ϕ(Σ A') = Σ(ϕ A')` when `ϕ` is
+injective on `A'` (coordinates `≤ Ka` with `2Ka < H`).  This is the
+`Σ(ϕ '' A') ⊆ ϕ(Σ A')`-type transfer used in the Appendix-A decode. -/
+theorem subsetSumsL_image_packVec {H : ℤ} (hH : 0 < H)
+    {A' : Finset (Fin ℓ → ℤ)} {Ka : ℤ}
+    (hKa : ∀ a ∈ A', ∀ j, |a j| ≤ Ka) (h2K : 2 * Ka < H) :
+    (subsetSumsL A').image (fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x) =
+      subsetSumsL (A'.image fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x) := by
+  have hinj : Set.InjOn (fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x)
+      ↑A' := by
+    intro a ha b hb hab
+    apply packVec_inj_of_sub_lt hH _ (congrFun hab 0)
+    intro j
+    have h1 := abs_le.mp (hKa a ha j)
+    have h2 := abs_le.mp (hKa b hb j)
+    rw [abs_lt]; constructor <;> linarith
+  ext z
+  constructor
+  · intro hz
+    obtain ⟨σ, hσ, rfl⟩ := Finset.mem_image.mp hz
+    obtain ⟨S, hS, hsum⟩ := mem_subsetSumsL.mp hσ
+    apply mem_subsetSumsL.mpr
+    refine ⟨S.image (fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x),
+      Finset.image_subset_image hS, ?_⟩
+    rw [Finset.sum_image (hinj.mono (Finset.coe_subset.mpr hS))]
+    funext i
+    rw [Finset.sum_apply]
+    show (∑ a ∈ S, packVec H a) = packVec H σ
+    rw [← packVec_sum H S]
+    exact congrArg (packVec H) hsum
+  · intro hz
+    obtain ⟨S₀, hS₀, hsum₀⟩ := mem_subsetSumsL.mp hz
+    obtain ⟨S, hS, rfl⟩ := Finset.subset_image_iff.mp hS₀
+    apply Finset.mem_image.mpr
+    refine ⟨∑ a ∈ S, a, mem_subsetSumsL.mpr ⟨S, hS, rfl⟩, ?_⟩
+    rw [← hsum₀, Finset.sum_image (hinj.mono (Finset.coe_subset.mpr hS))]
+    funext i
+    rw [Finset.sum_apply]
+    show packVec H (∑ a ∈ S, a) = ∑ a ∈ S, packVec H a
+    exact packVec_sum H S
+
+/-- A padded GAP still contains the original progression (take the last
+coefficient `0`).  Together with `padStep_proper`/`padStep_homogeneous`/
+`padStep_symmetric` this is the "dimension `+1`" padding that absorbs a
+translation whose digit vector may have negative entries. -/
+theorem toFinset_subset_padStep {P : GAP ℓ d} {v : Fin ℓ → ℤ} {w₀ : ℕ}
+    (hw : 0 < w₀) : P.toFinset ⊆ (P.padStep v w₀).toFinset := by
+  intro x hx
+  obtain ⟨n, hn, rfl⟩ := Finset.mem_image.mp hx
+  exact mem_padStep.mpr ⟨n, hn, 0, hw, by simp⟩
+
+/-- **The Appendix-A GAP pullback, packaged.**  If `P₀ : GAP 1 d` is proper
+and homogeneous with `ϕ`-decodable steps `dig`, base coefficient vector `c`,
+and decodable symmetry center `mdig`, and the decoded coefficient points and
+the center digits satisfy the displayed domination bounds, then the decoded
+GAP `P = unpack dig (∑ cᵢ • digᵢ) P₀.width` is proper, homogeneous,
+symmetric, and contains `T ∪ {0}` for every `Kx`-bounded `T` with
+`ϕ(T) ⊆ P₀`. -/
+theorem gap_pullback {P₀ : GAP 1 d} {H : ℤ} (hH : 0 < H)
+    {dig : Fin d → Fin ℓ → ℤ}
+    (hdig : ∀ i, packVec H (dig i) = P₀.step i 0)
+    {c : Fin d → ℤ} (hc : P₀.base = ∑ i, c i • P₀.step i)
+    (hP : P₀.Proper)
+    {m₀ : Fin 1 → ℤ} (hm₀ : ∀ x ∈ P₀.toFinset, (2 • m₀ - x) ∈ P₀.toFinset)
+    {mdig : Fin ℓ → ℤ} (hm : packVec H mdig = m₀ 0)
+    {K Km Kx : ℤ}
+    (hbound : ∀ n ∈ P₀.coeffs, ∀ j,
+      |(unpack dig (∑ i, c i • dig i) P₀.width).eval n j| ≤ K)
+    (hmdig : ∀ j, |mdig j| ≤ Km) (hHm : 2 * Km + 2 * K < H)
+    {T : Finset (Fin ℓ → ℤ)}
+    (hT : ∀ x ∈ T, (fun _ : Fin 1 ↦ packVec H x) ∈ P₀.toFinset)
+    (hx : ∀ x ∈ T, ∀ j, |x j| ≤ Kx) (hKH : K + Kx < H)
+    (h0 : (fun _ : Fin 1 ↦ (0 : ℤ)) ∈ P₀.toFinset) (hK0 : K < H) :
+    ∃ P : GAP ℓ d, T ∪ {0} ⊆ P.toFinset ∧ P.Proper ∧ P.Homogeneous ∧
+      P.Symmetric := by
+  have hb := packVec_sum_smul_dig hdig hc
+  refine ⟨unpack dig (∑ i, c i • dig i) P₀.width, ?_, ?_, ?_, ?_⟩
+  · exact Finset.union_subset
+      (subset_unpack_toFinset hH hdig hb hT hbound hx hKH)
+      (Finset.singleton_subset_iff.mpr
+        (zero_mem_unpack hH hdig hb h0 hbound hK0))
+  · exact Proper.unpack hdig hb hP
+  · exact ⟨c, rfl⟩
+  · exact unpack_symmetric hH hdig hb hm₀ hm hbound hmdig hHm
 
 end GAP
 

@@ -2109,6 +2109,231 @@ theorem not_inDeltaConvexPosition_one {A : Finset (Fin 1 → ℝ)} {δ : ℝ}
   have := mul_pos h2δ hcardpos
   nlinarith
 
+/-! ### Affine invariance of the density-increment problem
+
+The paper's proof of Lemma 1 first rescales `A` by an affine map
+`x ↦ r • x + b` so that `A ⊆ [−1, 1]^d`.  The lemmas in this section show
+that all the hypotheses and the conclusion of `density_increment_core` are
+transported by such a map (with `r ≠ 0`), so the core theorem reduces to the
+*boxed* case `density_increment_core_boxed`, which is where the paper's
+dyadic-box and `SO(d)`-averaging argument runs. -/
+
+/-- `x ↦ r • x + b` is injective when `r ≠ 0`. -/
+theorem smul_add_injective {r : ℝ} (hr : r ≠ 0) (b : Fin d → ℝ) :
+    Function.Injective fun x : Fin d → ℝ ↦ r • x + b := by
+  intro x y h
+  funext i
+  have hi := congrFun h i
+  simp only [Pi.add_apply, Pi.smul_apply, smul_eq_mul] at hi
+  have hmul : r * x i = r * y i := by linarith
+  exact mul_left_cancel₀ hr hmul
+
+/-- `x ↦ r • x + b` preserves affine combinations. -/
+theorem smul_add_affine (r : ℝ) (b x y : Fin d → ℝ) {a b' : ℝ}
+    (hab : a + b' = 1) :
+    r • (a • x + b' • y) + b = a • (r • x + b) + b' • (r • y + b) := by
+  funext i
+  simp only [Pi.add_apply, Pi.smul_apply, smul_eq_mul]
+  have h1 : b i = (a + b') * b i := by rw [hab, one_mul]
+  nth_rewrite 1 [h1]
+  ring
+
+/-- Images of convex sets under `x ↦ r • x + b` are convex. -/
+theorem convex_smul_add_image (r : ℝ) (b : Fin d → ℝ) {s : Set (Fin d → ℝ)}
+    (hs : Convex ℝ s) : Convex ℝ ((fun x ↦ r • x + b) '' s) := by
+  rintro _ ⟨x, hx, rfl⟩ _ ⟨y, hy, rfl⟩ a b' ha hb' hab
+  exact ⟨a • x + b' • y, hs hx hy ha hb' hab, smul_add_affine r b x y hab⟩
+
+/-- Preimages of convex sets under `x ↦ r • x + b` are convex. -/
+theorem convex_smul_add_preimage (r : ℝ) (b : Fin d → ℝ)
+    {s : Set (Fin d → ℝ)} (hs : Convex ℝ s) :
+    Convex ℝ ((fun x ↦ r • x + b) ⁻¹' s) := by
+  intro x hx y hy a b' ha hb' hab
+  show r • (a • x + b' • y) + b ∈ s
+  rw [smul_add_affine r b x y hab]
+  exact hs hx hy ha hb' hab
+
+/-- `x ↦ r • x + b` commutes with `convexHull` (it is an affine map). -/
+theorem smul_add_image_convexHull (r : ℝ) (b : Fin d → ℝ)
+    (s : Set (Fin d → ℝ)) :
+    (fun x ↦ r • x + b) '' convexHull ℝ s =
+      convexHull ℝ ((fun x ↦ r • x + b) '' s) := by
+  apply Set.Subset.antisymm
+  · rw [Set.image_subset_iff]
+    exact convexHull_min
+      (fun x hx ↦ subset_convexHull ℝ _ ⟨x, hx, rfl⟩)
+      (convex_smul_add_preimage r b (convex_convexHull ℝ _))
+  · exact convexHull_min
+      (Set.image_mono (subset_convexHull ℝ s))
+      (convex_smul_add_image r b (convex_convexHull ℝ s))
+
+/-- Volume of an image under `x ↦ r • x + b`; no measurability is needed
+since `volume` is a Haar measure. -/
+theorem volume_smul_add_image (r : ℝ) (b : Fin d → ℝ) (s : Set (Fin d → ℝ)) :
+    volume ((fun x : Fin d → ℝ ↦ r • x + b) '' s) =
+      ENNReal.ofReal |r ^ d| * volume s := by
+  have hcomp : (fun x : Fin d → ℝ ↦ r • x + b) = (· + b) ∘ (r • ·) := rfl
+  rw [hcomp, Set.image_comp, Set.image_add_right, measure_preimage_add_right,
+    Set.image_smul, MeasureTheory.Measure.addHaar_smul,
+    Module.finrank_fintype_fun_eq_card, Fintype.card_fin]
+
+/-- A subset of a `δ`-convex-position set is in `δ'`-convex position as soon
+as `δ' |A'| ≥ δ |A|`.  This is the bookkeeping step behind the "rough convex
+position" observation (equation (3) of the paper): a box containing more than
+`δ |A|` points of `A` yields a large subset which is in convex position at
+the rescaled parameter `δ' = δ |A| / |A'| < 1`. -/
+theorem InDeltaConvexPosition.subset {A A' : Finset (Fin d → ℝ)} {δ δ' : ℝ}
+    (hsub : A' ⊆ A) (h : InDeltaConvexPosition A δ)
+    (hle : δ * A.card ≤ δ' * A'.card) : InDeltaConvexPosition A' δ' := by
+  classical
+  intro a ha
+  obtain ⟨u, t, ht, hcap⟩ := h a (hsub ha)
+  refine ⟨u, t, ht, le_trans ?_ (le_trans hcap hle)⟩
+  exact_mod_cast Finset.card_le_card (Finset.filter_subset_filter _ hsub)
+
+/-- δ-convex position is preserved by the rescaling `x ↦ r • x + b` with
+`r ≠ 0`: the half-space at `a` in direction `u` pulls back to a half-space at
+the preimage in direction `r⁻¹ • u`, with the same point count. -/
+theorem InDeltaConvexPosition.image_smul_add {A : Finset (Fin d → ℝ)}
+    {δ r : ℝ} (hr : r ≠ 0) (b : Fin d → ℝ) (h : InDeltaConvexPosition A δ) :
+    InDeltaConvexPosition (A.image fun x ↦ r • x + b) δ := by
+  classical
+  have hinj := smul_add_injective hr b
+  -- The key computation: `dot (r⁻¹ • u) (r • x + b) = dot u x + c` where the
+  -- correction `c = dot (r⁻¹ • u) b` does not depend on `x`.
+  have hdot : ∀ u x : Fin d → ℝ,
+      dot (r⁻¹ • u) (r • x + b) = dot u x + dot (r⁻¹ • u) b := by
+    intro u x
+    simp only [dot, Pi.smul_apply, Pi.add_apply, smul_eq_mul]
+    rw [← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl fun i _ ↦ ?_
+    calc r⁻¹ * u i * (r * x i + b i)
+        = r⁻¹ * u i * r * x i + r⁻¹ * u i * b i := by ring
+      _ = u i * x i + r⁻¹ * u i * b i := by
+          congr 1
+          rw [mul_assoc r⁻¹ (u i) r, mul_comm (u i) r,
+            ← mul_assoc r⁻¹ r (u i), inv_mul_cancel₀ hr, one_mul]
+  intro a' ha'
+  obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp ha'
+  obtain ⟨u, t, ht, hcap⟩ := h a ha
+  refine ⟨r⁻¹ • u, t + dot (r⁻¹ • u) b, ?_, ?_⟩
+  · show t + dot (r⁻¹ • u) b ≤ dot (r⁻¹ • u) (r • a + b)
+    rw [hdot]
+    exact add_le_add ht le_rfl
+  · have hcardeq : ((A.image fun x ↦ r • x + b).filter
+        (fun x ↦ t + dot (r⁻¹ • u) b ≤ dot (r⁻¹ • u) x)).card =
+        (A.filter fun a ↦ t ≤ dot u a).card := by
+      rw [Finset.filter_image, Finset.card_image_of_injective _ hinj]
+      congr 1
+      ext a''
+      simp only [Finset.mem_filter, and_congr_right_iff]
+      intro _
+      show (t + dot (r⁻¹ • u) b ≤ dot (r⁻¹ • u) (r • a'' + b)) ↔
+        t ≤ dot u a''
+      rw [hdot]
+      exact add_le_add_iff_right _
+    rw [hcardeq, Finset.card_image_of_injective _ hinj]
+    exact hcap
+
+namespace DensityIncrementGoal
+
+/-- Pulling the density-increment goal back along `x ↦ r • x + b` (`r ≠ 0`):
+if the rescaled problem admits a good `Ω₁`, then its preimage is a good
+`Ω'` for the original problem.  The volume bound uses
+`vol(F⁻¹ Ω₁) = |r|^{-d} · vol Ω₁` and `vol(F '' Ω) = |r|^d · vol Ω`. -/
+theorem of_smul_add_image {δ τ ε : ℝ} {r : ℝ} (hr : r ≠ 0) (b : Fin d → ℝ)
+    {Ω : Set (Fin d → ℝ)} {A : Finset (Fin d → ℝ)}
+    (h : DensityIncrementGoal d δ τ ε
+      ((fun x : Fin d → ℝ ↦ r • x + b) '' Ω)
+      (A.image fun x ↦ r • x + b)) :
+    DensityIncrementGoal d δ τ ε Ω A := by
+  classical
+  have hinj := smul_add_injective hr b
+  obtain ⟨η, hδη, hηδ, Ω₁, hconv₁, hsub₁, hvol₁, hcount₁⟩ := h
+  refine ⟨η, hδη, hηδ, (fun x : Fin d → ℝ ↦ r • x + b) ⁻¹' Ω₁,
+    convex_smul_add_preimage r b hconv₁, ?_, ?_, ?_⟩
+  · -- `F ⁻¹' Ω₁ ⊆ Ω` since `Ω₁ ⊆ F '' Ω` and `F` is injective.
+    intro x hx
+    obtain ⟨y, hyΩ, hyx⟩ := hsub₁ hx
+    obtain rfl : y = x := hinj hyx
+    exact hyΩ
+  · -- `vol (F ⁻¹' Ω₁) = |r⁻¹|^d · vol Ω₁ ≤ |r⁻¹|^d · η · |r|^d · vol Ω
+    --   = η · vol Ω`.
+    have hGeq : (fun y : Fin d → ℝ ↦ r⁻¹ • (y - b)) =
+        fun y ↦ r⁻¹ • y + -(r⁻¹ • b) := by
+      funext y
+      rw [smul_sub, sub_eq_add_neg]
+    have hGpre : (fun x : Fin d → ℝ ↦ r • x + b) ⁻¹' Ω₁ =
+        (fun y ↦ r⁻¹ • (y - b)) '' Ω₁ := by
+      ext x
+      constructor
+      · intro hx
+        exact ⟨r • x + b, hx, by
+          show r⁻¹ • (r • x + b - b) = x
+          rw [add_sub_cancel_right, smul_smul, inv_mul_cancel₀ hr, one_smul]⟩
+      · rintro ⟨y, hy, rfl⟩
+        show r • (r⁻¹ • (y - b)) + b ∈ Ω₁
+        rw [smul_smul, mul_inv_cancel₀ hr, one_smul, sub_add_cancel]
+        exact hy
+    have hvolpre : volume ((fun x : Fin d → ℝ ↦ r • x + b) ⁻¹' Ω₁) =
+        ENNReal.ofReal |(r⁻¹) ^ d| * volume Ω₁ := by
+      rw [hGpre, hGeq]
+      exact volume_smul_add_image r⁻¹ (-(r⁻¹ • b)) Ω₁
+    have hvol₁' : volume Ω₁ ≤
+        ENNReal.ofReal η * (ENNReal.ofReal |r ^ d| * volume Ω) := by
+      rwa [volume_smul_add_image r b Ω] at hvol₁
+    have hC : ENNReal.ofReal |(r⁻¹) ^ d| * ENNReal.ofReal |r ^ d| = 1 := by
+      rw [← ENNReal.ofReal_mul (abs_nonneg _), ← abs_mul, inv_pow,
+        inv_mul_cancel₀ (pow_ne_zero _ hr), abs_one, ENNReal.ofReal_one]
+    have hC'pos : (0 : ENNReal) < ENNReal.ofReal |(r⁻¹) ^ d| :=
+      ENNReal.ofReal_pos.mpr (abs_pos.mpr (pow_ne_zero _ (inv_ne_zero hr)))
+    calc volume ((fun x : Fin d → ℝ ↦ r • x + b) ⁻¹' Ω₁)
+        = ENNReal.ofReal |(r⁻¹) ^ d| * volume Ω₁ := hvolpre
+      _ ≤ ENNReal.ofReal |(r⁻¹) ^ d| *
+            (ENNReal.ofReal η * (ENNReal.ofReal |r ^ d| * volume Ω)) :=
+          (ENNReal.mul_le_mul_iff_right hC'pos.ne'
+            ENNReal.ofReal_ne_top).mpr hvol₁'
+      _ = ENNReal.ofReal η * volume Ω := by
+          have key : ENNReal.ofReal |(r⁻¹) ^ d| * (ENNReal.ofReal η *
+                (ENNReal.ofReal |r ^ d| * volume Ω)) =
+              (ENNReal.ofReal |(r⁻¹) ^ d| * ENNReal.ofReal |r ^ d|) *
+                (ENNReal.ofReal η * volume Ω) := by ac_rfl
+          rw [key, hC, one_mul]
+  · -- `|A ∩ F ⁻¹' Ω₁| = |A' ∩ Ω₁|` since `F` is injective.
+    have hcardeq : ((A.image fun x ↦ r • x + b).filter
+        fun x ↦ (x : Fin d → ℝ) ∈ Ω₁).card =
+        (A.filter fun a ↦ (a : Fin d → ℝ) ∈
+          (fun x : Fin d → ℝ ↦ r • x + b) ⁻¹' Ω₁).card := by
+      rw [Finset.filter_image, Finset.card_image_of_injective _ hinj]
+      congr 1
+    rw [hcardeq, Finset.card_image_of_injective _ hinj] at hcount₁
+    exact hcount₁
+
+end DensityIncrementGoal
+
+/-- **The boxed case** of `density_increment_core`: `A ⊆ [−1,1]^d`.  This is
+the genuinely hard geometric step of Lemma 1, where the paper's machinery is
+needed: the dyadic `r`-box decomposition (`r ~ δ^{1/d}`), the observation
+that boxes containing more than `δ|A|` points are in "rough convex position"
+(equation (3)), the width/inradius dichotomy for `P = conv(⋃ Bᵢ)`, averaging
+over `SO(d)` to place `~u^{d−1}` of the boundary points `xᵢ` above the cap
+`[−u,u]^{d−1}`, the concave envelope `h`, an application of
+`convex_linear_approx` (Lemma 2), and the volume estimate of the resulting
+graph-slab `Ω'`. -/
+private theorem density_increment_core_boxed (d : ℕ) (hd : 2 ≤ d) {ε : ℝ}
+    (hε : 0 < ε) :
+    ∃ τ : ℝ, 0 < τ ∧ τ < 1 ∧ ∃ δ₀ : ℝ, 0 < δ₀ ∧ ∀ δ : ℝ, 0 < δ → δ < δ₀ →
+      ∃ M : ℕ, ∀ (Ω : Set (Fin d → ℝ)) (A : Finset (Fin d → ℝ)),
+        Convex ℝ Ω → (interior Ω).Nonempty →
+        (∀ a ∈ A, (a : Fin d → ℝ) ∈ Ω) →
+        (∀ a ∈ A, ∀ i : Fin d, a i ∈ Set.Icc (-1) 1) →
+        InDeltaConvexPosition A δ → M ≤ A.card →
+        volume Ω ≠ ⊤ →
+        ENNReal.ofReal δ * volume Ω <
+          volume (convexHull ℝ (A : Set (Fin d → ℝ))) →
+        DensityIncrementGoal d δ τ ε Ω A := by
+  sorry
+
 /-- **The geometric core of Lemma 1**: the genuinely difficult case of a
 *finite-volume* `Ω` in which `A` is not already confined to a thin set
 (`vol(conv A) > δ·vol Ω`).  The complementary cases are handled by
@@ -2133,7 +2358,153 @@ theorem density_increment_core (d : ℕ) (hd : 2 ≤ d) {ε : ℝ} (hε : 0 < ε
         ENNReal.ofReal δ * volume Ω <
           volume (convexHull ℝ (A : Set (Fin d → ℝ))) →
         DensityIncrementGoal d δ τ ε Ω A := by
-  sorry
+  classical
+  obtain ⟨τ, hτ0, hτ1, δ₀, hδ₀, H⟩ := density_increment_core_boxed d hd hε
+  refine ⟨τ, hτ0, hτ1, δ₀, hδ₀, fun δ hδ hδ0 ↦ ?_⟩
+  obtain ⟨M, HM⟩ := H δ hδ hδ0
+  refine ⟨M, fun Ω A hconv hint hsub hcp hM hvol hhull ↦ ?_⟩
+  -- Since `vol (conv A) > δ·vol Ω ≥ 0`, `A` is nonempty; pick `a₀ ∈ A`.
+  have hconvpos : (0 : ENNReal) < volume (convexHull ℝ (A : Set (Fin d → ℝ))) :=
+    lt_of_le_of_lt zero_le hhull
+  have hAne : A.Nonempty := by
+    rcases A.eq_empty_or_nonempty with rfl | hne
+    · simp only [Finset.coe_empty, convexHull_empty, measure_empty] at hconvpos
+      exact absurd hconvpos (lt_irrefl _)
+    · exact hne
+  obtain ⟨a₀, ha₀⟩ := hAne
+  haveI : Nonempty (Fin d) := ⟨⟨0, by omega⟩⟩
+  -- `R` is the `ℓ^∞`-radius of `A` about `a₀`; it is positive, since
+  -- otherwise `A = {a₀}` and `conv A` would have volume `0`.
+  obtain ⟨R, hRge⟩ : ∃ R : ℝ, ∀ a ∈ A, ∀ i : Fin d, |a i - a₀ i| ≤ R := by
+    refine ⟨Finset.sup' A ⟨a₀, ha₀⟩ (fun a ↦ Finset.sup' Finset.univ
+      Finset.univ_nonempty fun i ↦ |a i - a₀ i|), fun a ha i ↦ ?_⟩
+    exact le_trans
+      (Finset.le_sup' (f := fun i ↦ |a i - a₀ i|) (Finset.mem_univ i))
+      (Finset.le_sup' (f := fun a ↦ Finset.sup' Finset.univ
+        Finset.univ_nonempty fun i ↦ |a i - a₀ i|) ha)
+  have hRnn : 0 ≤ R := by
+    obtain ⟨i₀⟩ := (inferInstance : Nonempty (Fin d))
+    have h1 := hRge a₀ ha₀ i₀
+    rwa [sub_self, abs_zero] at h1
+  have hR0 : 0 < R := by
+    rcases eq_or_lt_of_le hRnn with h | h
+    · exfalso
+      have hall : ∀ a ∈ A, a = a₀ := by
+        intro a ha
+        funext i
+        have hle := le_trans (hRge a ha i) h.ge
+        rw [abs_nonpos_iff] at hle
+        exact sub_eq_zero.mp hle
+      have hvol0 : volume (convexHull ℝ (A : Set (Fin d → ℝ))) = 0 := by
+        apply le_antisymm _ zero_le
+        calc volume (convexHull ℝ (A : Set (Fin d → ℝ)))
+            ≤ volume (Set.Icc a₀ a₀) :=
+              measure_mono (convexHull_min
+                (fun x hx ↦ Set.mem_Icc.mpr
+                  ⟨le_of_eq (hall x (Finset.mem_coe.mp hx)).symm,
+                    le_of_eq (hall x (Finset.mem_coe.mp hx))⟩)
+                (convex_Icc a₀ a₀))
+          _ = 0 := by simp
+      rw [hvol0] at hconvpos
+      exact absurd hconvpos (lt_irrefl _)
+    · exact h
+  -- The rescaling `F x = R⁻¹ • x + b` (with `b = −R⁻¹ • a₀`, so `F a₀ = 0`)
+  -- maps `A` into `[−1,1]^d`.
+  set r : ℝ := R⁻¹ with hrdef
+  have hr : r ≠ 0 := inv_ne_zero hR0.ne'
+  set b : Fin d → ℝ := fun i ↦ -(r * a₀ i) with hbdef
+  have hinj : Function.Injective fun x : Fin d → ℝ ↦ r • x + b :=
+    smul_add_injective hr b
+  have hFmem : ∀ a ∈ A, ∀ i : Fin d,
+      ((fun x ↦ r • x + b) a) i ∈ Set.Icc (-1) 1 := by
+    intro a ha i
+    have hle : |a i - a₀ i| ≤ R := hRge a ha i
+    have hFi : ((fun x ↦ r • x + b) a) i = (a i - a₀ i) / R := by
+      simp only [hbdef, Pi.add_apply, Pi.smul_apply, smul_eq_mul]
+      rw [hrdef, div_eq_inv_mul]
+      ring
+    rw [hFi]
+    have habs : |(a i - a₀ i) / R| ≤ 1 := by
+      rw [abs_div, abs_of_pos hR0, div_le_one hR0]
+      exact hle
+    exact Set.mem_Icc.mpr (abs_le.mp habs)
+  -- `G y = r⁻¹ • (y − b)` is the inverse of `F`; it is continuous, so
+  -- `F '' interior Ω` is open and `F x₀ ∈ interior (F '' Ω)`.
+  have hGF : ∀ x : Fin d → ℝ, r⁻¹ • ((fun x ↦ r • x + b) x - b) = x := by
+    intro x
+    funext i
+    simp only [Pi.add_apply, Pi.smul_apply, Pi.sub_apply, smul_eq_mul]
+    rw [add_sub_cancel_right, ← mul_assoc, inv_mul_cancel₀ hr, one_mul]
+  have hG : ∀ y : Fin d → ℝ,
+      (fun x ↦ r • x + b) (r⁻¹ • (y - b)) = y := by
+    intro y
+    funext i
+    simp only [Pi.add_apply, Pi.smul_apply, Pi.sub_apply, smul_eq_mul]
+    rw [← mul_assoc, mul_inv_cancel₀ hr, one_mul, sub_add_cancel]
+  have hconvimg : Convex ℝ ((fun x ↦ r • x + b) '' Ω) :=
+    convex_smul_add_image r b hconv
+  have hintimg : (interior ((fun x ↦ r • x + b) '' Ω)).Nonempty := by
+    obtain ⟨x₀, hx₀⟩ := hint
+    have hpre : (fun y : Fin d → ℝ ↦ r⁻¹ • (y - b)) ⁻¹' interior Ω =
+        (fun x ↦ r • x + b) '' interior Ω := by
+      ext y
+      constructor
+      · intro hy
+        exact ⟨r⁻¹ • (y - b), hy, hG y⟩
+      · rintro ⟨x, hx, rfl⟩
+        show r⁻¹ • ((fun x ↦ r • x + b) x - b) ∈ interior Ω
+        rw [hGF x]
+        exact hx
+    have hcont : Continuous fun y : Fin d → ℝ ↦ r⁻¹ • (y - b) := by fun_prop
+    have hopen : IsOpen ((fun x ↦ r • x + b) '' interior Ω) := by
+      rw [← hpre]
+      exact isOpen_interior.preimage hcont
+    have hsub' : (fun x ↦ r • x + b) '' interior Ω ⊆
+        interior ((fun x ↦ r • x + b) '' Ω) :=
+      interior_maximal (Set.image_mono interior_subset) hopen
+    exact ⟨(fun x ↦ r • x + b) x₀, hsub' ⟨x₀, hx₀, rfl⟩⟩
+  have hsubimg : ∀ a' ∈ A.image (fun x ↦ r • x + b),
+      (a' : Fin d → ℝ) ∈ (fun x ↦ r • x + b) '' Ω := by
+    intro a' ha'
+    obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp ha'
+    exact ⟨a, hsub a ha, rfl⟩
+  have hFmemimg : ∀ a' ∈ A.image (fun x ↦ r • x + b), ∀ i : Fin d,
+      (a' : Fin d → ℝ) i ∈ Set.Icc (-1) 1 := by
+    intro a' ha' i
+    obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp ha'
+    exact hFmem a ha i
+  have hcpimg : InDeltaConvexPosition (A.image fun x ↦ r • x + b) δ :=
+    hcp.image_smul_add hr b
+  have hcardimg : M ≤ (A.image fun x ↦ r • x + b).card := by
+    rw [Finset.card_image_of_injective _ hinj]
+    exact hM
+  have hvolimg : volume ((fun x ↦ r • x + b) '' Ω) =
+      ENNReal.ofReal |r ^ d| * volume Ω := volume_smul_add_image r b Ω
+  have hvoltimg : volume ((fun x ↦ r • x + b) '' Ω) ≠ ⊤ := by
+    rw [hvolimg]
+    exact ENNReal.mul_ne_top ENNReal.ofReal_ne_top hvol
+  have hconvHullimg : convexHull ℝ
+      ((A.image fun x ↦ r • x + b : Finset (Fin d → ℝ)) : Set (Fin d → ℝ)) =
+        (fun x ↦ r • x + b) '' convexHull ℝ (A : Set (Fin d → ℝ)) := by
+    rw [Finset.coe_image, smul_add_image_convexHull]
+  have hvolconvimg : volume (convexHull ℝ
+      ((A.image fun x ↦ r • x + b : Finset (Fin d → ℝ)) :
+        Set (Fin d → ℝ))) =
+      ENNReal.ofReal |r ^ d| *
+        volume (convexHull ℝ (A : Set (Fin d → ℝ))) := by
+    rw [hconvHullimg]
+    exact volume_smul_add_image r b _
+  have hCpos : (0 : ENNReal) < ENNReal.ofReal |r ^ d| :=
+    ENNReal.ofReal_pos.mpr (abs_pos.mpr (pow_ne_zero _ hr))
+  have hhullimg : ENNReal.ofReal δ * volume ((fun x ↦ r • x + b) '' Ω) <
+      volume (convexHull ℝ ((A.image fun x ↦ r • x + b : Finset (Fin d → ℝ)) :
+        Set (Fin d → ℝ))) := by
+    rw [hvolimg, hvolconvimg, ← mul_assoc,
+      mul_comm (ENNReal.ofReal δ) (ENNReal.ofReal |r ^ d|), mul_assoc]
+    exact ENNReal.mul_lt_mul_right hCpos.ne' ENNReal.ofReal_ne_top hhull
+  exact DensityIncrementGoal.of_smul_add_image hr b
+    (HM ((fun x ↦ r • x + b) '' Ω) (A.image fun x ↦ r • x + b) hconvimg
+      hintimg hsubimg hFmemimg hcpimg hcardimg hvoltimg hhullimg)
 
 /-- **Lemma 1 (density increment)**.  For `d ≥ 1` and `ε > 0` there exist
 `τ ∈ (0,1)` and `δ₀ > 0` such that for every `δ ∈ (0, δ₀)` the following

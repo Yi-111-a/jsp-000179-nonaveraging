@@ -1,5 +1,6 @@
 import Nonaveraging.Structure
 import Nonaveraging.Observation15
+import Nonaveraging.Irreducibility
 
 /-!
 # Iteration machinery for Theorem 2 (`nonaveraging_box_bound`)
@@ -444,6 +445,1128 @@ theorem case_shrink_pow {a b p C ρ K σ t e e' : ℝ}
           Real.rpow_le_rpow_of_exponent_le ha.le (by linarith [hub])
         linarith
     _ = ρ * a / 2 := by rw [Real.rpow_one, mul_div_assoc]
+
+/-- **`d̃ > d` numerical core, high-exponent variant.**  Same algebra as
+`case_up_pow` but for `0 < e' ≤ 2` — i.e. it also covers the degenerate
+regime `α_{d̃} + ζ + incr > 1` — at the price of absorbing `C²` (rather
+than `C`) into the largeness hypothesis `2·C·C ≤ a^{c/2}`.
+
+`p ≤ C·a^{−(1−ε)k}·b`, `b ≤ a^{1/e}` imply
+`p^{e'} ≤ C^{e'}·a^{e'X} ≤ C²·a^{1−c} ≤ a^{c/2}·a^{1−c}/2 = a^{1−c/2}/2
+< a^{1−ε}/2`. -/
+theorem case_up_pow_hi {a b p C c ε k e e' : ℝ}
+    (ha : 1 < a) (hb : 0 ≤ b) (hp : 0 ≤ p) (hC : 1 ≤ C)
+    (he' : 0 < e') (he2 : e' ≤ 2) (_hk : 0 ≤ k)
+    (hc : 0 < c) (_hε : 0 ≤ ε) (hεc : ε ≤ c / 4)
+    (hobs : e' * (e⁻¹ - (1 - ε) * k) ≤ 1 - c)
+    (hpb : p ≤ C * a ^ (-(1 - ε) * k) * b) (hba : b ≤ a ^ e⁻¹)
+    (hCa : 2 * C * C ≤ a ^ (c / 2)) :
+    p ^ e' < a ^ (1 - ε) / 2 := by
+  have ha0 : (0 : ℝ) ≤ a := zero_le_one.trans ha.le
+  have hapos : (0 : ℝ) < a := zero_lt_one.trans ha
+  have hu : (0 : ℝ) ≤ a ^ (-(1 - ε) * k) := Real.rpow_nonneg ha0 _
+  have hCe : C ^ e' ≤ C * C := by
+    have h := Real.rpow_le_rpow_of_exponent_le hC he2
+    have e2 : (2 : ℝ) = ((2 : ℕ) : ℝ) := by norm_num
+    rw [e2, Real.rpow_natCast, pow_two] at h
+    exact h
+  have hstep : p ^ e' ≤ C ^ e' * a ^ (-(1 - ε) * k * e')
+      * a ^ (e⁻¹ * e') := by
+    calc p ^ e' ≤ (C * a ^ (-(1 - ε) * k) * b) ^ e' :=
+        Real.rpow_le_rpow hp hpb he'.le
+      _ = C ^ e' * (a ^ (-(1 - ε) * k)) ^ e' * b ^ e' := by
+        rw [Real.mul_rpow (mul_nonneg (by linarith : (0 : ℝ) ≤ C) hu) hb,
+          Real.mul_rpow (by linarith : (0 : ℝ) ≤ C) hu]
+      _ ≤ C ^ e' * (a ^ (-(1 - ε) * k)) ^ e' * (a ^ e⁻¹) ^ e' :=
+        mul_le_mul_of_nonneg_left (Real.rpow_le_rpow hb hba he'.le)
+          (mul_nonneg (Real.rpow_nonneg (by linarith) _)
+            (Real.rpow_nonneg ha0 _))
+      _ = C ^ e' * a ^ (-(1 - ε) * k * e') * a ^ (e⁻¹ * e') := by
+        rw [Real.rpow_mul ha0, Real.rpow_mul ha0]
+  have hcomb : a ^ (-(1 - ε) * k * e') * a ^ (e⁻¹ * e')
+      = a ^ (e' * (e⁻¹ - (1 - ε) * k)) := by
+    rw [← Real.rpow_add hapos]
+    congr 1
+    ring
+  calc p ^ e' ≤ C ^ e' * a ^ (-(1 - ε) * k * e') * a ^ (e⁻¹ * e') :=
+      hstep
+    _ = C ^ e' * (a ^ (-(1 - ε) * k * e') * a ^ (e⁻¹ * e')) :=
+      mul_assoc _ _ _
+    _ = C ^ e' * a ^ (e' * (e⁻¹ - (1 - ε) * k)) := by rw [hcomb]
+    _ ≤ (C * C) * a ^ (1 - c) :=
+      mul_le_mul hCe
+        (Real.rpow_le_rpow_of_exponent_le ha.le hobs)
+        (Real.rpow_nonneg ha0 _)
+        (by nlinarith [hC] : (0 : ℝ) ≤ C * C)
+    _ ≤ (a ^ (c / 2) / 2) * a ^ (1 - c) :=
+      mul_le_mul_of_nonneg_right (by linarith : C * C ≤ a ^ (c / 2) / 2)
+        (Real.rpow_nonneg ha0 _)
+    _ = a ^ (1 - c / 2) / 2 := by
+      rw [div_mul_eq_mul_div, ← Real.rpow_add hapos,
+        show c / 2 + (1 - c) = 1 - c / 2 by ring]
+    _ < a ^ (1 - ε) / 2 := by
+      have hpow : a ^ (1 - c / 2) < a ^ (1 - ε) :=
+        Real.rpow_lt_rpow_of_exponent_lt ha (by linarith)
+      linarith
+
+/-- **Case 3, shrink sub-case, high-exponent variant.**  Same algebra as
+`case_shrink_pow` but for `0 < e' ≤ 2` (the actual `d̃ = d` regime has
+`e' = α_d + ζ + incr` which may exceed `1`), absorbing `C²` via the
+stronger largeness `2·C·C < a^{σK/10}`. -/
+theorem case_shrink_pow_sq {a b p C ρ K σ t e e' : ℝ}
+    (ha : 1 < a) (hb : 0 ≤ b) (hp : 0 ≤ p) (hC : 1 ≤ C)
+    (hρ : 0 < ρ) (he' : 0 < e') (he2 : e' ≤ 2)
+    (hK0 : 0 ≤ K) (hK : K / 5 ≤ K * e' - 1)
+    (ht : e' * e⁻¹ ≤ 1 + t)
+    (hρσ : ρ ≤ a ^ (-σ)) (hσ : 0 < σ)
+    (hpb : p ≤ C * ρ ^ K * b) (hba : b ≤ a ^ e⁻¹)
+    (hCa : 2 * C * C < a ^ (σ * K / 10)) (htt : t ≤ σ * K / 10) :
+    p ^ e' < ρ * a / 2 := by
+  have ha0 : (0 : ℝ) ≤ a := zero_le_one.trans ha.le
+  have hapos : (0 : ℝ) < a := zero_lt_one.trans ha
+  have hρK : (0 : ℝ) ≤ ρ ^ K := Real.rpow_nonneg hρ.le _
+  have hCe : C ^ e' ≤ C * C := by
+    have h := Real.rpow_le_rpow_of_exponent_le hC he2
+    have e2 : (2 : ℝ) = ((2 : ℕ) : ℝ) := by norm_num
+    rw [e2, Real.rpow_natCast, pow_two] at h
+    exact h
+  have hKpos : (0 : ℝ) < K := by
+    have hKe : K * e' ≤ K * 2 := mul_le_mul_of_nonneg_left he2 hK0
+    linarith
+  have hK1 : (0 : ℝ) ≤ K * e' - 1 := by linarith [hK, hKpos]
+  have hρpow : ρ ^ (K * e' - 1) ≤ a ^ (-σ * (K * e' - 1)) := by
+    calc ρ ^ (K * e' - 1) ≤ (a ^ (-σ)) ^ (K * e' - 1) :=
+        Real.rpow_le_rpow hρ.le hρσ hK1
+      _ = a ^ (-σ * (K * e' - 1)) := (Real.rpow_mul ha0 _ _).symm
+  have hρsplit : ρ ^ (K * e') = ρ ^ (K * e' - 1) * ρ := by
+    have h : ρ ^ (K * e') = ρ ^ ((K * e' - 1) + 1) := by
+      congr 1
+      ring
+    rw [h, Real.rpow_add hρ, Real.rpow_one]
+  have hstep : p ^ e' ≤ C ^ e' * (ρ ^ (K * e') * a ^ (e⁻¹ * e')) := by
+    calc p ^ e' ≤ (C * ρ ^ K * b) ^ e' := Real.rpow_le_rpow hp hpb he'.le
+      _ = C ^ e' * (ρ ^ K) ^ e' * b ^ e' := by
+        rw [Real.mul_rpow (mul_nonneg (by linarith : (0 : ℝ) ≤ C) hρK) hb,
+          Real.mul_rpow (by linarith : (0 : ℝ) ≤ C) hρK]
+      _ = C ^ e' * (ρ ^ (K * e') * b ^ e') := by
+        rw [Real.rpow_mul hρ.le, mul_assoc]
+      _ ≤ C ^ e' * (ρ ^ (K * e') * (a ^ e⁻¹) ^ e') :=
+        mul_le_mul_of_nonneg_left
+          (mul_le_mul_of_nonneg_left (Real.rpow_le_rpow hb hba he'.le)
+            (Real.rpow_nonneg hρ.le _))
+          (Real.rpow_nonneg (by linarith) _)
+      _ = C ^ e' * (ρ ^ (K * e') * a ^ (e⁻¹ * e')) := by
+        rw [Real.rpow_mul ha0]
+  have hbound : ρ ^ (K * e') * a ^ (e⁻¹ * e')
+      ≤ a ^ (-σ * (K * e' - 1)) * ρ * a ^ (1 + t) := by
+    have h1 : ρ ^ (K * e') ≤ a ^ (-σ * (K * e' - 1)) * ρ := by
+      rw [hρsplit]
+      exact mul_le_mul_of_nonneg_right hρpow hρ.le
+    have h2 : a ^ (e⁻¹ * e') ≤ a ^ (1 + t) :=
+      Real.rpow_le_rpow_of_exponent_le ha.le (by rwa [mul_comm])
+    exact mul_le_mul h1 h2 (Real.rpow_nonneg ha0 _)
+      (mul_nonneg (Real.rpow_nonneg ha0 _) hρ.le)
+  have hKbound : σ * K / 5 ≤ σ * (K * e' - 1) := by
+    linarith [mul_le_mul_of_nonneg_left hK hσ.le]
+  have hub : -σ * (K * e' - 1) + (1 + t) ≤ 1 - σ * K / 10 := by
+    linarith [hKbound, htt]
+  calc p ^ e' ≤ C ^ e' * (ρ ^ (K * e') * a ^ (e⁻¹ * e')) := hstep
+    _ ≤ (C * C) * (ρ ^ (K * e') * a ^ (e⁻¹ * e')) :=
+        mul_le_mul_of_nonneg_right hCe
+          (mul_nonneg (Real.rpow_nonneg hρ.le _) (Real.rpow_nonneg ha0 _))
+    _ ≤ (C * C) * (a ^ (-σ * (K * e' - 1)) * ρ * a ^ (1 + t)) :=
+        mul_le_mul_of_nonneg_left hbound (by nlinarith [hC])
+    _ = ρ * ((C * C) * a ^ (-σ * (K * e' - 1) + (1 + t))) := by
+        rw [show a ^ (-σ * (K * e' - 1)) * ρ * a ^ (1 + t)
+            = ρ * (a ^ (-σ * (K * e' - 1)) * a ^ (1 + t)) by ring]
+        rw [← Real.rpow_add hapos]
+        ring
+    _ < ρ * ((a ^ (σ * K / 10) / 2) *
+        a ^ (-σ * (K * e' - 1) + (1 + t))) := by
+        apply mul_lt_mul_of_pos_left _ hρ
+        apply mul_lt_mul_of_pos_right _ (Real.rpow_pos_of_pos hapos _)
+        linarith
+    _ = ρ * (a ^ (σ * K / 10 + (-σ * (K * e' - 1) + (1 + t))) / 2) := by
+        congr 1
+        rw [div_mul_eq_mul_div, ← Real.rpow_add hapos]
+    _ ≤ ρ * (a ^ (1 : ℝ) / 2) := by
+        apply mul_le_mul_of_nonneg_left _ hρ.le
+        have hpow : a ^ (σ * K / 10 + (-σ * (K * e' - 1) + (1 + t)))
+            ≤ a ^ (1 : ℝ) :=
+          Real.rpow_le_rpow_of_exponent_le ha.le (by linarith [hub])
+        linarith
+    _ = ρ * a / 2 := by rw [Real.rpow_one, mul_div_assoc]
+
+/-! ### The §4 step: leaf interface
+
+The remaining content of Theorem 2 is a single iteration step: from a
+non-averaging counterexample `A ⊆ B ⊆ ℤ^d` at exponent `α_d + ζ`, produce
+a new one at a strictly larger slack.  The numerics for the three cases
+(`d̃ > d`, `d̃ < d`, `d̃ = d` with `|Ã| ≤ |A|^{1-σ}`) are `case_up_pow`,
+`case_down_pow`, `case_shrink_pow` above.  This section packages the data
+the unresolved paper lemmas supply, at exactly the granularity those case
+lemmas consume it.
+
+* `coeffBox_isInterval`, `dim_lt_of_slack`: small geometric/numeric
+  helpers needed by the assembly.
+* `Lemma10Data`: the faithful output of Lemma 10 (compare
+  `Nonaveraging/Structure.lean`'s `irreduciblization`).  The two
+  strengthenings relative to the current sorry-statement are the `d̃`
+  index of the ambient dimension and, crucially, a *usable* lower bound
+  `|Ã|/2 ≤ |ϕ(Â)|` on the embedded image — the present
+  `SubSumWitness.hAhcard` only gives `|Â| ≥ |Ã| − ct⁻¹|Ã|/log|Ã|` with an
+  uncontrolled `ct`, which is precisely what `irreduciblization`'s
+  vacuous `SubSumWitness.degenerate` exploit (`Â = ∅`, `d̃ = 0`)
+  fails to provide.  The intended discharge is
+  `Nonaveraging/Irreducibility.lean`'s `irreduciblization_faithful`.
+* `lemma10_data`: existence of the bundle for every large non-averaging
+  `A ⊆ B` with `|B| ≤ |A|⁴` and `d ≤ D₀` (the `|A|^{-1/3} ≤ γ` largeness
+  side condition of `irreduciblization` is folded into the existential
+  `γ`, and the dimension bound `D₀` accommodates the dimension-dependent
+  constants of `irreduciblization_faithful`, from which the bundle is
+  now discharged).
+* `residual_step`: the cases the up-move numerics do not cover —
+  `d̃ < d` (whose increment `α_d − α_{d̃} − ε` is uniform but whose
+  counterexample verification has margin `ε(1−e)/e`, degenerating as the
+  exponent `e → 1`), `d̃ = d` (the shrink sub-case is
+  `case_shrink_pow`; the non-shrink sub-case is where
+  `embedded_in_mu_convex_position` (Theorem 4), `density_increment`
+  (Lemma 1) and the discrete John lemma (Lemma 7, currently absent)
+  plug in), and `d̃ > d` with `α_{d̃} + ζ` already `≥ 1 − incr`.
+
+  Important subtlety documented in `round3_thm2_report.md`: in the
+  `d̃ = d` case the paper's increment is `θ'(ζ,d,|A|)`, which decays like
+  `log log log |A| / log |A|` — it is *not* bounded below by a constant.
+  Hence the step is stated for an arbitrary `incr ≤ min ι (θ |A|)` with
+  `θ |A|` of the paper's scale `≍ 1/log |A|`, and the fixed-slack
+  `IterationStepProp` of `UpperBound.lean` is replaced there by
+  `IterationStepPropD`. -/
+
+/-- The canonical coefficient box of a GAP is an interval box:
+`Ico 0 w = Icc 0 (w − 1)` in `ℤ` coordinatewise. -/
+theorem coeffBox_isInterval {ℓ d : ℕ} (P : GAP ℓ d) :
+    P.coeffBox.IsInterval := by
+  intro i
+  refine ⟨0, (P.width i : ℤ) - 1, ?_⟩
+  ext x
+  simp only [GAP.coeffBox, Finset.mem_Ico, Finset.mem_Icc]
+  omega
+
+/-- Slack `ζ > 0` bounds the ambient dimension of a counterexample:
+`α_d + ζ < 1` forces `d < 2/ζ`. -/
+theorem dim_lt_of_slack {d : ℕ} (hd : 1 ≤ d) {ζ : ℝ} (hζ : 0 < ζ)
+    (h : αd d + ζ < 1) : (d : ℝ) < 2 / ζ := by
+  rcases eq_or_ne d 1 with rfl | hd1
+  · rw [αd_one] at h
+    rw [lt_div_iff₀ hζ, Nat.cast_one, one_mul]
+    linarith
+  · rw [αd_of_ne_one hd1] at h
+    have hdp : (0 : ℝ) < (d : ℝ) + 1 := by positivity
+    have h' : ((d : ℝ) - 1) / ((d : ℝ) + 1) < 1 - ζ := by linarith
+    rw [div_lt_iff₀ hdp] at h'
+    have h2 : (d : ℝ) * ζ < 2 := by nlinarith [h']
+    rwa [lt_div_iff₀ hζ]
+
+/-- The conclusion of one §4 iteration step: a new non-averaging
+counterexample `A' ⊆ B' ⊆ ℤ^{d'}` at exponent `α_{d'} + ζ'` with the slack
+incremented by `incr`, with `|A'| ≤ |A|` (moves never grow the set), the
+polynomial retention `|A|^q ≤ |A'|`, and a reported multiplicative
+retention factor `ρ` (`ρ·|A| ≤ |A'|`, `ρ > 0`) — the quantity the paper's
+final bookkeeping paragraph tracks (`∏ ρⱼ ≥ |A|^{-c/2}`).  Packaged as an
+`abbrev` so the existential is transparent at use sites. -/
+abbrev StepConclusion {d : ℕ} (A : Finset (Fin d → ℤ))
+    (ζ incr q : ℝ) : Prop :=
+  ∃ (d' : ℕ) (A' : Finset (Fin d' → ℤ)) (B' : GAP.Box d') (ζ' ρ : ℝ),
+    1 ≤ d' ∧ B'.IsInterval ∧ NonAveraging A' ∧ A' ⊆ B'.toFinset ∧
+    A'.card ≤ A.card ∧ ζ + incr ≤ ζ' ∧
+    (B'.card : ℝ) ^ (αd d' + ζ') < (A'.card : ℝ) ∧
+    (A.card : ℝ) ^ q ≤ (A'.card : ℝ) ∧ ρ * (A.card : ℝ) ≤ (A'.card : ℝ) ∧
+    0 < ρ
+
+/-- **Lemma-10 output bundle** (faithful form).  For the parameters
+`ε K`, a non-averaging `A ⊆ B ⊆ ℤ^d` with `|B| ≤ |A|⁴` produces a derived
+`Ã ⊆ ℤⁿ` with canonical witness `Wt` of dimension `d̃` such that:
+
+* `Ã` is obtained from `A` by `DerivedFrom`-moves (hence is
+  non-averaging and `|Ã| ≤ |A|`),
+* `|Ã| ≥ |A|^{1-ε}` and `|ϕ(Â)| ≥ |Ã|/2`,
+* `Wt` is `(δ,γ)`-irreducible for the existential `δ, γ` with
+  `γ ≤ δ^K`, `4δ < 1` and `|A|^{-1/3} ≤ γ`,
+* `|A|^{ε/4} ≥ 2C` (the `C`-absorption the step lemmas need, folded
+  into the largeness threshold), and
+* `P̃ = P(Ã)` satisfies the three bounds of Lemma 10.
+
+Note `n` (the ambient dimension of `Ã`) and `d̃` (the GAP dimension of the
+witness) are *separately* existentially quantified, matching
+`irreduciblization_faithful`; the step lemmas only ever use the
+coefficient-space data `Wt.imageAh ⊆ ℤ^{d̃}` and `Wt.P.coeffBox`. -/
+def Lemma10Data {d : ℕ} (A : Finset (Fin d → ℤ)) (B : GAP.Box d)
+    (ε K : ℝ) : Prop :=
+  ∃ (n dt : ℕ) (At : Finset (Fin n → ℤ)) (ct : ℝ)
+    (Wt : SubSumWitness At ct dt) (c' δ γ C : ℝ),
+    0 < δ ∧ 4 * δ < 1 ∧ 0 < γ ∧ γ ≤ δ ^ K ∧
+    (A.card : ℝ) ^ (-(1 : ℝ) / 3) ≤ γ ∧
+    DerivedFrom A δ At ∧ 1 ≤ C ∧ 2 * C ≤ (A.card : ℝ) ^ (ε / 4) ∧
+    (A.card : ℝ) ^ (1 - ε) ≤ (At.card : ℝ) ∧
+    (At.card : ℝ) / 2 ≤ (Wt.imageAh.card : ℝ) ∧
+    Irreducible Wt c' δ γ ∧
+    (d < dt → (Wt.P.coeffBox.card : ℝ) ≤
+      C * (A.card : ℝ) ^ (-(1 - ε) * ((dt : ℝ) - d)) * B.card) ∧
+    (dt = d → (Wt.P.coeffBox.card : ℝ) ≤
+      C * ((At.card : ℝ) / (A.card : ℝ)) ^ K * B.card) ∧
+    (dt < d → (Wt.P.coeffBox.card : ℝ) ≤ C * B.card)
+
+/-- **Lemma-10 leaf** (`irreduciblization`, faithful form): every
+sufficiently large non-averaging `A ⊆ B` with `|B| ≤ |A|⁴` in ambient
+dimension `d ≤ D₀` admits the bundle `Lemma10Data`.
+
+This is discharged by `irreduciblization_faithful`
+(`Nonaveraging/Irreducibility.lean`), which produces *universal*
+constants `c₀(d)`, `c'(d)`, `C(d)`, `D(d)`, `N(d)` per ambient
+dimension.  The bridging steps:
+
+* the move parameters are instantiated to the constants `δ = 1/2` and
+  `γ = (1/2)^K` (`γ ≤ δ^K` is then an equality); the faithful lemma's
+  side condition `|A|^{-1/3} ≤ γ` becomes the largeness `|A| ≥ γ^{-3}`;
+* `|Ã|/2 ≤ |ϕ(Ât)| = |Ât|` follows from `half_le_Ah_card` once
+  `2c₀⁻¹ ≤ log|Ã|`, which holds since `|Ã| ≥ |A|^{1-ε}` and
+  `|A| ≥ exp(2c₀⁻¹/(1-ε))`;
+* `|P̃.coeffBox| = |P̃.toFinset|` is `witness_card_coeffBox`
+  (`kP̃` proper ⇒ `P̃` proper), and `C(d)` is upgraded to `max (C d) 1`;
+* the bound `D₀` on the ambient dimension is needed because the faithful
+  constants vary with `d`: `thm2_step` supplies `D₀ = ⌈2/ζ₀⌉` via
+  `dim_lt_of_slack`. -/
+theorem lemma10_data {ε K : ℝ} (hε : 0 < ε) (hε3 : ε < 1 / 3)
+    (_hK : 0 < K) (D₀ : ℕ) :
+    ∃ N : ℕ, ∀ {d : ℕ} {A : Finset (Fin d → ℤ)} {B : GAP.Box d},
+      d ≤ D₀ → B.IsInterval → NonAveraging A → A ⊆ B.toFinset →
+      (B.card : ℝ) ≤ (A.card : ℝ) ^ (4 : ℝ) → N ≤ A.card →
+      Lemma10Data A B ε K := by
+  have hβ4 : (1 : ℝ) < 4 := by norm_num
+  have hδ : (0 : ℝ) < 1 / 8 := by norm_num
+  have hδ1 : (1 / 8 : ℝ) < 1 := by norm_num
+  have hγ : (0 : ℝ) < (1 / 8 : ℝ) ^ K := Real.rpow_pos_of_pos hδ _
+  -- the faithful constants are dimension-dependent; collect them per `d`.
+  have hf := fun (d : ℕ) ↦
+    irreduciblization_faithful (ℓ := d) hβ4 hε hε3 hδ hδ1 hγ (le_refl _)
+  choose c₀ c' Cf Df Nf hfA using hf
+  -- per-dimension threshold: the faithful `Nf d`, the largeness
+  -- `|A| ≥ γ^{-3}` making `|A|^{-1/3} ≤ γ`,
+  -- `|A| ≥ exp(2c₀⁻¹/(1-ε))` making `2c₀⁻¹ ≤ (1-ε)·log|A| ≤ log|Ã|`, and
+  -- `|A| ≥ (2·max(C d,1))^{4/ε}` making `2C ≤ |A|^{ε/4}`.
+  refine ⟨max 4 ((Finset.range (D₀ + 1)).sup fun d ↦
+    max (Nf d) (max ⌈((1 / 8 : ℝ) ^ K) ^ (-3 : ℝ)⌉₊
+      (max ⌈Real.exp (2 * (c₀ d)⁻¹ / (1 - ε))⌉₊
+        ⌈(2 * max (Cf d) 1 : ℝ) ^ (4 / ε : ℝ)⌉₊))), ?_⟩
+  intro d A B hdD hBint hNA hsub hB hN
+  have hmem : d ∈ Finset.range (D₀ + 1) :=
+    Finset.mem_range.mpr (Nat.lt_succ_iff.mpr hdD)
+  have hTd : max (Nf d) (max ⌈((1 / 8 : ℝ) ^ K) ^ (-3 : ℝ)⌉₊
+      (max ⌈Real.exp (2 * (c₀ d)⁻¹ / (1 - ε))⌉₊
+        ⌈(2 * max (Cf d) 1 : ℝ) ^ (4 / ε : ℝ)⌉₊)) ≤ A.card :=
+    (Finset.le_sup hmem).trans (le_trans (le_max_right _ _) hN)
+  have hNf : Nf d ≤ A.card := (le_max_left _ _).trans hTd
+  have hγ3N : ⌈((1 / 8 : ℝ) ^ K) ^ (-3 : ℝ)⌉₊ ≤ A.card :=
+    ((le_max_left _ _).trans (le_max_right _ _)).trans hTd
+  have hexpN : ⌈Real.exp (2 * (c₀ d)⁻¹ / (1 - ε))⌉₊ ≤ A.card :=
+    ((le_max_left _ _).trans ((le_max_right _ _).trans
+      (le_max_right _ _))).trans hTd
+  have hC4N : ⌈(2 * max (Cf d) 1 : ℝ) ^ (4 / ε : ℝ)⌉₊ ≤ A.card :=
+    ((le_max_right _ _).trans ((le_max_right _ _).trans
+      (le_max_right _ _))).trans hTd
+  have h4 : (4 : ℝ) ≤ (A.card : ℝ) := by
+    exact_mod_cast (le_trans (le_max_left _ _) hN)
+  have hApos : (0 : ℝ) < (A.card : ℝ) := by linarith
+  have h1ε : (0 : ℝ) < 1 - ε := by linarith
+  -- `|A| ≥ γ⁻³` gives `|A|^{1/3} ≥ γ⁻¹`, i.e. `|A|^{-1/3} ≤ γ`.
+  have hγ3le : ((1 / 8 : ℝ) ^ K) ^ (-3 : ℝ) ≤ (A.card : ℝ) :=
+    (Nat.le_ceil _).trans (by exact_mod_cast hγ3N)
+  have hr3 : ((1 / 8 : ℝ) ^ K) ^ (-1 : ℝ) ≤
+      (A.card : ℝ) ^ (1 / 3 : ℝ) := by
+    have e : ((1 / 8 : ℝ) ^ K) ^ (-1 : ℝ)
+        = (((1 / 8 : ℝ) ^ K) ^ (-3 : ℝ)) ^ (1 / 3 : ℝ) := by
+      rw [← Real.rpow_mul hγ.le]
+      congr 1
+      ring
+    rw [e]
+    exact Real.rpow_le_rpow (Real.rpow_nonneg hγ.le _) hγ3le
+      (by norm_num)
+  have hAγ : (A.card : ℝ) ^ (-(1 : ℝ) / 3) ≤ (1 / 8 : ℝ) ^ K := by
+    rw [show (-(1 : ℝ) / 3 : ℝ) = -((1 : ℝ) / 3) by ring,
+      Real.rpow_neg hApos.le]
+    have h2 : ((A.card : ℝ) ^ (1 / 3 : ℝ))⁻¹ ≤
+        (((1 / 8 : ℝ) ^ K) ^ (-1 : ℝ))⁻¹ :=
+      (inv_le_inv₀ (Real.rpow_pos_of_pos hApos _)
+        (Real.rpow_pos_of_pos hγ _)).mpr hr3
+    rwa [Real.rpow_neg_one, inv_inv] at h2
+  -- apply the faithful lemma at dimension `d`
+  obtain ⟨_hc₀, _hc', _hCf, hfB⟩ := hfA d
+  obtain ⟨n, At, dt, Wt, hder, _hNAt, hAtcard, _hdtD, hirr, hup, hsame,
+    hdown⟩ := hfB hBint hNA hsub hB hAγ hNf
+  -- `2c₀⁻¹ ≤ (1-ε)·log|A| ≤ log|Ã|`, hence `|Ât| ≥ |Ã|/2`.
+  have hlogA : 2 * (c₀ d)⁻¹ ≤ (1 - ε) * Real.log (A.card : ℝ) := by
+    have hexp : Real.exp (2 * (c₀ d)⁻¹ / (1 - ε)) ≤ (A.card : ℝ) :=
+      (Nat.le_ceil _).trans (by exact_mod_cast hexpN)
+    have h1 : 2 * (c₀ d)⁻¹ / (1 - ε) ≤ Real.log (A.card : ℝ) :=
+      calc 2 * (c₀ d)⁻¹ / (1 - ε)
+          = Real.log (Real.exp (2 * (c₀ d)⁻¹ / (1 - ε))) :=
+            (Real.log_exp _).symm
+        _ ≤ Real.log (A.card : ℝ) :=
+            Real.log_le_log (Real.exp_pos _) hexp
+    calc 2 * (c₀ d)⁻¹ ≤ Real.log (A.card : ℝ) * (1 - ε) :=
+          (div_le_iff₀ h1ε).mp h1
+      _ = (1 - ε) * Real.log (A.card : ℝ) := mul_comm _ _
+  have hlogAt : 2 * (c₀ d)⁻¹ ≤ Real.log (At.card : ℝ) :=
+    calc 2 * (c₀ d)⁻¹ ≤ (1 - ε) * Real.log (A.card : ℝ) := hlogA
+      _ = Real.log ((A.card : ℝ) ^ (1 - ε)) :=
+          (Real.log_rpow hApos _).symm
+      _ ≤ Real.log (At.card : ℝ) :=
+          Real.log_le_log (Real.rpow_pos_of_pos hApos _) hAtcard
+  have hAh2 : (At.card : ℝ) / 2 ≤ (Wt.imageAh.card : ℝ) := by
+    rw [Wt.card_imageAh]
+    exact half_le_Ah_card Wt hlogAt
+  -- `|A| ≥ (2C)^{4/ε}` gives `2C ≤ |A|^{ε/4}`.
+  have hC4 : ((2:ℝ) * max (Cf d) 1) ^ (4 / ε : ℝ) ≤ (A.card : ℝ) :=
+    (Nat.le_ceil _).trans (by exact_mod_cast hC4N)
+  have hCa : 2 * max (Cf d) 1 ≤ (A.card : ℝ) ^ (ε / 4 : ℝ) := by
+    have hCpos : (0 : ℝ) ≤ 2 * max (Cf d) 1 := by positivity
+    have h2 : ((2 * max (Cf d) 1 : ℝ) ^ (4 / ε : ℝ)) ^ (ε / 4 : ℝ)
+        = 2 * max (Cf d) 1 := by
+      rw [← Real.rpow_mul hCpos]
+      rw [show (4 / ε : ℝ) * (ε / 4) = 1 by
+        rw [div_mul_div_comm, show (4 : ℝ) * ε = ε * 4 from mul_comm _ _,
+          div_self (mul_ne_zero hε.ne' (by norm_num))]]
+      exact Real.rpow_one _
+    rw [← h2]
+    exact Real.rpow_le_rpow hCpos hC4 (by positivity : (0 : ℝ) ≤ ε / 4)
+  -- assemble the bundle with `C := max (Cf d) 1`
+  refine ⟨n, dt, At, c₀ d, Wt, c' d, 1 / 8, (1 / 8 : ℝ) ^ K,
+    max (Cf d) 1, hδ, by norm_num, hγ, le_refl _, hAγ, hder,
+    le_max_right _ _, hCa, hAtcard, hAh2, hirr, ?_, ?_, ?_⟩
+  · intro hlt
+    rw [witness_card_coeffBox Wt]
+    exact (hup hlt).trans (mul_le_mul_of_nonneg_right
+      (mul_le_mul_of_nonneg_right (le_max_left _ _)
+        (Real.rpow_nonneg (Nat.cast_nonneg _) _))
+      (Nat.cast_nonneg _))
+  · intro heq
+    rw [witness_card_coeffBox Wt]
+    exact (hsame heq).trans (mul_le_mul_of_nonneg_right
+      (mul_le_mul_of_nonneg_right (le_max_left _ _)
+        (Real.rpow_nonneg
+          (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)) _))
+      (Nat.cast_nonneg _))
+  · intro hlt
+    rw [witness_card_coeffBox Wt]
+    exact (hdown hlt).trans
+      (mul_le_mul_of_nonneg_right (le_max_left _ _) (Nat.cast_nonneg _))
+
+/-- **Case 1 assembly** (`d̃ > d`, genuine, sorry-free): under the
+Lemma-10 up-move bound `|P̃| = ∏ w̃ᵢ ≤ C·|A|^{-(1-ε)(d̃-d)}·|B|` and the
+Observation-15 uniform bound, the embedded image `Ā = ϕ_{P̃}(Â)` inside
+`B' = coeffBox P̃` is a non-averaging counterexample at slack
+`ζ + incr`, provided `incr ≤ c₀/16`, `α_{d̃} + ζ + incr ≤ 1`, and the
+largeness thresholds `2C ≤ |A|^{c₀/8}`, `2 ≤ |A|^ε` hold.  The retained
+factor is `ρ = |A|^{-ε}/2`. -/
+theorem step_up {d n dt : ℕ} {A : Finset (Fin d → ℤ)} {B : GAP.Box d}
+    {At : Finset (Fin n → ℤ)} {ct : ℝ} (Wt : SubSumWitness At ct dt)
+    {δ ζ incr ε C c₀ q : ℝ} (hder : DerivedFrom A δ At)
+    (hd : 1 ≤ d) (hdt : d < dt) (hζ : 0 < ζ)
+    (hNA : NonAveraging A)
+    (hincr : 0 < incr) (hincrc : incr ≤ c₀ / 16)
+    (hαe' : αd dt + ζ + incr ≤ 1)
+    (hobs15 : (αd dt + ζ) *
+        ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ))) ≤ 1 - c₀)
+    (_hc₀ : 0 < c₀) (hc₀1 : c₀ ≤ 1) (hε : 0 < ε) (hεc : ε ≤ c₀ / 8)
+    (ha : (1 : ℝ) < A.card)
+    (hba : (B.card : ℝ) ≤ (A.card : ℝ) ^ (αd d + ζ)⁻¹)
+    (hp : (Wt.P.coeffBox.card : ℝ) ≤
+      C * (A.card : ℝ) ^ (-(1 - ε) * ((dt : ℝ) - (d : ℝ))) * B.card)
+    (hAt : (A.card : ℝ) ^ (1 - ε) ≤ At.card)
+    (hAh : (At.card : ℝ) / 2 ≤ Wt.imageAh.card)
+    (hC : 1 ≤ C) (hCa : 2 * C ≤ (A.card : ℝ) ^ (c₀ / 8))
+    (_hq0 : 0 < q) (hq : q ≤ 1 - 2 * ε)
+    (hεpow : (2 : ℝ) ≤ (A.card : ℝ) ^ ε) :
+    StepConclusion A ζ incr q := by
+  set a : ℝ := (A.card : ℝ)
+  have ha1 : (1 : ℝ) ≤ a := ha.le
+  have ha0 : (0 : ℝ) < a := by linarith
+  have he4 : (1 / 4 : ℝ) ≤ αd d + ζ := (αd_quarter_le hd).trans (by linarith)
+  have hinv4 : (αd d + ζ)⁻¹ ≤ 4 := by
+    calc (αd d + ζ)⁻¹ ≤ (1 / 4 : ℝ)⁻¹ := inv_anti₀ (by norm_num) he4
+      _ = 4 := by norm_num
+  have hk : (0 : ℝ) < (dt : ℝ) - (d : ℝ) :=
+    sub_pos.mpr (by exact_mod_cast hdt)
+  have he' : (0 : ℝ) < αd dt + (ζ + incr) := by
+    have h1dt : 1 ≤ dt := by omega
+    linarith [αd_quarter_le h1dt, hincr]
+  -- the Observation-15 bound at slack `ζ + incr` (the bracket is `≤ 4`,
+  -- absorbing the extra `incr·X ≤ c₀/4`).
+  have hXnn : (0 : ℝ) ≤ (1 - ε) * ((dt : ℝ) - (d : ℝ)) :=
+    mul_nonneg (by linarith) hk.le
+  have hX : incr * ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ)))
+      ≤ c₀ / 4 := by
+    have hle : (αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ)) ≤ 4 := by
+      linarith
+    calc incr * ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ)))
+        ≤ incr * 4 := mul_le_mul_of_nonneg_left hle hincr.le
+      _ ≤ c₀ / 4 := by linarith
+  have hobs : (αd dt + (ζ + incr)) *
+      ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ))) ≤ 1 - c₀ / 2 := by
+    have hde : (αd dt + (ζ + incr)) *
+        ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ))) =
+        (αd dt + ζ) * ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ))) +
+        incr * ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ))) := by ring
+    rw [hde]
+    linarith
+  have hεc' : ε ≤ c₀ / 2 / 4 := by
+    have h : (c₀ / 2 : ℝ) / 4 = c₀ / 8 := by ring
+    rwa [h]
+  have hCa' : 2 * C ≤ a ^ (c₀ / 2 / 2) := by
+    have h : (c₀ / 2 : ℝ) / 2 = c₀ / 4 := by ring
+    rw [h]
+    calc 2 * C ≤ a ^ (c₀ / 8) := hCa
+      _ ≤ a ^ (c₀ / 4) :=
+        Real.rpow_le_rpow_of_exponent_le ha1 (by linarith)
+  have hmain := case_up_pow (a := a) (b := (B.card : ℝ))
+    (p := (Wt.P.coeffBox.card : ℝ)) (C := C) (e := αd d + ζ)
+    (e' := αd dt + (ζ + incr)) (k := (dt : ℝ) - (d : ℝ)) (ε := ε)
+    (c := c₀ / 2) ha (Nat.cast_nonneg _) (Nat.cast_nonneg _) hC he'
+    (by linarith : αd dt + (ζ + incr) ≤ 1) hk.le (by linarith) hε.le
+    hεc' hobs hp hba hCa'
+  -- assemble `StepConclusion` with `A' = ϕ(Â)`, `B' = coeffBox P̃`,
+  -- `ζ' = ζ + incr`, `ρ = a^{-ε}/2`.
+  refine ⟨dt, Wt.imageAh, Wt.P.coeffBox, ζ + incr, a ^ (-ε) / 2,
+    by omega, coeffBox_isInterval _, ?_, Wt.imageAh_subset_coeffBox, ?_,
+    le_rfl, ?_, ?_, ?_, ?_⟩
+  · -- non-averaging: `DerivedFrom` moves preserve it, `Â ⊆ Ã` inherits,
+    -- and `ϕ` transports it.
+    exact GAP.nonAveraging_ptCoeffImage _
+      (fun _ ha ↦ Wt.hsub (Finset.mem_union_left _ ha))
+      (NonAveraging.mono Wt.hAh (hder.nonAveraging hNA))
+  · -- `|A'| ≤ |A|`
+    rw [Wt.card_imageAh]
+    exact (Finset.card_le_card Wt.hAh).trans hder.card_le
+  · -- `(B'.card)^{α_{d'} + ζ'} < |A'|`
+    calc (Wt.P.coeffBox.card : ℝ) ^ (αd dt + (ζ + incr))
+        < a ^ (1 - ε) / 2 := hmain
+      _ ≤ (At.card : ℝ) / 2 := by linarith
+      _ ≤ (Wt.imageAh.card : ℝ) := hAh
+  · -- `|A|^q ≤ |A'|` via `q ≤ 1 - 2ε` and `2 ≤ |A|^ε`
+    calc a ^ q ≤ a ^ (1 - 2 * ε) := Real.rpow_le_rpow_of_exponent_le ha1 hq
+      _ = a ^ (1 - ε) / a ^ ε := by
+          rw [show (1 - 2 * ε : ℝ) = (1 - ε) - ε by ring,
+            Real.rpow_sub ha0]
+      _ ≤ a ^ (1 - ε) / 2 :=
+          div_le_div_of_nonneg_left (Real.rpow_nonneg ha0.le _)
+            (by norm_num) hεpow
+      _ ≤ (At.card : ℝ) / 2 := by linarith
+      _ ≤ (Wt.imageAh.card : ℝ) := hAh
+  · -- `ρ·|A| = |A|^{1-ε}/2 ≤ |A'|`
+    have hρa : a ^ (-ε) / 2 * a = a ^ (1 - ε) / 2 := by
+      have h := Real.rpow_add ha0 (-ε) 1
+      rw [Real.rpow_one, show (-ε : ℝ) + 1 = 1 - ε by ring] at h
+      rw [div_mul_eq_mul_div, ← h]
+    calc a ^ (-ε) / 2 * a = a ^ (1 - ε) / 2 := hρa
+      _ ≤ (At.card : ℝ) / 2 := by linarith
+      _ ≤ (Wt.imageAh.card : ℝ) := hAh
+  · exact div_pos (Real.rpow_pos_of_pos ha0 _) (by norm_num)
+
+/-- **Non-shrink `d̃ = d` leaf** (the density-increment step).  In the
+`d̃ = d` case with `ρ = |Ã|/|A|` not small (`|A|^{-σ} < ρ`), the paper
+produces the new counterexample by: `embedded_in_mu_convex_position`
+(Theorem 4, applied to `Ā = ϕ_{P̃}(Â)` at `μ = ρ^K` inside `conv B̄` —
+the irreducibility `Wt` supplies the `(δ,γ)` input, `|A|^{-1/3} ≤ γ` and
+the largeness `N ≤ |A|` absorb Theorem 4's threshold), `density_increment`
+(Lemma 1, giving `η ∈ [μ, μ^τ]` and a convex `Ω' ⊆ conv B̄` capturing an
+`η^{(d-1)/(d+1)+ε'}`-fraction of `Ā`), and `discrete_john_strong`
+(Lemma 7) to replace `Ω'` by an integer box `B̃` with
+`|B̃| ≪ η·ρ^K·|B|`.  The resulting counterexample sits at increment
+`θ'(ζ,d,|A|) ≍ log log log |A| / log |A|` — hence the hypothesis
+`incr ≤ ι / log |A|`.
+
+**This is the single remaining sorry of the iteration step.** -/
+theorem residual_density_step
+    {d n : ℕ} {A : Finset (Fin d → ℤ)} {B : GAP.Box d}
+    {At : Finset (Fin n → ℤ)} {ct c' δ γ C σ : ℝ}
+    (Wt : SubSumWitness At ct d)
+    {ζ incr q ε K ι : ℝ} {N : ℕ}
+    (hd : 1 ≤ d) (hζ : 0 < ζ) (hαζ : αd d + ζ < 1)
+    (hBint : B.IsInterval) (hNA : NonAveraging A)
+    (hsub : A ⊆ B.toFinset)
+    (hcex : (B.card : ℝ) ^ (αd d + ζ) < (A.card : ℝ))
+    (hN : N ≤ A.card)
+    (hε : 0 < ε) (hε1 : ε < 1) (hK : 100 ≤ K)
+    (hq0 : 0 < q) (hq : q ≤ 1 - 2 * ε)
+    (hι : 0 < ι) (hincr : 0 < incr)
+    (hincrι : incr ≤ ι) (hincrθ : incr ≤ ι / Real.log (A.card : ℝ))
+    (hεpow : (2 : ℝ) ≤ (A.card : ℝ) ^ ε)
+    (hδ : 0 < δ) (hδ4 : 4 * δ < 1) (hγ : 0 < γ) (hγδ : γ ≤ δ ^ K)
+    (hγa : (A.card : ℝ) ^ (-(1 : ℝ) / 3) ≤ γ)
+    (hder : DerivedFrom A δ At) (hC : 1 ≤ C)
+    (hCa : 2 * C ≤ (A.card : ℝ) ^ (ε / 4))
+    (hAt : (A.card : ℝ) ^ (1 - ε) ≤ (At.card : ℝ))
+    (hAh : (At.card : ℝ) / 2 ≤ (Wt.imageAh.card : ℝ))
+    (hirr : Irreducible Wt c' δ γ)
+    (hp : (Wt.P.coeffBox.card : ℝ) ≤
+      C * ((At.card : ℝ) / (A.card : ℝ)) ^ K * (B.card : ℝ))
+    (hσ : 0 < σ)
+    (hρ : (A.card : ℝ) ^ (-σ) < (At.card : ℝ) / (A.card : ℝ)) :
+    StepConclusion A ζ incr q := by
+  sorry
+
+/-- **Residual §4 leaf**: given the Lemma-10 bundle, produce the step
+conclusion in every case where the clean up-move bound is unavailable —
+`d̃ < d`, `d̃ = d`, or `d̃ > d` with `α_{d̃} + ζ + incr ≥ 1`.
+
+The `d̃ < d` case is `case_down_pow` (margin `ε' = g/4`, where `g` is a
+uniform lower bound on the `αd`-gap `α_d − α_{d̃}` supplied by `hgap`);
+the `d̃ = d` case splits on `ρ = |Ã|/|A|` against
+`|A|^{-σ}` with `σ = max (incr/2) (20·log(2C²)/(K·log|A|))`: the shrink
+sub-case is `case_shrink_pow_sq`, the non-shrink sub-case is the
+remaining leaf `residual_density_step`; and the degenerate `d̃ > d`
+case (target exponent already above `1`) is `case_up_pow_hi` with
+margin `3c₀/4`.
+
+Note on the hypothesis list: `hgap`, `hobs15`, `hCa` (inside the bundle)
+and `hεpow` are the largeness/margin inputs `thm2_step`'s parameter
+choices supply; without them the statement would be *false* — e.g. at
+`|A| = 2`, `d = 1`, a degenerate `d̃ = 0` witness satisfies the bare
+bundle while no `StepConclusion` exists. -/
+theorem residual_step
+    {d : ℕ} {A : Finset (Fin d → ℤ)} {B : GAP.Box d}
+    {ζ incr q ε K ι g c₀ : ℝ} {N : ℕ}
+    (hd : 1 ≤ d) (hζ : 0 < ζ) (hαζ : αd d + ζ < 1)
+    (hBint : B.IsInterval) (hNA : NonAveraging A)
+    (hsub : A ⊆ B.toFinset)
+    (hcex : (B.card : ℝ) ^ (αd d + ζ) < (A.card : ℝ))
+    (hN : N ≤ A.card)
+    (hε : 0 < ε) (hεg : 2 * ε ≤ g) (hg : 0 < g) (hg12 : g ≤ 1 / 12)
+    (hK : 100 ≤ K) (hq0 : 0 < q) (hq : q ≤ 1 - 2 * ε)
+    (hgap : ∀ {dt : ℕ}, 1 ≤ dt → dt < d → g ≤ αd d - αd dt)
+    (hι : 0 < ι) (hc₀ : 0 < c₀) (hεc : ε ≤ c₀ / 8)
+    (hobs15 : ∀ {dt : ℕ}, d < dt → (αd dt + ζ) *
+      ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ))) ≤ 1 - c₀)
+    (hincr : 0 < incr) (hincrι : incr ≤ ι) (hincrg : 4 * incr ≤ g)
+    (hincrc : 16 * incr ≤ c₀)
+    (hincrθ : incr ≤ ι / Real.log (A.card : ℝ))
+    (hεpow : (2 : ℝ) ≤ (A.card : ℝ) ^ ε)
+    (hdata : Lemma10Data A B ε K) :
+    StepConclusion A ζ incr q := by
+  obtain ⟨n, dt, At, ct, Wt, c', δ, γ, C, hδ, hδ4, hγ, hγδ, hγa, hder, hC,
+    hCa, hAt, hAh, hirr, hup, hsame, hdown⟩ := hdata
+  -- `|A|^ε ≥ 2` forces `|A| ≥ 2^{1/ε}`; hence `|Ã| ≥ |A|^{1-ε} ≥ 3`
+  -- and `d̃ ≥ 1` (a `0`-dimensional witness sees at most one point).
+  have ha0 : (0 : ℝ) < (A.card : ℝ) := by
+    have := Wt.two_le_card.trans hder.card_le
+    positivity
+  have ha1 : (1 : ℝ) < (A.card : ℝ) := by
+    by_contra hle
+    push_neg at hle
+    have h := Real.rpow_le_one (Nat.cast_nonneg _) hle hε.le
+    linarith [hεpow]
+  have ha2 : (2 : ℝ) ^ (1 / ε : ℝ) ≤ (A.card : ℝ) := by
+    have h1 : ((A.card : ℝ) ^ ε) ^ (1 / ε : ℝ) = (A.card : ℝ) := by
+      rw [← Real.rpow_mul (Nat.cast_nonneg _), one_div,
+        mul_inv_cancel₀ hε.ne', Real.rpow_one]
+    rw [← h1]
+    exact Real.rpow_le_rpow (by norm_num) hεpow (by positivity)
+  have hAt3 : (3 : ℝ) ≤ (At.card : ℝ) := by
+    have hε24 : ε ≤ 1 / 24 := by linarith [hεg, hg12]
+    calc (3 : ℝ) ≤ (2 : ℝ) ^ (12 : ℝ) := by norm_num
+      _ ≤ (2 : ℝ) ^ (1 / (2 * ε) : ℝ) := by
+          apply Real.rpow_le_rpow_of_exponent_le (by norm_num : (1:ℝ) ≤ 2)
+          rw [le_div_iff₀ (by positivity : (0 : ℝ) < 2 * ε)]
+          linarith [hε24]
+      _ = ((2 : ℝ) ^ (1 / ε : ℝ)) ^ (1 / 2 : ℝ) := by
+          rw [← Real.rpow_mul (by norm_num : (0 : ℝ) ≤ 2)]
+          congr 1
+          ring
+      _ ≤ (A.card : ℝ) ^ (1 / 2 : ℝ) :=
+          Real.rpow_le_rpow (Real.rpow_nonneg (by norm_num) _) ha2
+            (by norm_num)
+      _ ≤ (A.card : ℝ) ^ (1 - ε) :=
+          Real.rpow_le_rpow_of_exponent_le ha1.le (by linarith)
+      _ ≤ (At.card : ℝ) := hAt
+  have hAt3n : 3 ≤ At.card := by exact_mod_cast hAt3
+  have hdt1 : 1 ≤ dt := by
+    rcases Nat.eq_zero_or_pos dt with h0 | h0
+    · exfalso
+      subst h0
+      have h1 : (Wt.imageAh.card : ℝ) ≤ 1 := by
+        rw [Wt.card_imageAh]
+        exact_mod_cast Wt.card_Ah_le_one
+      have h2 : (At.card : ℝ) ≤ 2 := by linarith [hAh]
+      linarith [hAt3]
+    · exact h0
+  -- shared bounds and the `StepConclusion` assembly
+  have he4 : (1 / 4 : ℝ) ≤ αd d + ζ := (αd_quarter_le hd).trans (by linarith)
+  have he0 : (0 : ℝ) < αd d + ζ := by linarith
+  have hba : (B.card : ℝ) ≤ (A.card : ℝ) ^ (αd d + ζ)⁻¹ :=
+    (card_lt_rpow_of_rpow_lt he0 (by omega) hcex).le
+  have hinv4 : (αd d + ζ)⁻¹ ≤ 4 := by
+    calc (αd d + ζ)⁻¹ ≤ (1 / 4 : ℝ)⁻¹ := inv_anti₀ (by norm_num) he4
+      _ = 4 := by norm_num
+  have hNA' : NonAveraging Wt.imageAh :=
+    GAP.nonAveraging_ptCoeffImage _
+      (fun _ ha ↦ Wt.hsub (Finset.mem_union_left _ ha))
+      (NonAveraging.mono Wt.hAh (hder.nonAveraging hNA))
+  have hA'card : Wt.imageAh.card ≤ A.card := by
+    calc Wt.imageAh.card = Wt.Ah.card := Wt.card_imageAh
+      _ ≤ At.card := Finset.card_le_card Wt.hAh
+      _ ≤ A.card := hder.card_le
+  -- assembly: any bound `|P̃|^{α_{d̃}+ζ+incr} < |A|^{1-ε}/2` gives the
+  -- conclusion with `A' = ϕ(Â)`, `B' = coeffBox P̃`, `ζ' = ζ+incr`,
+  -- `ρ' = |Ã|/(2|A|)`.
+  have finish (h : (Wt.P.coeffBox.card : ℝ) ^ (αd dt + (ζ + incr))
+      < (A.card : ℝ) ^ (1 - ε) / 2) : StepConclusion A ζ incr q := by
+    refine ⟨dt, Wt.imageAh, Wt.P.coeffBox, ζ + incr,
+      (At.card : ℝ) / (2 * (A.card : ℝ)), hdt1, coeffBox_isInterval _,
+      hNA', Wt.imageAh_subset_coeffBox, hA'card, le_rfl, ?_, ?_, ?_, ?_⟩
+    · exact h.trans_le (by linarith [hAt, hAh])
+    · calc (A.card : ℝ) ^ q ≤ (A.card : ℝ) ^ (1 - 2 * ε) :=
+            Real.rpow_le_rpow_of_exponent_le ha1.le hq
+        _ = (A.card : ℝ) ^ (1 - ε) / (A.card : ℝ) ^ ε := by
+            rw [show (1 - 2 * ε : ℝ) = (1 - ε) - ε by ring,
+              Real.rpow_sub ha0]
+        _ ≤ (A.card : ℝ) ^ (1 - ε) / 2 :=
+            div_le_div_of_nonneg_left (Real.rpow_nonneg ha0.le _)
+              (by norm_num) hεpow
+        _ ≤ (Wt.imageAh.card : ℝ) := by linarith [hAt, hAh]
+    · have hρmul : (At.card : ℝ) / (2 * (A.card : ℝ)) * (A.card : ℝ)
+          = (At.card : ℝ) / 2 := by
+        have hne : (A.card : ℝ) ≠ 0 := ha0.ne'
+        field_simp
+        ring
+      rw [hρmul]
+      linarith [hAh]
+    · exact div_pos
+        (by exact_mod_cast (by omega : 0 < At.card)) (by linarith)
+  rcases lt_trichotomy dt d with hdt | hdt | hdt
+  · -- **`d̃ < d`**: down-move via `case_down_pow` with margin `ε' = g/4`.
+    have hΔ : g ≤ αd d - αd dt := hgap hdt1 hdt
+    have he'pos : (0 : ℝ) < αd dt + (ζ + incr) := by
+      linarith [αd_quarter_le hdt1, hζ, hincr]
+    have he'le : αd dt + (ζ + incr) ≤ αd d + ζ := by
+      linarith [hΔ, hincrg]
+    have hsplit : (αd dt + (ζ + incr)) * (αd d + ζ)⁻¹
+        ≤ 1 - ε - g / 4 := by
+      have hΔi : (0 : ℝ) ≤ αd d - αd dt - incr := by linarith [hΔ, hincrg]
+      have hge : αd d - αd dt - incr
+          ≤ (αd d - αd dt - incr) * (αd d + ζ)⁻¹ := by
+        rw [show (αd d - αd dt - incr) * (αd d + ζ)⁻¹
+            = (αd d - αd dt - incr) / (αd d + ζ) from div_eq_mul_inv _ _]
+        rw [le_div_iff₀ he0]
+        nlinarith [hΔi, hαζ]
+      have e'eq : αd dt + (ζ + incr)
+          = αd d + ζ - (αd d - αd dt - incr) := by ring
+      calc (αd dt + (ζ + incr)) * (αd d + ζ)⁻¹
+          = (αd d + ζ - (αd d - αd dt - incr)) * (αd d + ζ)⁻¹ := by
+            rw [e'eq]
+        _ = (αd d + ζ) * (αd d + ζ)⁻¹
+            - (αd d - αd dt - incr) * (αd d + ζ)⁻¹ := by ring
+        _ = 1 - (αd d - αd dt - incr) * (αd d + ζ)⁻¹ := by
+            rw [mul_inv_cancel₀ he0.ne']
+        _ ≤ 1 - (αd d - αd dt - incr) := by linarith [hge]
+        _ ≤ 1 - ε - g / 4 := by linarith [hΔ, hincrg, hεg]
+    have hCa' : 2 * C ≤ (A.card : ℝ) ^ (g / 4 / 2) := by
+      calc 2 * C ≤ (A.card : ℝ) ^ (ε / 4) := hCa
+        _ ≤ (A.card : ℝ) ^ (g / 4 / 2) :=
+            Real.rpow_le_rpow_of_exponent_le ha1.le (by linarith [hεg])
+    exact finish (case_down_pow (a := (A.card : ℝ)) (b := (B.card : ℝ))
+      (p := (Wt.P.coeffBox.card : ℝ)) (C := C) (ε := ε) (ε' := g / 4)
+      (e := αd d + ζ) (e' := αd dt + (ζ + incr))
+      ha1 (Nat.cast_nonneg _) (Nat.cast_nonneg _) hC he'pos
+      (by linarith [hαζ] : αd dt + (ζ + incr) ≤ 1) hε.le
+      (by linarith [hg] : (0 : ℝ) < g / 4) hsplit (hdown hdt) hba hCa')
+  · -- **`d̃ = d`**: shrink vs. density-increment split on
+    -- `ρ = |Ã|/|A|` vs `|A|^{-σ}`.
+    subst hdt
+    set σ : ℝ := max (incr / 2)
+      (20 * Real.log (2 * C * C) / (K * Real.log (A.card : ℝ)))
+      with hσdef
+    have hσpos : (0 : ℝ) < σ :=
+      lt_of_lt_of_le (by linarith [hincr] : (0 : ℝ) < incr / 2)
+        (le_max_left _ _)
+    by_cases hρσ : (At.card : ℝ) / (A.card : ℝ) ≤ (A.card : ℝ) ^ (-σ)
+    · -- shrink regime: `case_shrink_pow_sq` with `t = incr·e⁻¹`.
+      have hρpos : (0 : ℝ) < (At.card : ℝ) / (A.card : ℝ) :=
+        div_pos (by exact_mod_cast (by omega : 0 < At.card)) ha0
+      have he'pos : (0 : ℝ) < αd d + (ζ + incr) := by
+        linarith [αd_quarter_le hd, hζ, hincr]
+      have he'2 : αd d + (ζ + incr) ≤ 2 := by
+        have h1 : incr ≤ 1 / 48 := by linarith [hincrg, hg12]
+        linarith [hαζ]
+      have hKpos : (0 : ℝ) < K := by linarith [hK]
+      have hKsplit : K / 5 ≤ K * (αd d + (ζ + incr)) - 1 := by
+        have he'4 : (1 / 4 : ℝ) ≤ αd d + (ζ + incr) :=
+          (αd_quarter_le hd).trans (by linarith [hζ, hincr])
+        have h1 : 1 + K / 5 ≤ K * (αd d + (ζ + incr)) := by
+          have e1 : 1 + K / 5 = K * (1 / K + 1 / 5) := by
+            field_simp
+            ring
+          rw [e1]
+          apply mul_le_mul_of_nonneg_left _ hKpos.le
+          have h2 : (1 : ℝ) / K ≤ 1 / 100 :=
+            one_div_le_one_div_of_le (by norm_num) (by linarith [hK])
+          linarith [he'4]
+        linarith
+      have ht : (αd d + (ζ + incr)) * (αd d + ζ)⁻¹
+          ≤ 1 + incr * (αd d + ζ)⁻¹ := by
+        have e1 : (αd d + (ζ + incr)) * (αd d + ζ)⁻¹
+            = (αd d + ζ) * (αd d + ζ)⁻¹ + incr * (αd d + ζ)⁻¹ := by ring
+        rw [e1, mul_inv_cancel₀ he0.ne']
+        exact le_rfl
+      have htt : incr * (αd d + ζ)⁻¹ ≤ σ * K / 10 := by
+        have h2 : incr * 4 ≤ incr * K / 20 := by
+          have e1 : incr * K / 20 = incr * (K / 20) := by ring
+          rw [e1]
+          apply mul_le_mul_of_nonneg_left _ hincr.le
+          linarith [hK]
+        have h3 : incr * K / 20 ≤ σ * K / 10 := by
+          have e1 : incr * K / 20 = (incr / 2) * (K / 10) := by ring
+          rw [e1]
+          apply mul_le_mul_of_nonneg_right _ (by linarith [hK] :
+            (0 : ℝ) ≤ K / 10)
+          exact le_max_left _ _
+        calc incr * (αd d + ζ)⁻¹ ≤ incr * 4 :=
+            mul_le_mul_of_nonneg_left hinv4 hincr.le
+          _ ≤ incr * K / 20 := h2
+          _ ≤ σ * K / 10 := h3
+      have hloga : (0 : ℝ) < Real.log (A.card : ℝ) := Real.log_pos ha1
+      have hσ2 : 2 * (Real.log (2 * C * C) / Real.log (A.card : ℝ))
+          ≤ σ * K / 10 := by
+        have h1 : 20 * Real.log (2 * C * C) /
+            (K * Real.log (A.card : ℝ)) ≤ σ := le_max_right _ _
+        have e1 : σ * K / 10 = σ * (K / 10) := by ring
+        rw [e1]
+        calc 2 * (Real.log (2 * C * C) / Real.log (A.card : ℝ))
+            = (20 * Real.log (2 * C * C) /
+                (K * Real.log (A.card : ℝ))) * (K / 10) := by
+              field_simp
+              ring
+          _ ≤ σ * (K / 10) :=
+              mul_le_mul_of_nonneg_right h1 (by linarith [hK] :
+                (0 : ℝ) ≤ K / 10)
+      have hC2pos : (0 : ℝ) < 2 * C * C := by positivity
+      have hy : (A.card : ℝ) ^
+          (Real.log (2 * C * C) / Real.log (A.card : ℝ)) = 2 * C * C := by
+        rw [show Real.log (2 * C * C) / Real.log (A.card : ℝ)
+            = Real.logb (A.card : ℝ) (2 * C * C) from rfl]
+        exact Real.rpow_logb ha0 ha1.ne' hC2pos
+      have hCa2 : 2 * C * C < (A.card : ℝ) ^ (σ * K / 10) := by
+        have h1 : (2 * C * C) ^ 2
+            ≤ (A.card : ℝ) ^ (σ * K / 10) := by
+          calc (2 * C * C) ^ 2
+              = ((A.card : ℝ) ^
+                  (Real.log (2 * C * C) / Real.log (A.card : ℝ))) ^ 2 := by
+                rw [hy]
+            _ = (A.card : ℝ) ^
+                (2 * (Real.log (2 * C * C) / Real.log (A.card : ℝ))) := by
+                rw [sq, ← Real.rpow_add ha0]
+                congr 1
+                ring
+            _ ≤ (A.card : ℝ) ^ (σ * K / 10) :=
+                Real.rpow_le_rpow_of_exponent_le ha1.le hσ2
+        have hlt : (2 * C * C : ℝ) < (2 * C * C) ^ 2 := by
+          have h : (1 : ℝ) < 2 * C * C := by nlinarith [hC]
+          nlinarith
+        exact hlt.trans_le h1
+      exact finish (case_shrink_pow_sq (a := (A.card : ℝ))
+        (b := (B.card : ℝ)) (p := (Wt.P.coeffBox.card : ℝ)) (C := C)
+        (ρ := (At.card : ℝ) / (A.card : ℝ)) (K := K) (σ := σ)
+        (t := incr * (αd d + ζ)⁻¹)
+        (e := αd d + ζ) (e' := αd d + (ζ + incr))
+        ha1 (Nat.cast_nonneg _) (Nat.cast_nonneg _) hC hρpos he'pos he'2
+        (by linarith [hK] : (0 : ℝ) ≤ K) hKsplit ht hρσ hσpos (hsame rfl)
+        hba hCa2 htt)
+    · -- non-shrink regime: the remaining leaf.
+      push_neg at hρσ
+      exact residual_density_step Wt hd hζ hαζ hBint hNA hsub hcex hN
+        hε (by linarith [hεg, hg12] : ε < 1) hK hq0 hq hι hincr hincrι
+        hincrθ hεpow hδ hδ4 hγ hγδ hγa hder hC hCa hAt hAh hirr
+        (hsame rfl) hσpos hρσ
+  · -- **`d̃ > d` degenerate**: `case_up_pow_hi` covers `e' ∈ (0, 2]`
+    -- (in particular `α_{d̃} + ζ + incr > 1`), margin `3c₀/4`.
+    have he'pos : (0 : ℝ) < αd dt + (ζ + incr) := by
+      linarith [αd_quarter_le hdt1, hζ, hincr]
+    have he'2 : αd dt + (ζ + incr) ≤ 2 := by
+      have h1 : αd dt < 1 := αd_lt_one hdt1
+      have h2 : ζ + incr < 1 := by
+        have h3 : ζ < 1 - αd d := by linarith [hαζ]
+        have h4 : (1 / 4 : ℝ) ≤ αd d := αd_quarter_le hd
+        have h5 : incr ≤ g / 4 := by linarith [hincrg]
+        have h6 : g / 4 ≤ 1 / 48 := by linarith [hg12]
+        linarith
+      linarith
+    have he'X : (αd dt + (ζ + incr)) *
+        ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ)))
+        ≤ 1 - 3 * c₀ / 4 := by
+      have h1 := hobs15 hdt
+      have h2 : (αd dt + (ζ + incr)) *
+          ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ)))
+          = (αd dt + ζ) *
+            ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ)))
+            + incr * ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ))) := by
+        ring
+      have hXle : (αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ))
+          ≤ (αd d + ζ)⁻¹ := by
+        apply sub_le_self
+        apply mul_nonneg (by linarith [hε])
+        have hdd : (d : ℝ) ≤ (dt : ℝ) := by exact_mod_cast hdt.le
+        linarith
+      have h3 : incr * ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ)))
+          ≤ incr * (αd d + ζ)⁻¹ :=
+        mul_le_mul_of_nonneg_left hXle hincr.le
+      have h4 : incr * (αd d + ζ)⁻¹ ≤ c₀ / 4 := by
+        calc incr * (αd d + ζ)⁻¹ ≤ incr * 4 :=
+            mul_le_mul_of_nonneg_left hinv4 hincr.le
+          _ ≤ c₀ / 4 := by linarith [hincrc]
+      rw [h2]
+      linarith
+    have hCa2' : 2 * C * C ≤ (A.card : ℝ) ^ ((3 * c₀ / 4) / 2) := by
+      have h1 : C ≤ (A.card : ℝ) ^ (ε / 4) / 2 := by
+        have hpos := Real.rpow_pos_of_pos ha0 (ε / 4)
+        linarith [hCa]
+      have h2 : C * C ≤ ((A.card : ℝ) ^ (ε / 4) / 2) *
+          ((A.card : ℝ) ^ (ε / 4) / 2) := by
+        apply mul_le_mul h1 h1
+          (by positivity : (0 : ℝ) ≤ (A.card : ℝ) ^ (ε / 4) / 2)
+          (by linarith [hC] : (0 : ℝ) ≤ C)
+      have h3 : ((A.card : ℝ) ^ (ε / 4) / 2) * ((A.card : ℝ) ^ (ε / 4) / 2)
+          = (A.card : ℝ) ^ (ε / 2) / 4 := by
+        have e1 : (A.card : ℝ) ^ (ε / 4) * (A.card : ℝ) ^ (ε / 4)
+            = (A.card : ℝ) ^ (ε / 4 + ε / 4) := (Real.rpow_add ha0 _ _).symm
+        rw [e1, show ε / 4 + ε / 4 = ε / 2 by ring]
+        ring
+      have h4 : 2 * C * C ≤ (A.card : ℝ) ^ (ε / 2) / 2 := by
+        linarith [h2, h3]
+      have h5 : (A.card : ℝ) ^ (ε / 2) ≤ (A.card : ℝ) ^ (3 * c₀ / 4 / 2) :=
+        Real.rpow_le_rpow_of_exponent_le ha1.le (by linarith [hεc, hc₀])
+      linarith
+    exact finish (case_up_pow_hi (a := (A.card : ℝ)) (b := (B.card : ℝ))
+      (p := (Wt.P.coeffBox.card : ℝ)) (C := C) (c := 3 * c₀ / 4) (ε := ε)
+      (k := (dt : ℝ) - (d : ℝ)) (e := αd d + ζ) (e' := αd dt + (ζ + incr))
+      ha1 (Nat.cast_nonneg _) (Nat.cast_nonneg _) hC he'pos he'2
+      (by have hdd : (d : ℝ) ≤ (dt : ℝ) := by exact_mod_cast hdt.le
+          linarith)
+      (by linarith [hc₀] : (0 : ℝ) < 3 * c₀ / 4) hε.le
+      (by linarith [hεc, hc₀] : ε ≤ (3 * c₀ / 4) / 4) he'X (hup hdt) hba
+      hCa2')
+
+/-- The per-instance §4 step property: every large non-averaging
+counterexample `A ⊆ B` at exponent `α_d + ζ < 1` produces a
+`StepConclusion` at increment `min ι (θ |A|)`.  Unlike `IterationStepProp`
+(uniform `ι`), the increment may decay with `|A|` — this matches the
+paper, whose `d̃ = d` increment `θ'(ζ,d,|A|)` has scale
+`log log log |A| / log |A|`. -/
+def StepProp (ζ₀ : ℝ) (ι : ℝ) (q : ℝ) (θ : ℝ → ℝ) (N : ℕ) : Prop :=
+  ∀ {d : ℕ}, 1 ≤ d → ∀ {ζ : ℝ}, ζ₀ ≤ ζ → αd d + ζ < 1 →
+    ∀ {A : Finset (Fin d → ℤ)} {B : GAP.Box d},
+      B.IsInterval → NonAveraging A → A ⊆ B.toFinset →
+      (B.card : ℝ) ^ (αd d + ζ) < (A.card : ℝ) → N ≤ A.card →
+      StepConclusion A ζ (min ι (θ (A.card : ℝ))) q
+
+/-- **The §4 step** (assembly theorem).  For each fixed `ζ₀ > 0` the step
+property holds for uniform `ι, q` and `θ |A| = ι / log |A|`.
+
+Modulo the two leaf sorries (`lemma10_data`, `residual_step`) this is
+proved: parameters are chosen as in the paper (`ε ≤ 0.01ζ`,
+`K = 100`, `D = ⌈2/ζ₀⌉`), the Lemma-10 bundle is obtained, and the
+`d̃ > d` case is dispatched to `step_up` (genuine), with all other cases
+delegated to `residual_step`. -/
+theorem thm2_step (ζ₀ : ℝ) (hζ₀ : 0 < ζ₀) :
+    ∃ (ι q : ℝ) (θ : ℝ → ℝ) (N : ℕ), 0 < ι ∧ 0 < q ∧ q ≤ 1 ∧
+      (∀ x : ℝ, 2 ≤ x → 0 < θ x) ∧ AntitoneOn θ (Set.Ici (2 : ℝ)) ∧
+      1 ≤ N ∧ StepProp ζ₀ ι q θ N := by
+  rcases lt_or_ge ζ₀ 1 with hζ1 | hζ1
+  · obtain ⟨c₀, hc₀, hc₀1, hobs15⟩ := observation15_ge hζ₀ hζ1
+    -- parameters: `D` the dimension bound, `g` the down-move gap floor,
+    -- `ε` small in `ζ₀, c₀, g`, `K = 100`, `q = 1 - 2ε`,
+    -- `ι = min(c₀/16, g)`, `θ x = ι / log x`.
+    have hD0 : (0 : ℝ) < ((⌈2 / ζ₀⌉₊ : ℕ) : ℝ) := by
+      exact_mod_cast Nat.ceil_pos.mpr (div_pos two_pos hζ₀)
+    set D : ℝ := ((⌈2 / ζ₀⌉₊ : ℕ) : ℝ) with hD_def
+    set g := min (1 / 12 : ℝ) (2 / (D * (D + 1))) with hg_def
+    have hg : 0 < g := by
+      rw [hg_def]
+      exact lt_min (by norm_num)
+        (div_pos two_pos (mul_pos hD0 (by linarith)))
+    set ε := min (0.01 * ζ₀) (min (c₀ / 8) (g / 2)) with hε_def
+    have hε : 0 < ε := by
+      rw [hε_def]
+      exact lt_min (mul_pos (by norm_num) hζ₀)
+        (lt_min (by linarith) (by linarith))
+    have hεle : ε ≤ 0.01 * ζ₀ := by rw [hε_def]; exact min_le_left _ _
+    have hεc : ε ≤ c₀ / 8 := by
+      rw [hε_def]
+      exact le_trans (min_le_right _ _) (min_le_left _ _)
+    have hε1 : ε < 1 := by linarith
+    have hε3 : ε < 1 / 3 := by linarith
+    obtain ⟨N₀, hl10⟩ := lemma10_data (ε := ε) (K := 100) hε hε3
+      (by norm_num) ⌈2 / ζ₀⌉₊
+    set q := 1 - 2 * ε with hq_def
+    have hq0 : 0 < q := by rw [hq_def]; linarith
+    have hq1 : q ≤ 1 := by rw [hq_def]; linarith
+    set ι := min (c₀ / 16) g with hι_def
+    have hι : 0 < ι := by rw [hι_def]; exact lt_min (by linarith) hg
+    have hιc : ι ≤ c₀ / 16 := by rw [hι_def]; exact min_le_left _ _
+    have hιg : ι ≤ g := by rw [hι_def]; exact min_le_right _ _
+    set θ : ℝ → ℝ := fun x ↦ ι / Real.log x with hθ_def
+    have hθpos : ∀ x : ℝ, 2 ≤ x → 0 < θ x := by
+      intro x hx
+      simp only [hθ_def]
+      exact div_pos hι (Real.log_pos (by linarith))
+    have hθanti : AntitoneOn θ (Set.Ici (2 : ℝ)) := by
+      intro x hx y _ hxy
+      have hx2 : (2 : ℝ) ≤ x := hx
+      simp only [hθ_def]
+      exact div_le_div_of_nonneg_left hι.le
+        (Real.log_pos (by linarith))
+        (Real.log_le_log (by linarith) hxy)
+    -- global threshold: `N` dominates Lemma-10's `N₀`, `3` (so
+    -- `log |A| > 0`), and `2^{1/ε}` (so `2 ≤ |A|^ε`).
+    refine ⟨ι, q, θ, max N₀ (max 3 (Nat.ceil ((2 : ℝ) ^ (1 / ε)))),
+      hι, hq0, hq1, hθpos, hθanti, by omega, ?_⟩
+    intro d hd ζ hζ hαζ A B hBint hNA hsub hcex hN
+    have h2a : (2 : ℝ) ≤ (A.card : ℝ) := by
+      exact_mod_cast (le_trans (by omega : 2 ≤
+        max N₀ (max 3 (Nat.ceil ((2 : ℝ) ^ (1 / ε))))) hN)
+    have ha1 : (1 : ℝ) < (A.card : ℝ) := by linarith
+    have ha0 : (0 : ℝ) < (A.card : ℝ) := by linarith
+    have he : 0 < αd d + ζ := add_pos (αd_pos hd) (hζ₀.trans_le hζ)
+    have hba : (B.card : ℝ) ≤ (A.card : ℝ) ^ (αd d + ζ)⁻¹ :=
+      (card_lt_rpow_of_rpow_lt he (by omega) hcex).le
+    -- `|B| ≤ |A|^4` for the Lemma-10 input (`β = (α_d+ζ)⁻¹ ≤ 4`).
+    have hbox4 : (B.card : ℝ) ≤ (A.card : ℝ) ^ (4 : ℝ) := by
+      have he4 : (1 / 4 : ℝ) ≤ αd d + ζ :=
+        (αd_quarter_le hd).trans (by linarith)
+      have hinv : (αd d + ζ)⁻¹ ≤ 4 := by
+        calc (αd d + ζ)⁻¹ ≤ (1 / 4 : ℝ)⁻¹ := inv_anti₀ (by norm_num) he4
+          _ = 4 := by norm_num
+      exact hba.trans (Real.rpow_le_rpow_of_exponent_le ha1.le hinv)
+    have hN0 : N₀ ≤ A.card := le_trans (by omega) hN
+    -- `α_d + ζ < 1` bounds the ambient dimension by `⌈2/ζ₀⌉`.
+    have hdD : d ≤ ⌈2 / ζ₀⌉₊ := by
+      have hlt : (d : ℝ) < 2 / ζ :=
+        dim_lt_of_slack hd (hζ₀.trans_le hζ) hαζ
+      have hle : (2 : ℝ) / ζ ≤ 2 / ζ₀ :=
+        div_le_div_of_nonneg_left (by norm_num) hζ₀ hζ
+      have hlt' : (d : ℝ) < (⌈2 / ζ₀⌉₊ : ℝ) :=
+        (hlt.trans_le hle).trans_le (Nat.le_ceil _)
+      exact le_of_lt (by exact_mod_cast hlt')
+    obtain ⟨n, dt, At, ct, Wt, c', δ, γ, C, hδ, hδ4, hγ, hγδ, hγa, hder,
+      hC, hCa, hAt, hAh, hirr, hup, hsame, hdown⟩ :=
+      hl10 hdD hBint hNA hsub hbox4 hN0
+    -- the per-instance increment `incr = min ι (θ |A|)`
+    set incr := min ι (θ (A.card : ℝ)) with hincr_def
+    have hincr : 0 < incr := by
+      rw [hincr_def]
+      exact lt_min hι (hθpos _ h2a)
+    have hincrι : incr ≤ ι := by rw [hincr_def]; exact min_le_left _ _
+    have hincrg : incr ≤ g := le_trans hincrι hιg
+    have hincrθ : incr ≤ ι / Real.log (A.card : ℝ) := by
+      rw [hincr_def]
+      simp only [hθ_def]
+      exact min_le_right _ _
+    have h2ε : (2 : ℝ) ^ (1 / ε : ℝ) ≤ (A.card : ℝ) := by
+      calc (2 : ℝ) ^ (1 / ε : ℝ)
+          ≤ ((⌈(2 : ℝ) ^ (1 / ε)⌉₊ : ℕ) : ℝ) := Nat.le_ceil _
+        _ ≤ (A.card : ℝ) := by
+            exact_mod_cast (le_trans (by omega : ⌈(2 : ℝ) ^ (1 / ε)⌉₊ ≤
+              max N₀ (max 3 (Nat.ceil ((2 : ℝ) ^ (1 / ε))))) hN)
+    have hεpow : (2 : ℝ) ≤ (A.card : ℝ) ^ ε := by
+      have h2 : ((2 : ℝ) ^ (1 / ε : ℝ)) ^ ε = 2 := by
+        rw [← Real.rpow_mul (show (0 : ℝ) ≤ 2 by norm_num)]
+        rw [show (1 / ε : ℝ) * ε = 1 from div_mul_cancel₀ _ hε.ne']
+        exact Real.rpow_one _
+      calc (2 : ℝ) = ((2 : ℝ) ^ (1 / ε : ℝ)) ^ ε := h2.symm
+        _ ≤ (A.card : ℝ) ^ ε :=
+          Real.rpow_le_rpow (Real.rpow_nonneg (by norm_num) _) h2ε hε.le
+    -- derived facts `residual_step` consumes: `2ε ≤ g`, `g ≤ 1/12`,
+    -- `g ≤ α_d − α_{d̃}` for `d̃ < d`, `4·incr ≤ g`, `16·incr ≤ c₀`, and
+    -- the ∀-form of the Observation-15 bound.
+    have hεg : 2 * ε ≤ g := by
+      have : ε ≤ g / 2 := by
+        rw [hε_def]
+        exact le_trans (min_le_right _ _) (min_le_right _ _)
+      linarith
+    have hg12 : g ≤ 1 / 12 := by rw [hg_def]; exact min_le_left _ _
+    have hd0' : (0 : ℝ) < (d : ℝ) := by exact_mod_cast hd
+    have hDd : (d : ℝ) ≤ D := by exact_mod_cast hdD
+    have hgap : ∀ {dt : ℕ}, 1 ≤ dt → dt < d → g ≤ αd d - αd dt := by
+      intro dt hdt1 hdt
+      have hsub' := αd_sub_gap hdt1 hdt
+      have h1 : 2 / (D * (D + 1)) ≤ 2 / ((d : ℝ) * ((d : ℝ) + 1)) := by
+        apply div_le_div_of_nonneg_left (by norm_num)
+          (mul_pos hd0' (by linarith))
+        exact mul_le_mul hDd (by linarith) (by linarith)
+          (by linarith [hD0])
+      have h2 : g ≤ min (1 / 12 : ℝ) (2 / ((d : ℝ) * ((d : ℝ) + 1))) := by
+        rw [hg_def]
+        exact le_min (min_le_left _ _) ((min_le_right _ _).trans h1)
+      linarith [hsub', h2]
+    have hloga4 : (4 : ℝ) ≤ Real.log (A.card : ℝ) := by
+      have hε24 : ε ≤ 1 / 24 := by linarith [hεg, hg12]
+      have hlog2 : (0.693 : ℝ) < Real.log 2 := Real.log_two_gt_d9
+      have h1 : (4 : ℝ) ≤ Real.log 2 / ε := by
+        rw [le_div_iff₀ hε]
+        nlinarith [hε24]
+      calc (4 : ℝ) ≤ Real.log 2 / ε := h1
+        _ = Real.log ((2 : ℝ) ^ (1 / ε : ℝ)) := by
+            rw [Real.log_rpow (by norm_num : (0 : ℝ) < 2)]
+            rw [one_div, mul_comm, ← div_eq_mul_inv]
+        _ ≤ Real.log (A.card : ℝ) :=
+            Real.log_le_log (Real.rpow_pos_of_pos (by norm_num) _) h2ε
+    have hincrg4 : 4 * incr ≤ g := by
+      have h1 : ι / Real.log (A.card : ℝ) ≤ g / 4 := by
+        rw [div_le_iff₀ (by linarith [hloga4] :
+          (0 : ℝ) < Real.log (A.card : ℝ))]
+        calc ι ≤ g := hιg
+          _ = g / 4 * 4 := by ring
+          _ ≤ g / 4 * Real.log (A.card : ℝ) :=
+            mul_le_mul_of_nonneg_left hloga4 (by linarith [hg])
+      calc 4 * incr ≤ 4 * (ι / Real.log (A.card : ℝ)) :=
+          mul_le_mul_of_nonneg_left hincrθ (by norm_num)
+        _ ≤ 4 * (g / 4) := mul_le_mul_of_nonneg_left h1 (by norm_num)
+        _ = g := by ring
+    have hincrc : 16 * incr ≤ c₀ := by
+      calc 16 * incr ≤ 16 * ι :=
+          mul_le_mul_of_nonneg_left hincrι (by norm_num)
+        _ ≤ c₀ := by linarith [hιc]
+    have hobs15all : ∀ {dt : ℕ}, d < dt → (αd dt + ζ) *
+        ((αd d + ζ)⁻¹ - (1 - ε) * ((dt : ℝ) - (d : ℝ))) ≤ 1 - c₀ := by
+      intro dt hdt
+      have hlem := hobs15 dt d ζ hd hdt hζ ε hε.le hεle
+      simpa [one_div] using hlem
+    by_cases hcase : d < dt ∧ αd dt + ζ + incr ≤ 1
+    · -- **Case 1** (`d̃ > d`): genuine up-move via `step_up`.
+      obtain ⟨hdt, hαe'⟩ := hcase
+      have hCa' : 2 * C ≤ (A.card : ℝ) ^ (c₀ / 8) := by
+        calc 2 * C ≤ (A.card : ℝ) ^ (ε / 4) := hCa
+          _ ≤ (A.card : ℝ) ^ (c₀ / 8) :=
+            Real.rpow_le_rpow_of_exponent_le ha1.le
+              (by linarith [hεc, hc₀])
+      exact step_up Wt hder hd hdt (hζ₀.trans_le hζ) hNA hincr
+        (le_trans hincrι hιc) hαe' (hobs15all hdt) hc₀ hc₀1 hε hεc ha1 hba
+        (hup hdt) hAt hAh hC hCa' hq0 (le_of_eq hq_def) hεpow
+    · -- **Residual cases** (`d̃ < d`, `d̃ = d`, degenerate `d̃ > d`).
+      clear hcase
+      exact residual_step hd (hζ₀.trans_le hζ) hαζ hBint hNA hsub hcex
+        hN hε hεg hg hg12 (le_refl _) hq0 (le_of_eq hq_def) hgap hι hc₀ hεc
+        hobs15all hincr hincrι hincrg4 hincrc hincrθ hεpow
+        ⟨n, dt, At, ct, Wt, c', δ, γ, C, hδ, hδ4, hγ, hγδ, hγa, hder, hC,
+          hCa, hAt, hAh, hirr, hup, hsame, hdown⟩
+  · -- `ζ₀ ≥ 1`: `α_d + ζ < 1` is impossible since `α_d ≥ 1/4`, so the
+    -- step property is vacuous.
+    refine ⟨1, 1, fun _ => 1, 1, one_pos, one_pos, le_rfl, ?_, ?_,
+      le_rfl, ?_⟩
+    · intro x _; exact one_pos
+    · intro x _ y _ _; rfl
+    · intro d hd ζ hζ hαζ A B _ _ _ _ _
+      exfalso
+      have h14 : (1 / 4 : ℝ) ≤ αd d := αd_quarter_le hd
+      linarith
 
 end Thm2
 

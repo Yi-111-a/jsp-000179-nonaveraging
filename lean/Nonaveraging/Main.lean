@@ -1,5 +1,7 @@
 import Nonaveraging.Asymptotics
 import Nonaveraging.ConvexBody
+import Nonaveraging.DiscreteJohn
+import Nonaveraging.Irreducibility
 import Nonaveraging.UpperBound
 
 /-!

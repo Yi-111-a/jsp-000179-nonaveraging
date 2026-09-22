@@ -199,6 +199,16 @@ theorem nonAveraging_ptCoeffImage {A : Finset (Fin ℓ → ℤ)}
     exact key
   exact hA a ha S' hS'erase hS'ne hsumS'.symm
 
+/-- Dilation by `1` is the identity on GAPs.  Used to bridge the
+`SubSumWitness` pointwise-dilation convention `k • P` with the
+coefficient-width scaling `P.widthScale k` returned by
+`cfp_structure_cor` (take `k = 1` on the widened progression). -/
+theorem one_smul' : (1 : ℤ) • P = P := by
+  show GAP.mk ((1 : ℤ) • P.base) (fun i ↦ (1 : ℤ) • P.step i) P.width =
+    GAP.mk P.base P.step P.width
+  rw [GAP.mk.injEq]
+  exact ⟨_root_.one_smul _ _, funext fun i ↦ _root_.one_smul _ _, rfl⟩
+
 end GAP
 
 variable {ℓ : ℕ}
@@ -318,8 +328,22 @@ theorem subSumDim_exists {β : ℝ} (hβ : 1 < β) :
   refine ⟨c, C, hc, hC, fun A B hBint hsub hB hCm ↦ ?_⟩
   obtain ⟨Â, d', P, hÂsub, hÂcard, -, -, hsub0, A', hA'sub, hA'card, k, hkpos,
     hkle, t, htrans, hprop⟩ := hcor A B hBint hsub hB hCm
-  exact ⟨d', ⟨Â, A', P, k, t, hc, hkpos, hkle, hÂsub, hA'sub, hA'card,
-    hÂcard, hsub0, htrans, hprop⟩⟩
+  -- `SubSumWitness` stores the pointwise dilation `k • P`, while
+  -- `cfp_structure_cor` supplies the coefficient-width scaling
+  -- `P.widthScale k`.  Take the widened progression itself as the witness
+  -- GAP with multiplicity `1`: `(1 : ℕ) • (P.widthScale k) = P.widthScale k`
+  -- (`GAP.one_smul'`), `P ⊆ P.widthScale k` coefficientwise since `1 ≤ k`
+  -- (`GAP.toFinset_subset_widthScale`), and `1 ≤ k ≤ c·s(A)`.
+  have hQ : (1 : ℕ) • (P.widthScale k) = P.widthScale k := by
+    rw [GAP.nsmul_eq_zsmul, Nat.cast_one]
+    exact GAP.one_smul' _
+  refine ⟨d', ⟨Â, A', P.widthScale k, 1, t, hc, zero_lt_one, ?_,
+    hÂsub, hA'sub, hA'card, hÂcard, ?_, ?_, ?_⟩⟩
+  · rw [Nat.cast_one]
+    exact (by exact_mod_cast hkpos : (1 : ℝ) ≤ (k : ℝ)).trans hkle
+  · exact hsub0.trans (P.toFinset_subset_widthScale hkpos)
+  · rw [hQ]; exact htrans
+  · rw [hQ]; exact hprop
 
 /-- `DerivedFrom A δ B`: `B ⊆ ℤⁿ` is obtained from `A ⊆ ℤ^ℓ` by a sequence
 of *down/up/shrink moves* as in Lemma 10: each move takes a subset of size

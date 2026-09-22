@@ -1003,7 +1003,21 @@ the largeness `N ≤ |A|` absorb Theorem 4's threshold), `density_increment`
 `θ'(ζ,d,|A|) ≍ log log log |A| / log |A|` — hence the hypothesis
 `incr ≤ ι / log |A|`.
 
-**This is the single remaining gap of the iteration step.** -/
+**This is the single remaining gap of the iteration step.**
+
+Round-14 note — the existing lemmas do not assemble to this goal:
+`embedded_in_mu_convex_position` and `density_increment` produce
+*existential* thresholds (`∃ N`, `∃ δ₀, ∃ M`) that cannot be
+discharged against the fixed `A` here (only `|Ã| ≥ |A|^{1-ε}` and
+`|A| ≥ γ^{-3}` are available, and `N`, `δ₀`, `M` are opaque functions
+of the parameters); `DerivedFrom.exists_interval_box` only supplies the
+crude `|B'| ≤ 2^{|A|} + |B|` box for `Ã` (the polynomial bound needs
+Lemmas 6–8); and no lemma converts the Lemma-7 `GAP.centered` output
+inside `Ω'` into a `GAP.Box` with `|B̃| ≪ ρ̃^K |B|`.  The bare bound
+`hp` alone cannot produce the counterexample either:
+`|P̃|^{α_d+ζ+incr} < |Ã̂|` would need
+`2C^{e'}ρ̃^{Ke'-1} < |A|^{-(e'/e - 1)}`, whose LHS is `≥ 1` while the
+RHS is `< 1`. -/
 theorem residual_density_step
     {d n : ℕ} {A : Finset (Fin d → ℤ)} {B : GAP.Box d}
     {At : Finset (Fin n → ℤ)} {ct c' δ γ C σ : ℝ}

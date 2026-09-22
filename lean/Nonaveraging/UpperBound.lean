@@ -911,7 +911,23 @@ to `|B'| ≤ ρ^κ|B|`; in the `d̃ > d` degenerate sub-case
 (`α_{d̃} + ζ + ι ≥ 1`) a dimension-changing derived counterexample at
 slack `≥ ζ + ι` must be produced without the `α_{d̃} + ζ + ι ≤ 1`
 margin (the slack is already `> 1 − ι` at dimension `d̃`, so the
-uniform gain is realized by reporting `ζ'` at the boundary). -/
+uniform gain is realized by reporting `ζ'` at the boundary).
+
+**Round-14 note — the signature is under-hypothesized.**  A proof needs,
+on top of the current arguments, the following inputs (all available at
+the call site in `thm2_step_bookkeeping` but not passed):
+`hq : q ≤ 1 - 2 * ε` (the `|A'| ≥ |Ã|/2 ≥ |A|^{1-ε}/2` retention bound
+cannot beat `|A|^{1-ε}`), `hgap : ∀ d̃ < d, g ≤ αd d - αd d̃` (from the
+caller's `d ≤ ⌈2/ζ₀⌉₊` and `g = min (1/12) (2/(D(D+1)))`),
+`hg12 : g ≤ 1/12` (for `3 ≤ |Ã|` hence `1 ≤ d̃`), a `c₀` package
+`0 < c₀`, `ε ≤ c₀/8`, `16 * incr ≤ c₀`, `hobs15` (for `case_up_pow_hi`
+in the degenerate `d̃ > d` branch), and `2 ≤ |A|^ε` (recoverable from
+the bundle's `2C ≤ |A|^{ε/4}`).  As stated the lemma is not provable:
+e.g. `g = 10`, `ι = 5` is consistent with all hypotheses yet forces
+`ζ' ≥ ζ + 5` in a `d̃ < d` instance, making `|B'|^{α_{d̃}+ζ'} ≥ |B'| ≥
+|A'|` — no counterexample exists.  The intended fix is to strengthen
+this signature to `Thm2.residual_step`'s parameter package plus
+`2κ ≤ K`, `ι ≤ g/2`, `ε ≤ g/2`, `incr ≤ ι / log|A|`. -/
 theorem residual_step_bookkeeping
     {d : ℕ} {A : Finset (Fin d → ℤ)} {B : GAP.Box d}
     {ζ incr q ε K ι κ g : ℝ} {N : ℕ}

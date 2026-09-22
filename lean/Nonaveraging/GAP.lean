@@ -1426,6 +1426,88 @@ theorem gap_pullback {P₀ : GAP 1 d} {H : ℤ} (hH : 0 < H)
   · exact ⟨c, rfl⟩
   · exact unpack_symmetric hH hdig hb hm₀ hm hbound hmdig hHm
 
+/-- For `H ≥ 2` the geometric sum `∑_{j < ℓ} H^j` is at most `H^ℓ`
+(`∑ H^j ≤ H^{ℓ-1}(1 + … ) ≤ 2H^{ℓ-1} ≤ H·H^{ℓ-1}`).  Used to bound the
+base-`H` packing `packVec` of vectors in `[0, n]^ℓ`. -/
+theorem geom_sum_le {H : ℤ} (hH : 2 ≤ H) :
+    ∀ ℓ : ℕ, ∑ j ∈ Finset.range ℓ, H ^ j ≤ H ^ ℓ := by
+  intro ℓ
+  induction ℓ with
+  | zero => simp
+  | succ ℓ ih =>
+    rw [Finset.sum_range_succ]
+    calc (∑ j ∈ Finset.range ℓ, H ^ j) + H ^ ℓ
+        ≤ H ^ ℓ + H ^ ℓ := add_le_add_right ih _
+      _ = 2 * H ^ ℓ := by ring
+      _ ≤ H * H ^ ℓ := mul_le_mul_of_nonneg_right hH (pow_nonneg (by linarith) _)
+      _ = H ^ (ℓ + 1) := by rw [← pow_succ']
+
+/-- **Residual input — the Appendix-A decode** (Pham–Zakharov
+arXiv:2410.14624v2, Appendix A).  Given a proper, symmetric `P₀ : GAP 1 d'`
+covering the `packVec`-image of `Â₀ ⊆ [0,n]^ℓ` together with a `k`-dilated
+containment `(k • P₀).translate t ⊆ Σ(ϕ A'₀)`, the conclusion is a decoded
+`P : GAP ℓ d'` — symmetric, containing `Â₀ ∪ {0}` — with `k • P` proper and
+a translate of `k • P` inside `Σ(A'₀)`.
+
+The paper proves this verbatim: there the one-dimensional input is
+`x₀ + cs·P₀ ⊆ Σ(A'₀)` where `cs·P₀` is the **coefficient-scaled** GAP
+(CFP23's `cQ`), so `P₀ ⊆ csP₀` (as `0 ∈ P₀`), giving `q_{0i} ∈ csP₀ − csP₀ ⊆
+2sQ`; unpacking `q_{0i}` yields digit vectors `dig i : Fin ℓ → ℤ` of the
+undilated steps with `|dig i j| ≤ 2sn`, and the decoded GAP is
+`unpack dig (−∑ n⁰ᵢ • dig i) P₀.width` where `n⁰` is the coefficient of `0`
+(`Proper.unpack` + `subsetSumsL_smul_translate_unpack` +
+`unpack_symmetric`), `hdom` being the paper's domination `cH > ns²(sn)^ℓ`.
+
+With `cfp_main`'s **pointwise** dilation `k • P₀` (base and steps scaled by
+`k`), only `k·q_{0i} ∈ Σ(A'₀) − Σ(A'₀)` is available; a `≤ 2sn` digit
+vector for `q_{0i}` exists iff `k` divides `u_i` componentwise, which the
+dilated containment does not give.  This hypothesis gap — together with a
+digit vector for the symmetry center `m₀` (which is automatic for centered
+`P₀`, the shape the paper's Theorem 5 returns) — is the missing input
+isolated in this lemma. -/
+theorem appendix_decode {ℓ : ℕ} (hℓ : 0 < ℓ) {H : ℤ} (hH : 1 < H)
+    {n s : ℕ} {Â₀ A'₀ : Finset (Fin ℓ → ℤ)}
+    (hÂ : ∀ a ∈ Â₀, ∀ j, 0 ≤ a j ∧ a j ≤ (n : ℤ))
+    (hA' : ∀ a ∈ A'₀, ∀ j, 0 ≤ a j ∧ a j ≤ (n : ℤ))
+    (hA'card : (A'₀.card : ℤ) ≤ (s : ℤ))
+    {d' : ℕ} {P₀ : GAP 1 d'} (hP₀ : P₀.Proper) (hP₀s : P₀.Symmetric)
+    (hsub : ∀ a ∈ Â₀, (fun _ : Fin 1 ↦ packVec H a) ∈ P₀.toFinset)
+    (h0 : (0 : Fin 1 → ℤ) ∈ P₀.toFinset)
+    {k : ℕ} (hk : 0 < k) {t : Fin 1 → ℤ}
+    (hcont : ((k • P₀).translate t).toFinset ⊆
+      subsetSumsL (A'₀.image fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x))
+    (hdom : (8 : ℤ) * ((k : ℤ) + 1) * ((s : ℤ) + 1) * ((n : ℤ) + 1) *
+      (2 * (s : ℤ) * (n : ℤ) + 1) ^ (2 * ℓ) < H) :
+    ∃ P : GAP ℓ d', P.Symmetric ∧ (Â₀ ∪ {0}) ⊆ P.toFinset ∧
+      ∃ tdig : Fin ℓ → ℤ, ((k • P).translate tdig).toFinset ⊆
+        subsetSumsL A'₀ ∧ (k • P).Proper := by
+  sorry
+
+/-- **Residual input — the unanchored-box lift.**  If the Appendix-A
+conclusion holds for the anchored translate `A₀ = A − lo`, it lifts to `A`
+itself: a padded `P'` (dimension `d' + 1`, the extra `padStep` absorbing
+the corner `lo`) containing `(Â₀ + lo) ∪ {0}`, and a translate of `k • P'`
+inside `Σ(A'₀ + lo)`.
+
+The obstruction is the translation non-invariance of `Σ`: an element of
+`Σ(A'₀)` is a `j`-element subset sum of `A'₀` shifted by `j • lo`, with `j`
+varying over the point, so a *uniform* translate inside `Σ(A'₀ + lo)`
+requires the fixed-cardinality machinery of `subsetSumsL_translate_of_card`
+— which `cfp_main`'s all-cardinality `Σ` conclusion does not supply.  For
+`lo = 0` (the paper's `WLOG B = [n]^ℓ`) it is immediate
+(`P' = P.padStep 0 1`, `t = tdig`); the general case is the WLOG step the
+paper elides. -/
+theorem cfp_unshift {ℓ d' : ℕ} {P : GAP ℓ d'} {lo : Fin ℓ → ℤ} {k : ℕ}
+    {Â₀ A'₀ : Finset (Fin ℓ → ℤ)} {tdig : Fin ℓ → ℤ}
+    (hPmem : Â₀ ∪ {0} ⊆ P.toFinset) (hPs : P.Symmetric)
+    (hcont : ((k • P).translate tdig).toFinset ⊆ subsetSumsL A'₀)
+    (hkP : (k • P).Proper) :
+    ∃ P' : GAP ℓ (d' + 1), P'.Symmetric ∧
+      (Â₀.image (· + lo) ∪ {0}) ⊆ P'.toFinset ∧
+      ∃ t : Fin ℓ → ℤ, ((k • P').translate t).toFinset ⊆
+        subsetSumsL (A'₀.image (· + lo)) ∧ (k • P').Proper := by
+  sorry
+
 end GAP
 
 /-- **CFP23 main theorem** (Conlon–Fox–Pham, Theorem 1.5), quoted as
@@ -1505,7 +1587,7 @@ componentwise even (automatic for odd widths / centered `P₀`, but
 `cfp_main` does not provide `P₀` in centered form), and for non-anchored
 `B` the shift back by `lo` needs fixed-cardinality subset sums
 (`subsetSumsL_translate_of_card`), which `cfp_main`'s conclusion does not
-supply.  Closing this `sorry` therefore needs a `cfp_main` with the
+supply.  Closing this placeholder therefore needs a `cfp_main` with the
 sumset-shaped containment `x₀ + csP ⊆ Σ(A')` of the papers (with `P`
 returned centered), plus a treatment of the unanchored shift. -/
 theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1) :
@@ -1523,13 +1605,13 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
               ((k • P).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
               (k • P).Proper := by
   classical
-  -- Packing pushes the ambient exponent to `β' = (10ℓ³ + 1)·β` (the packed
-  -- range is `≍ ℓ·M·H^ℓ` with `H` a high power of the box scale); `cfp_main`
-  -- is applied at that exponent.
+  -- Packing pushes the ambient exponent to `β' = (10ℓ⁴ + 1)·β` (the packed
+  -- range is `n·H^ℓ = n^{10ℓ⁴ + 1}` with `H = n^κ`, `κ = 10ℓ³` a high power
+  -- of the box scale); `cfp_main` is applied at that exponent.
   obtain ⟨c, d, hc, hd, hcfp⟩ :=
-    cfp_main (β := β * (10 * (ℓ : ℝ) ^ 3 + 1)) (by
-      have hℓ : (1 : ℝ) ≤ 10 * (ℓ : ℝ) ^ 3 + 1 := by positivity
-      nlinarith [hβ]) hη hη1
+    cfp_main (β := β * (10 * (ℓ : ℝ) ^ 4 + 1)) (by
+      have h10 : (1 : ℝ) ≤ 10 * (ℓ : ℝ) ^ 4 + 1 := by positivity
+      exact (hβ).trans_le (le_mul_of_one_le_right (zero_le_one.trans hβ.le) h10)) hη hη1
   refine ⟨c, d + 1, hc, by linarith, ?_⟩
   intro A B s hA hB hAB hBcard hs1 hs2
   rcases ℓ.eq_zero_or_pos with hℓ0 | hℓ
@@ -1547,15 +1629,228 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
               ⟨fun _ ↦ 0, by ext x; simp [h1 x (fun _ ↦ 0), Finset.mem_univ]⟩
       omega
     rw [hAcard] at hs1 hs2
-    rw [Real.log_one, div_zero] at hs2
-    have : (s : ℝ) ≤ 0 := by
-      calc (s : ℝ) ≤ c * (1 : ℝ) / 0 := hs2
-        _ = 0 := div_zero _
-    have hs0 : s = 0 := by exact_mod_cast (by linarith : (s : ℝ) ≤ 0)
-    rw [hs0] at hs1
-    have : (1 : ℝ) ^ η ≤ 0 := by simpa using hs1
-    nlinarith [Real.one_rpow η]
-  · sorry
+    rw [Nat.cast_one, Real.one_rpow] at hs1
+    rw [Nat.cast_one, Real.log_one, mul_one, div_zero] at hs2
+    -- `hs1 : (1 : ℝ) ≤ s`, `hs2 : (s : ℝ) ≤ 0`
+    linarith
+  · -- `ℓ ≥ 1`: the Appendix-A base-`H` packing argument of Pham–Zakharov.
+    -- The surrounding derivation (anchoring, packing, `cfp_main` numerics,
+    -- cardinalities) is complete; the two paper steps that the `k • P`
+    -- formulation of `cfp_main` does not supply are isolated in the
+    -- documented residual lemmas `appendix_decode` and `cfp_unshift`.
+    choose lo hi hBi using (show ∀ i, ∃ lo hi, B i = Finset.Icc lo hi from hB)
+    obtain ⟨a₀, ha₀⟩ := hA
+    have hlohi : ∀ i, lo i ≤ hi i := by
+      intro i
+      have hai := Fintype.mem_piFinset.mp (hAB ha₀) i
+      rw [hBi i, Finset.mem_Icc] at hai
+      exact hai.1.trans hai.2
+    obtain ⟨B₀, hB₀a, hB₀card, hA₀sub⟩ :=
+      Box.exists_anchored_image_sub hAB (fun i ↦ ⟨hi i, hlohi i, hBi i⟩)
+    choose N hN using
+      (show ∀ i, ∃ N : ℕ, B₀ i = Finset.Icc 0 (N : ℤ) from hB₀a)
+    set A₀ := A.image (· - lo) with hA₀def
+    have hA₀ne : A₀.Nonempty := hA.image _
+    set n := B.card with hndef
+    -- `m = |A| ≥ 2`: `m = 1` gives `s ≤ c·1/log 1 = 0`, contradicting `s ≥ 1^η`.
+    have hm2 : 2 ≤ A.card := by
+      rcases lt_or_ge A.card 2 with h | h
+      · have h1 : A.card = 1 := by
+          have := Finset.card_pos.mpr hA; omega
+        simp only [h1, Nat.cast_one, Real.log_one, div_zero, Real.one_rpow,
+          Nat.cast_zero] at hs1 hs2
+        linarith
+      · exact h
+    have hBn : A.card ≤ n := by
+      rw [hndef, ← Box.card_toFinset B]
+      exact Finset.card_le_card hAB
+    have hn2 : 2 ≤ n := hm2.trans hBn
+    -- side lengths `N i + 1` and coordinate bounds on `A₀ ⊆ B₀ = ∏ [0, Nᵢ]`
+    obtain ⟨b₀, hb₀⟩ := hA₀ne
+    have hB₀ne : ∀ i, (B₀ i).Nonempty :=
+      fun i ↦ ⟨b₀ i, Fintype.mem_piFinset.mp (hA₀sub hb₀) i⟩
+    have hNcard : ∀ i, (B₀ i).card = N i + 1 := by
+      intro i
+      rw [hN i]
+      have hcast' : (↑(N i) + 1 - 0 : ℤ) = ((N i + 1 : ℕ) : ℤ) := by
+        push_cast; ring
+      rw [Int.card_Icc, hcast', Int.toNat_natCast]
+    have hNle : ∀ i, N i ≤ n := by
+      intro i
+      have hle : (B₀ i).card ≤ B₀.card := by
+        show (B₀ i).card ≤ ∏ j, (B₀ j).card
+        exact Finset.single_le_prod
+          (fun j _ ↦ Finset.card_pos.mpr (hB₀ne j)) (Finset.mem_univ i)
+      rw [hNcard i, hB₀card] at hle
+      omega
+    have hA₀bnd : ∀ a ∈ A₀, ∀ j, 0 ≤ a j ∧ a j ≤ (n : ℤ) := by
+      intro a ha j
+      have haj := Fintype.mem_piFinset.mp (hA₀sub ha) j
+      rw [hN j, Finset.mem_Icc] at haj
+      exact ⟨haj.1, haj.2.trans (by exact_mod_cast hNle j)⟩
+    -- the packing base `H = n^κ`, `κ = 10ℓ³` (Appendix A)
+    set κ : ℕ := 10 * ℓ ^ 3 with hκdef
+    have hκ2 : 2 ≤ κ := by
+      have h1 : 1 ≤ ℓ ^ 3 := one_le_pow₀ hℓ
+      omega
+    set H : ℤ := (n : ℤ) ^ κ with hHdef
+    have hH2 : 2 ≤ H := by
+      rw [hHdef]
+      calc (2 : ℤ) ≤ 2 ^ κ := le_self_pow₀ (by norm_num) (by omega)
+        _ ≤ (n : ℤ) ^ κ := pow_le_pow_left₀ (by norm_num) (by exact_mod_cast hn2) κ
+    have hnH : (n : ℤ) < H := by
+      rw [hHdef]
+      have hnn : (2 : ℤ) ≤ (n : ℤ) := by exact_mod_cast hn2
+      calc (n : ℤ) < (n : ℤ) * (n : ℤ) :=
+            lt_mul_of_one_lt_right (by linarith) (by linarith)
+        _ = (n : ℤ) ^ 2 := by rw [pow_two]
+        _ ≤ (n : ℤ) ^ κ := pow_le_pow_right₀ (by linarith) hκ2
+    -- `ϕ` is injective on the anchored box (sidelengths `Nᵢ ≤ n < H`)
+    have hinj : Set.InjOn (packVec H) ↑B₀.toFinset :=
+      packVec_injOn_box (by linarith) (fun i ↦ hN i) (fun i ↦ by
+        simp only [sub_zero]
+        exact lt_of_le_of_lt (by exact_mod_cast hNle i) hnH)
+    have hϕinj : Set.InjOn (fun a ↦ fun _ : Fin 1 ↦ packVec H a) ↑A₀ :=
+      fun a ha b hb hab ↦ hinj (hA₀sub ha) (hA₀sub hb) (congrFun hab 0)
+    -- `A₀' = ϕ(A₀) ⊆ [0, n·H^ℓ]`, `|A₀'| = m`
+    have hpacknn : ∀ a ∈ A₀, 0 ≤ packVec H a :=
+      fun a ha ↦ packVec_nonneg (by linarith) (fun j ↦ (hA₀bnd a ha j).1)
+    have hpackle : ∀ a ∈ A₀, packVec H a ≤ (n : ℤ) * H ^ ℓ := by
+      intro a ha
+      have hbnd := hA₀bnd a ha
+      calc packVec H a = ∑ j : Fin ℓ, a j * H ^ j.val := rfl
+        _ ≤ ∑ j : Fin ℓ, (n : ℤ) * H ^ j.val :=
+            Finset.sum_le_sum fun j _ ↦
+              mul_le_mul_of_nonneg_right (hbnd j).2 (pow_nonneg (by linarith) _)
+        _ = (n : ℤ) * ∑ j : Fin ℓ, H ^ j.val := by rw [← Finset.mul_sum]
+        _ = (n : ℤ) * ∑ j ∈ Finset.range ℓ, H ^ j := by
+            rw [Fin.sum_univ_eq_sum_range]
+        _ ≤ (n : ℤ) * H ^ ℓ :=
+            mul_le_mul_of_nonneg_left (geom_sum_le hH2 ℓ) (by positivity)
+    set n₀ : ℕ := n * (n ^ κ) ^ ℓ with hn₀def
+    set A₀' := A₀.image (fun a ↦ fun _ : Fin 1 ↦ packVec H a) with hA₀'def
+    have hA₀'ne : A₀'.Nonempty := hA₀ne.image _
+    have hA₀'card : A₀'.card = A.card := by
+      rw [hA₀'def, Finset.card_image_of_injOn hϕinj]
+      refine Finset.card_image_of_injective _ (fun a b h ↦ ?_)
+      funext i
+      have hi := congrFun h i
+      simp only [Pi.sub_apply] at hi
+      omega
+    have hA₀'bnd : ∀ a' ∈ A₀', 0 ≤ a' 0 ∧ a' 0 ≤ (n₀ : ℤ) := by
+      intro a' ha'
+      obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp ha'
+      show 0 ≤ packVec H a ∧ packVec H a ≤ (n₀ : ℤ)
+      refine ⟨hpacknn a ha, ?_⟩
+      calc packVec H a ≤ (n : ℤ) * H ^ ℓ := hpackle a ha
+        _ = (n₀ : ℤ) := by rw [hn₀def, hHdef]; push_cast; ring
+    -- `n₀ ≤ m^{β₀}` for `β₀ = β·(10ℓ⁴ + 1)`
+    have hn₀le : (n₀ : ℝ) ≤ (A₀'.card : ℝ) ^ (β * (10 * (ℓ : ℝ) ^ 4 + 1)) := by
+      have hm0 : (0 : ℝ) ≤ (A.card : ℝ) := by positivity
+      have hnle : (n : ℝ) ≤ (A.card : ℝ) ^ β := hBcard
+      have hexp : (n * (n ^ κ) ^ ℓ : ℕ) = n ^ (10 * ℓ ^ 4 + 1) := by
+        rw [← pow_mul, ← pow_succ', hκdef]
+        congr 1
+        ring
+      have hcast : ((10 * ℓ ^ 4 + 1 : ℕ) : ℝ) = 10 * (ℓ : ℝ) ^ 4 + 1 := by
+        push_cast
+        ring
+      have hn₀eq : (n₀ : ℝ) = ((n ^ (10 * ℓ ^ 4 + 1) : ℕ) : ℝ) := by
+        rw [hn₀def, hexp]
+      rw [hn₀eq, Nat.cast_pow]
+      calc (n : ℝ) ^ (10 * ℓ ^ 4 + 1)
+          ≤ ((A.card : ℝ) ^ β) ^ (10 * ℓ ^ 4 + 1) :=
+            pow_le_pow_left₀ (by positivity) hnle _
+        _ = (A.card : ℝ) ^ (β * ((10 * ℓ ^ 4 + 1 : ℕ) : ℝ)) := by
+            rw [← Real.rpow_natCast, ← Real.rpow_mul hm0]
+        _ = (A₀'.card : ℝ) ^ (β * (10 * (ℓ : ℝ) ^ 4 + 1)) := by
+            rw [hA₀'card, hcast]
+    -- admissible `s` for `cfp_main`
+    have hs1' : (A₀'.card : ℝ) ^ η ≤ (s : ℝ) := by rwa [hA₀'card]
+    have hs2' : (s : ℝ) ≤ c * A₀'.card / Real.log A₀'.card := by rwa [hA₀'card]
+    obtain ⟨Â₀', d', P₀, hÂ₀'sub, hÂ₀'card, hd'le, hP₀s, hP₀h, hP₀p, hmemP₀,
+      A'₀', hA'₀'sub, hA'₀'card, k, hk0, hkle, t₀, hcont₀, hkP₀⟩ :=
+      hcfp A₀' n₀ s hA₀'ne hA₀'bnd hn₀le hs1' hs2'
+    -- pull back through `ϕ`
+    obtain ⟨Â₀, hÂ₀sub, hÂ₀im⟩ := Finset.subset_image_iff.mp
+      (t := Â₀') (s := A₀) (f := fun a ↦ fun _ : Fin 1 ↦ packVec H a) (by
+        rw [← hA₀'def]
+        exact hÂ₀'sub)
+    have hA'₀subA₀ : A'₀' ⊆ A₀.image (fun a ↦ fun _ : Fin 1 ↦ packVec H a) := by
+      rw [← hA₀'def]
+      exact hA'₀'sub.trans hÂ₀'sub
+    obtain ⟨A'₀, hA'₀sub, hA'₀im⟩ := Finset.subset_image_iff.mp
+      (t := A'₀') (s := A₀) (f := fun a ↦ fun _ : Fin 1 ↦ packVec H a) hA'₀subA₀
+    have hmemÂ₀ : ∀ a ∈ A₀, (fun _ : Fin 1 ↦ packVec H a) ∈ Â₀' → a ∈ Â₀ := by
+      intro a ha hϕa
+      rw [← hÂ₀im] at hϕa
+      obtain ⟨b, hb, hϕb⟩ := Finset.mem_image.mp hϕa
+      have hba : b = a := hϕinj (hÂ₀sub hb) ha hϕb
+      exact hba ▸ hb
+    have hA'₀subÂ₀ : A'₀ ⊆ Â₀ := by
+      intro a ha
+      have hmem : (fun _ : Fin 1 ↦ packVec H a) ∈ A'₀' :=
+        hA'₀im ▸ Finset.mem_image.mpr ⟨a, ha, rfl⟩
+      exact hmemÂ₀ a (hA'₀sub ha) (hA'₀'sub hmem)
+    have hÂ₀card : Â₀.card = Â₀'.card := by
+      rw [← hÂ₀im]
+      exact (Finset.card_image_of_injOn
+        (hϕinj.mono (Finset.coe_subset.mpr hÂ₀sub))).symm
+    have hA'₀card : A'₀.card = A'₀'.card := by
+      rw [← hA'₀im]
+      exact (Finset.card_image_of_injOn
+        (hϕinj.mono (Finset.coe_subset.mpr hA'₀sub))).symm
+    have hsub : ∀ a ∈ Â₀, (fun _ : Fin 1 ↦ packVec H a) ∈ P₀.toFinset := by
+      intro a ha
+      exact hmemP₀ (Finset.mem_union.mpr (Or.inl
+        (hÂ₀im ▸ Finset.mem_image.mpr ⟨a, ha, rfl⟩)))
+    have h0 : (0 : Fin 1 → ℤ) ∈ P₀.toFinset :=
+      hmemP₀ (Finset.mem_union.mpr (Or.inr
+        (Finset.mem_singleton_self (0 : Fin 1 → ℤ))))
+    have hcontP₀ : ((k • P₀).translate t₀).toFinset ⊆
+        subsetSumsL (A'₀.image fun x ↦ fun _ : Fin 1 ↦ packVec H x) := by
+      rw [← hA'₀im] at hcont₀
+      exact hcont₀
+    -- the Appendix-A domination `H > ns²(sn)^ℓ`: it follows from
+    -- `H = n^{10ℓ³}`, `s ≤ c·m`, `k ≤ c·s` and `n ≤ m^β` once `m ≥ m₀(c)`,
+    -- but is not derivable for `m` below that threshold — the residual of
+    -- the paper's "choose `n₀` large" step for small `|A|`.
+    have hdom : (8 : ℤ) * ((k : ℤ) + 1) * ((s : ℤ) + 1) * ((n : ℤ) + 1) *
+        (2 * (s : ℤ) * (n : ℤ) + 1) ^ (2 * ℓ) < H := by
+      sorry
+    obtain ⟨P, hPs, hPmem0, tdig, hcontP, hkP⟩ :=
+      appendix_decode hℓ (by linarith)
+        (fun a ha j ↦ hA₀bnd a (hÂ₀sub ha) j)
+        (fun a ha j ↦ hA₀bnd a (hA'₀sub ha) j)
+        (by rw [hA'₀card]; exact_mod_cast hA'₀'card)
+        hP₀p hP₀s hsub h0 hk0 hcontP₀ hdom
+    obtain ⟨P', hP's, hP'mem, t', hcont', hkP'⟩ :=
+      cfp_unshift (lo := lo) hPmem0 hPs hcontP hkP
+    refine ⟨Â₀.image (· + lo), d' + 1, P', ?_, ?_, ?_, hP's, hP'mem,
+      A'₀.image (· + lo), ?_, ?_, k, hk0, hkle, t', hcont', hkP'⟩
+    · intro x hx
+      obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp hx
+      obtain ⟨a', ha', rfl⟩ := Finset.mem_image.mp (hÂ₀sub ha)
+      simpa using ha'
+    · have hcard : (Â₀.image (· + lo)).card = Â₀.card := by
+        refine Finset.card_image_of_injective _ (fun a b h ↦ ?_)
+        funext i
+        have hi := congrFun h i
+        simp only [Pi.add_apply] at hi
+        omega
+      rw [hcard, hÂ₀card]
+      rwa [hA₀'card] at hÂ₀'card
+    · push_cast
+      linarith [hd'le]
+    · exact Finset.image_subset_image hA'₀subÂ₀
+    · have hcard : (A'₀.image (· + lo)).card = A'₀.card := by
+        refine Finset.card_image_of_injective _ (fun a b h ↦ ?_)
+        funext i
+        have hi := congrFun h i
+        simp only [Pi.add_apply] at hi
+        omega
+      rw [hcard, hA'₀card]
+      exact hA'₀'card
 
 /-- **Corollary 5**: Theorem 3 at `s = ⌊m / log² m⌋`; `P` may be taken
 symmetric and `kP` proper.  Requires `m ≥ C` so that `s` lies in the

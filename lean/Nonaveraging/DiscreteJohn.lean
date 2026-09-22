@@ -369,6 +369,57 @@ and the `ZLattice` covolume API
 product bound (Minkowski's second theorem) and no Hermite/Smith normal
 form machinery producing bases adapted to a sublattice flag; this lemma
 is exactly that missing input. -/
+/-- **The geometric core of the Mahler basis theorem** — the exact
+geometry-of-numbers content needed by `exists_zbasis_mahler`, isolated as a
+single input.  Uniformly in the symmetric convex bounded body `B ∋ 0`,
+there is a `ℤ`-basis `v` of `ℤ^d` with dual basis `w` such that for every
+index `i`, either the dual vector `w i` annihilates all of `B ∩ ℤ^d`, or
+there is a scale `r > 0` (classically `r ≍ λᵢ`, the `i`-th successive
+minimum) with `|⟨z, w i⟩| · r ≤ C` for every integer point `z ∈ B` and
+`v i ∈ t • B` for all `t > r`.
+
+**Status: this is the only remaining gap** — it is *true*, and its
+classical proof (which is what remains to be formalized) has three parts,
+only the last of which uses Minkowski's second theorem:
+
+1. **Successive minima for a bounded (not necessarily open) `B`.**
+   `GeoNumbers.exists_succMinima` produces the greedy minimizers
+   `u₁,…,u_d` for open `B`; the same greedy argument works for any
+   bounded `B` using `gauge B`, since `{z : gauge B (intVec z) ≤ C}` is
+   finite (it is contained in `C • closure B`, which is bounded).  Write
+   `λᵢ = gauge B (intVec uᵢ)`, `Vᵢ = span_ℝ{u₁,…,uᵢ}`.
+
+2. **Mahler's basis lemma (pure algebra over `ℤ`, no Minkowski-2nd).**
+   The pure sublattices `Lᵢ = Vᵢ ∩ ℤ^d` form a flag with `Lᵢ/Lᵢ₋₁` free
+   of rank `1`; choosing generators `vᵢ` gives a `ℤ`-basis of `ℤ^d` with
+   `vᵢ ∈ Vᵢ`.  Writing `uᵢ = kᵢ vᵢ + w`, `w ∈ Lᵢ₋₁`, and shifting `vᵢ` by
+   integer multiples of `u₁,…,uᵢ₋₁` puts `vᵢ = kᵢ⁻¹ uᵢ + Σⱼ cⱼ uⱼ` with
+   `|cⱼ| ≤ 1/2`, whence `gauge B (vᵢ) ≤ (i+1)/2 · λᵢ ≤ d·λᵢ`.
+
+3. **The pairing bound (the Minkowski-2nd step).**  For `z ∈ B ∩ ℤ^d`,
+   `mᵢ := ⟨z, wᵢ⟩` is the `i`-th `v`-coordinate of `z`; if `mᵢ ≠ 0` then
+   `z ∉ Vᵢ₋₁`, so `λᵢ ≤ gauge z ≤ 1` and all of `λ₁,…,λᵢ` are finite.
+   Working in `V_r` (`r` = largest index with `λᵣ < ∞`), Cramer's rule
+   gives `|mᵢ| = |det(v₁,…,z,…,vᵣ)| ≤ (r!/2ʳ) · ∏ⱼ≠ᵢ gauge(vⱼ) · gauge(z)
+   · vol_r(B ∩ V_r)` (inscribed weighted cross-polytope:
+   `vol conv{±xⱼ} = 2ʳ|det x|/r!`), and Minkowski's second theorem
+   `∏ⱼ λⱼ · vol_r(B∩V_r) ≤ 2ʳ` for the lattice `L_r` — *the* missing
+   Mathlib input — yields `|mᵢ| ≤ C_d / λᵢ`.  Taking `rᵢ = d·λᵢ` gives
+   `|mᵢ|·rᵢ ≤ d·C_d` and `vᵢ ∈ t•B` for `t > rᵢ`. -/
+theorem exists_zbasis_mahler_core (d : ℕ) :
+    ∃ C : ℝ, 0 < C ∧ ∀ (B : Set (Fin d → ℝ)), Convex ℝ B →
+      (0 : Fin d → ℝ) ∈ B → (∀ x ∈ B, -x ∈ B) → Bornology.IsBounded B →
+      ∃ (v w : Fin d → Fin d → ℤ),
+        LinearIndependent ℤ v ∧ Submodule.span ℤ (Set.range v) = ⊤ ∧
+        (∀ i j, ∑ k, v i k * w j k = if i = j then (1 : ℤ) else 0) ∧
+        (∀ i, (∀ z : Fin d → ℤ, intVec z ∈ B →
+                (∑ k, (z k : ℝ) * (w i k : ℝ)) = 0) ∨
+              ∃ r : ℝ, 0 < r ∧
+                (∀ z : Fin d → ℤ, intVec z ∈ B →
+                    |(∑ k, (z k : ℝ) * (w i k : ℝ))| * r ≤ C) ∧
+                (∀ t : ℝ, r < t → intVec (v i) ∈ t • B)) := by
+  sorry
+
 theorem exists_zbasis_mahler (d : ℕ) :
     ∃ C : ℝ, 0 < C ∧ ∀ (B : Set (Fin d → ℝ)), Convex ℝ B →
       (0 : Fin d → ℝ) ∈ B → (∀ x ∈ B, -x ∈ B) → Bornology.IsBounded B →
@@ -379,7 +430,65 @@ theorem exists_zbasis_mahler (d : ℕ) :
         (∀ z : Fin d → ℤ, intVec z ∈ B → ∀ i,
             |(∑ k, (z k : ℝ) * (w i k : ℝ))| ≤ M i) ∧
         (∀ i, 0 < M i → ∀ t : ℝ, C / M i < t → intVec (v i) ∈ t • B) := by
-  sorry
+  classical
+  obtain ⟨C, hCpos, hC⟩ := exists_zbasis_mahler_core d
+  refine ⟨C, hCpos, fun B hBc hB0 hBs hBb ↦ ?_⟩
+  obtain ⟨v, w, hli, hspan, hdual, hdisj⟩ := hC B hBc hB0 hBs hBb
+  have h0mem : (0 : Fin d → ℤ) ∈ intPointsFinset B hBb :=
+    (mem_intPointsFinset hBb).mpr (by simpa using hB0)
+  have hne : (intPointsFinset B hBb).Nonempty := ⟨0, h0mem⟩
+  -- `M i` is the supremum of `|⟨z, w i⟩|` over the finitely many integer
+  -- points of `B`; being a supremum of nonnegative integers it is either
+  -- `0` (the annihilated case) or attained at some `zs ∈ B ∩ ℤ^d`.
+  refine ⟨v, w,
+    fun i ↦ (intPointsFinset B hBb).sup' hne
+      (fun z ↦ |(∑ k, (z k : ℝ) * (w i k : ℝ))|),
+    hli, hspan, hdual, fun i ↦ ?_, fun z hzB i ↦ ?_, fun i hMi t ht ↦ ?_⟩
+  · -- `0 ≤ M i`
+    show 0 ≤ (intPointsFinset B hBb).sup' hne
+      (fun z ↦ |(∑ k, (z k : ℝ) * (w i k : ℝ))|)
+    rw [Finset.le_sup'_iff]
+    exact ⟨0, h0mem, abs_nonneg _⟩
+  · -- `|⟨z, w i⟩| ≤ M i`
+    show |(∑ k, (z k : ℝ) * (w i k : ℝ))| ≤
+      (intPointsFinset B hBb).sup' hne
+        (fun z ↦ |(∑ k, (z k : ℝ) * (w i k : ℝ))|)
+    rw [Finset.le_sup'_iff]
+    exact ⟨z, (mem_intPointsFinset hBb).mpr hzB, le_rfl⟩
+  · -- `M i > 0`: the supremum is attained at some `zs ∈ B ∩ ℤ^d`, which
+    -- has nonzero pairing, so the second disjunct of `hdisj i` applies.
+    have hMi' : 0 < (intPointsFinset B hBb).sup' hne
+        (fun z ↦ |(∑ k, (z k : ℝ) * (w i k : ℝ))|) := hMi
+    have ht' : C / (intPointsFinset B hBb).sup' hne
+        (fun z ↦ |(∑ k, (z k : ℝ) * (w i k : ℝ))|) < t := ht
+    obtain ⟨zs, hzsmem, hzseq⟩ := Finset.exists_mem_eq_sup'
+      (s := intPointsFinset B hBb) (H := hne)
+      (f := fun z ↦ |(∑ k, (z k : ℝ) * (w i k : ℝ))|)
+    have hzsB : intVec zs ∈ B := (mem_intPointsFinset hBb).mp hzsmem
+    have hpair : |(∑ k, (zs k : ℝ) * (w i k : ℝ))| ≠ 0 := by
+      intro h0
+      have hz0 : (intPointsFinset B hBb).sup' hne
+          (fun z ↦ |(∑ k, (z k : ℝ) * (w i k : ℝ))|) = 0 := hzseq.trans h0
+      exact hMi'.ne' hz0
+    rcases hdisj i with hann | ⟨r, hrpos, hbound, hmem⟩
+    · exfalso
+      exact hpair (abs_eq_zero.mpr (hann zs hzsB))
+    · -- `M i · r ≤ C` from `|⟨z,w i⟩| · r ≤ C` at every integer point.
+      have hMle : (intPointsFinset B hBb).sup' hne
+            (fun z ↦ |(∑ k, (z k : ℝ) * (w i k : ℝ))|) ≤ C / r := by
+        rw [Finset.sup'_le_iff]
+        intro z hz
+        rw [le_div_iff₀ hrpos]
+        exact hbound z ((mem_intPointsFinset hBb).mp hz)
+      have hMr : (intPointsFinset B hBb).sup' hne
+            (fun z ↦ |(∑ k, (z k : ℝ) * (w i k : ℝ))|) * r ≤ C := by
+        have h := mul_le_mul_of_nonneg_right hMle hrpos.le
+        rwa [div_mul_cancel₀ _ hrpos.ne'] at h
+      have hrC : r ≤ C / ((intPointsFinset B hBb).sup' hne
+            (fun z ↦ |(∑ k, (z k : ℝ) * (w i k : ℝ))|)) := by
+        rw [le_div_iff₀ hMi']
+        rwa [mul_comm]
+      exact hmem t (hrC.trans_lt ht')
 
 /-- **The adapted integer basis lemma** — the geometry-of-numbers input
 behind Lemma 7 (discrete John): uniformly in the symmetric convex bounded

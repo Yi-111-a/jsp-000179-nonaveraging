@@ -146,8 +146,6 @@ theorem coeffs_subset_widthScale (P : GAP ℓ d) {k : ℕ} (hk : 1 ≤ k) :
   refine Finset.mem_image.mpr ⟨fun i ↦ ⟨(m i : ℕ), ?_⟩, Finset.mem_univ _, ?_⟩
   · exact lt_of_lt_of_le (m i).isLt (Nat.le_mul_of_pos_left _ hk)
   · rw [← hm]
-    funext i
-    rfl
 
 /-- For `1 ≤ k`, `P ⊆ widthScale k P` pointwise — the `P ⊆ csP` inclusion
 of CFP23 (the undilated steps `qᵢ` and `0` are points of `csP`, used in the
@@ -1511,7 +1509,7 @@ theorem geom_sum_le {H : ℤ} (hH : 2 ≤ H) :
   | succ ℓ ih =>
     rw [Finset.sum_range_succ]
     calc (∑ j ∈ Finset.range ℓ, H ^ j) + H ^ ℓ
-        ≤ H ^ ℓ + H ^ ℓ := add_le_add_right ih _
+        ≤ H ^ ℓ + H ^ ℓ := by linarith [ih]
       _ = 2 * H ^ ℓ := by ring
       _ ≤ H * H ^ ℓ := mul_le_mul_of_nonneg_right hH (pow_nonneg (by linarith) _)
       _ = H ^ (ℓ + 1) := by rw [← pow_succ']
@@ -1618,6 +1616,8 @@ theorem cfp_unshift {ℓ d' : ℕ} {P : GAP ℓ d'} {lo : Fin ℓ → ℤ} {k : 
 
 end GAP
 
+open GAP
+
 /-- **CFP23 main theorem** (Conlon–Fox–Pham, Theorem 1.5), quoted as
 **Theorem 5** in Pham–Zakharov (arXiv:2410.14624v2).  This is the deep
 external input to `cfp_structure`: it is stated here as a black box and is
@@ -1721,7 +1721,9 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
   -- of the box scale); `cfp_main` is applied at that exponent.
   obtain ⟨c, d, hc, hd, hcfp⟩ :=
     cfp_main (β := β * (10 * (ℓ : ℝ) ^ 4 + 1)) (by
-      have h10 : (1 : ℝ) ≤ 10 * (ℓ : ℝ) ^ 4 + 1 := by positivity
+      have h10 : (1 : ℝ) ≤ 10 * (ℓ : ℝ) ^ 4 + 1 := by
+        have h0 : (0 : ℝ) ≤ (ℓ : ℝ) ^ 4 := pow_nonneg (Nat.cast_nonneg _) 4
+        linarith
       exact (hβ).trans_le (le_mul_of_one_le_right (zero_le_one.trans hβ.le) h10)) hη hη1
   refine ⟨c, d + 1, hc, by linarith, ?_⟩
   intro A B s hA hB hAB hBcard hs1 hs2 hlarge
@@ -1731,14 +1733,16 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
     subst hℓ0
     exfalso
     have hAcard : A.card = 1 := by
-      have h1 : ∀ a b : Fin 0 → ℤ, a = b := fun a b ↦ funext fun i ↦ i.elim0
-      have hsub : A ⊆ Finset.univ := Finset.subset_univ _
-      have : A.card ≤ 1 := by
-        calc A.card ≤ (Finset.univ : Finset (Fin 0 → ℤ)).card :=
-              Finset.card_le_card hsub
-          _ = 1 := Finset.card_eq_one.mpr
-              ⟨fun _ ↦ 0, by ext x; simp [h1 x (fun _ ↦ 0), Finset.mem_univ]⟩
-      omega
+      obtain ⟨a₀, ha₀⟩ := hA
+      rw [Finset.card_eq_one]
+      refine ⟨a₀, ?_⟩
+      ext x
+      simp only [Finset.mem_singleton]
+      constructor
+      · intro _
+        exact funext fun i ↦ i.elim0
+      · rintro rfl
+        exact ha₀
     rw [hAcard] at hs1 hs2
     rw [Nat.cast_one, Real.one_rpow] at hs1
     rw [Nat.cast_one, Real.log_one, mul_one, div_zero] at hs2
@@ -1757,23 +1761,23 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
       rw [hBi i, Finset.mem_Icc] at hai
       exact hai.1.trans hai.2
     obtain ⟨B₀, hB₀a, hB₀card, hA₀sub⟩ :=
-      Box.exists_anchored_image_sub hAB (fun i ↦ ⟨hi i, hlohi i, hBi i⟩)
+      GAP.Box.exists_anchored_image_sub hAB (fun i ↦ ⟨hi i, hlohi i, hBi i⟩)
     choose N hN using
       (show ∀ i, ∃ N : ℕ, B₀ i = Finset.Icc 0 (N : ℤ) from hB₀a)
     set A₀ := A.image (· - lo) with hA₀def
-    have hA₀ne : A₀.Nonempty := hA.image _
+    have hA₀ne : A₀.Nonempty := ⟨_, Finset.mem_image.mpr ⟨a₀, ha₀, rfl⟩⟩
     set n := B.card with hndef
     -- `m = |A| ≥ 2`: `m = 1` gives `s ≤ c·1/log 1 = 0`, contradicting `s ≥ 1^η`.
     have hm2 : 2 ≤ A.card := by
       rcases lt_or_ge A.card 2 with h | h
       · have h1 : A.card = 1 := by
-          have := Finset.card_pos.mpr hA; omega
+          have := Finset.card_pos.mpr ⟨a₀, ha₀⟩; omega
         simp only [h1, Nat.cast_one, Real.log_one, div_zero, Real.one_rpow,
           Nat.cast_zero] at hs1 hs2
         linarith
       · exact h
     have hBn : A.card ≤ n := by
-      rw [hndef, ← Box.card_toFinset B]
+      rw [hndef, ← GAP.Box.card_toFinset B]
       exact Finset.card_le_card hAB
     have hn2 : 2 ≤ n := hm2.trans hBn
     -- side lengths `N i + 1` and coordinate bounds on `A₀ ⊆ B₀ = ∏ [0, Nᵢ]`
@@ -1791,7 +1795,8 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
       have hle : (B₀ i).card ≤ B₀.card := by
         show (B₀ i).card ≤ ∏ j, (B₀ j).card
         exact Finset.single_le_prod
-          (fun j _ ↦ Finset.card_pos.mpr (hB₀ne j)) (Finset.mem_univ i)
+          (fun j _ ↦ (Finset.card_pos.mpr (hB₀ne j) : (1 : ℕ) ≤ (B₀ j).card))
+          (Finset.mem_univ i)
       rw [hNcard i, hB₀card] at hle
       omega
     have hA₀bnd : ∀ a ∈ A₀, ∀ j, 0 ≤ a j ∧ a j ≤ (n : ℤ) := by

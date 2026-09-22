@@ -1182,11 +1182,11 @@ theorem residual_step
   -- conclusion with `A' = ϕ(Â)`, `B' = coeffBox P̃`, `ζ' = ζ+incr`,
   -- `ρ' = |Ã|/(2|A|)`.
   have finish (h : (Wt.P.coeffBox.card : ℝ) ^ (αd dt + (ζ + incr))
-      < (A.card : ℝ) ^ (1 - ε) / 2) : StepConclusion A ζ incr q := by
+      < (At.card : ℝ) / 2) : StepConclusion A ζ incr q := by
     refine ⟨dt, Wt.imageAh, Wt.P.coeffBox, ζ + incr,
       (At.card : ℝ) / (2 * (A.card : ℝ)), hdt1, coeffBox_isInterval _,
       hNA', Wt.imageAh_subset_coeffBox, hA'card, le_rfl, ?_, ?_, ?_, ?_⟩
-    · exact h.trans_le (by linarith [hAt, hAh])
+    · exact h.trans_le hAh
     · calc (A.card : ℝ) ^ q ≤ (A.card : ℝ) ^ (1 - 2 * ε) :=
             Real.rpow_le_rpow_of_exponent_le ha1.le hq
         _ = (A.card : ℝ) ^ (1 - ε) / (A.card : ℝ) ^ ε := by
@@ -1205,6 +1205,8 @@ theorem residual_step
       linarith [hAh]
     · exact div_pos
         (by exact_mod_cast (by omega : 0 < At.card)) (by linarith)
+  have hhalf : (A.card : ℝ) ^ (1 - ε) / 2 ≤ (At.card : ℝ) / 2 := by
+    linarith [hAt]
   rcases lt_trichotomy dt d with hdt | hdt | hdt
   · -- **`d̃ < d`**: down-move via `case_down_pow` with margin `ε' = g/4`.
     have hΔ : g ≤ αd d - αd dt := hgap hdt1 hdt
@@ -1236,12 +1238,13 @@ theorem residual_step
       calc 2 * C ≤ (A.card : ℝ) ^ (ε / 4) := hCa
         _ ≤ (A.card : ℝ) ^ (g / 4 / 2) :=
             Real.rpow_le_rpow_of_exponent_le ha1.le (by linarith [hεg])
-    exact finish (case_down_pow (a := (A.card : ℝ)) (b := (B.card : ℝ))
+    exact finish ((case_down_pow (a := (A.card : ℝ)) (b := (B.card : ℝ))
       (p := (Wt.P.coeffBox.card : ℝ)) (C := C) (ε := ε) (ε' := g / 4)
       (e := αd d + ζ) (e' := αd dt + (ζ + incr))
       ha1 (Nat.cast_nonneg _) (Nat.cast_nonneg _) hC he'pos
       (by linarith [hαζ] : αd dt + (ζ + incr) ≤ 1) hε.le
-      (by linarith [hg] : (0 : ℝ) < g / 4) hsplit (hdown hdt) hba hCa')
+      (by linarith [hg] : (0 : ℝ) < g / 4) hsplit (hdown hdt) hba hCa').trans_le
+      hhalf)
   · -- **`d̃ = d`**: shrink vs. density-increment split on
     -- `ρ = |Ã|/|A|` vs `|A|^{-σ}`.
     subst hdt
@@ -1335,20 +1338,30 @@ theorem residual_step
           have h : (1 : ℝ) < 2 * C * C := by nlinarith [hC]
           nlinarith
         exact hlt.trans_le h1
-      exact finish (case_shrink_pow_sq (a := (A.card : ℝ))
+      have hρa : (At.card : ℝ) / (A.card : ℝ) * (A.card : ℝ) / 2
+          = (At.card : ℝ) / 2 := by
+        have hne : (A.card : ℝ) ≠ 0 := ha0.ne'
+        field_simp
+      have hsc := case_shrink_pow_sq (a := (A.card : ℝ))
         (b := (B.card : ℝ)) (p := (Wt.P.coeffBox.card : ℝ)) (C := C)
         (ρ := (At.card : ℝ) / (A.card : ℝ)) (K := K) (σ := σ)
         (t := incr * (αd d + ζ)⁻¹)
         (e := αd d + ζ) (e' := αd d + (ζ + incr))
         ha1 (Nat.cast_nonneg _) (Nat.cast_nonneg _) hC hρpos he'pos he'2
         (by linarith [hK] : (0 : ℝ) ≤ K) hKsplit ht hρσ hσpos (hsame rfl)
-        hba hCa2 htt)
+        hba hCa2 htt
+      rw [hρa] at hsc
+      exact finish hsc
     · -- non-shrink regime: the remaining leaf.
       push_neg at hρσ
-      exact residual_density_step Wt hd hζ hαζ hBint hNA hsub hcex hN
-        hε (by linarith [hεg, hg12] : ε < 1) hK hq0 hq hι hincr hincrι
-        hincrθ hεpow hδ hδ4 hγ hγδ hγa hder hC hCa hAt hAh hirr
-        (hsame rfl) hσpos hρσ
+      obtain ⟨A', B', ζ', ρ, hB'i, hNA2, hsub2, hcard2, hζ2, hlt2, hq2,
+        hρm2, hρpos2, -, -⟩ :=
+        residual_density_step (κ := K / 2) Wt hd hζ hαζ hBint hNA hsub hcex
+          hN hε (by linarith [hεg, hg12] : ε < 1) hK hq0 hq hι hincr hincrι
+          hincrθ hεpow hδ hδ4 hγ hγδ hγa hder hC hCa hAt hAh hirr
+          (hsame rfl) hσpos hρσ (by linarith [hK]) (by linarith [hK])
+      exact ⟨d, A', B', ζ', ρ, hd, hB'i, hNA2, hsub2, hcard2, hζ2, hlt2,
+        hq2, hρm2, hρpos2⟩
   · -- **`d̃ > d` degenerate**: `case_up_pow_hi` covers `e' ∈ (0, 2]`
     -- (in particular `α_{d̃} + ζ + incr > 1`), margin `3c₀/4`.
     have he'pos : (0 : ℝ) < αd dt + (ζ + incr) := by
@@ -1407,7 +1420,7 @@ theorem residual_step
       have h5 : (A.card : ℝ) ^ (ε / 2) ≤ (A.card : ℝ) ^ (3 * c₀ / 4 / 2) :=
         Real.rpow_le_rpow_of_exponent_le ha1.le (by linarith [hεc, hc₀])
       linarith
-    exact finish (case_up_pow_hi (a := (A.card : ℝ)) (b := (B.card : ℝ))
+    exact finish ((case_up_pow_hi (a := (A.card : ℝ)) (b := (B.card : ℝ))
       (p := (Wt.P.coeffBox.card : ℝ)) (C := C) (c := 3 * c₀ / 4) (ε := ε)
       (k := (dt : ℝ) - (d : ℝ)) (e := αd d + ζ) (e' := αd dt + (ζ + incr))
       ha1 (Nat.cast_nonneg _) (Nat.cast_nonneg _) hC he'pos he'2
@@ -1415,7 +1428,7 @@ theorem residual_step
           linarith)
       (by linarith [hc₀] : (0 : ℝ) < 3 * c₀ / 4) hε.le
       (by linarith [hεc, hc₀] : ε ≤ (3 * c₀ / 4) / 4) he'X (hup hdt) hba
-      hCa2')
+      hCa2').trans_le hhalf)
 
 /-- The per-instance §4 step property: every large non-averaging
 counterexample `A ⊆ B` at exponent `α_d + ζ < 1` produces a

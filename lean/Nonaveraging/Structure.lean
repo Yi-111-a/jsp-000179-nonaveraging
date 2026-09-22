@@ -2172,6 +2172,389 @@ theorem SubSumCoveringSeed.toPackage {d : ℕ} [NeZero d] {c₁ c₂ : ℝ}
         mul_le_mul_of_nonneg_left (Nat.cast_le.mpr hmul) (by positivity)
     _ ≤ ∏ i, s.r i := s.r_covol
 
+/-! ### §3.3 decomposition of the covering-seed construction
+
+`exists_subSumCoveringSeed` is reduced to the two residual inputs
+`exists_lemma11_13_data` and `exists_lemma14_covering` below, whose
+conclusions are exactly the unformalized mathematics of the paper's
+§3.3.  Everything else is proved: the Lemma-11 step bound
+(`lemma11_step_bound`, via `step_abs_le_of_subset`), the Lemma-13
+rounding of `Tz` into `⟨P₁⟩ ∩ ⟨P₂⟩`
+(`exists_lattice_intersection_rounding`), the choice of covering radii
+(`seed_radii`), and the eq.-(15) covering assembly
+(`fat_box_covering`, via `mem_subsetSumsL_of_zonotope_translate`). -/
+
+namespace SubSumWitness
+
+/-- A structure-witness GAP is homogeneous: `0 ∈ P.toFinset` expresses
+`P.base` as a (negated) integer combination of the steps. -/
+theorem homogeneous {d : ℕ} {c : ℝ} {X : Finset (Fin ℓ → ℤ)}
+    (W : SubSumWitness X c d) : W.P.Homogeneous := by
+  obtain ⟨n₀, -, hn₀e⟩ := Finset.mem_image.mp W.zero_mem_toFinset
+  have hev : W.P.base + ∑ i, (n₀ i : ℤ) • W.P.step i = 0 := hn₀e
+  have hbe : W.P.base = -∑ i, (n₀ i : ℤ) • W.P.step i :=
+    eq_neg_of_add_eq_zero_left hev
+  refine ⟨fun i ↦ -(n₀ i : ℤ), ?_⟩
+  rw [hbe]
+  simp_rw [← neg_smul]
+  rw [Finset.sum_neg_distrib]
+
+end SubSumWitness
+
+/-- **Lemma 11, second half** (the step bound): a nonempty `d`-dimensional
+GAP contained in the integer coordinate box `∏ [loᵢ, hiᵢ]` has its `j`-th
+step bounded columnwise by the box widths, hence by `C j` whenever
+`hiᵢ − loᵢ ≤ C j`.  This is `step_abs_le_of_subset` repackaged; it
+discharges the `step₁`/`step₂` fields of `SubSumCoveringSeed` from the
+paper's `Pᵢ ⊆` translate-of-`C·B` containment. -/
+theorem lemma11_step_bound {d : ℕ} {P : GAP d d}
+    {lo hi C : Fin d → ℤ}
+    (hsub : P.toFinset ⊆
+      Fintype.piFinset fun i ↦ Finset.Icc (lo i) (hi i))
+    (hne : P.toFinset.Nonempty) (hw : ∀ j, 2 ≤ P.width j)
+    (hC : ∀ j i, hi i - lo i ≤ C j) :
+    ∀ j i, |P.step j i| ≤ C j :=
+  fun j i ↦ (step_abs_le_of_subset hsub hne j (hw j) i).trans (hC j i)
+
+/-- **Lemma 13** (rounding into the intersection lattice): if `⟨P₁⟩` and
+`⟨P₂⟩` have full rank, there is a uniform coordinatewise slack `ρ` such
+that every real point `Tz` admits a common lattice point
+`T ∈ ⟨P₁⟩ ∩ ⟨P₂⟩` with `|Tᵢ − Tzᵢ| ≤ ρᵢ`.  Take a `ℤ`-basis `w` of the
+finite-index intersection `L = ⟨P₁⟩ ∩ ⟨P₂⟩`, view it as an `ℝ`-basis
+(`index L = |det w| ≠ 0`), write `Tz = ∑ αⱼ·wⱼ` and round each
+coefficient down; the error is bounded by `ρᵢ = ∑ⱼ |wⱼᵢ|`. -/
+theorem exists_lattice_intersection_rounding {d : ℕ} [NeZero d]
+    {P₁ P₂ : GAP d d}
+    (hli₁ : LinearIndependent ℤ P₁.step)
+    (hli₂ : LinearIndependent ℤ P₂.step) :
+    ∃ ρ : Fin d → ℝ, ∀ Tz : Fin d → ℝ, ∃ T : Fin d → ℤ,
+      T ∈ gapLattice P₁ ∧ T ∈ gapLattice P₂ ∧
+      ∀ i, |(T i : ℝ) - Tz i| ≤ ρ i := by
+  classical
+  set L₁ := (gapLattice P₁).toAddSubgroup
+  set L₂ := (gapLattice P₂).toAddSubgroup
+  have hL₁ : L₁.index ≠ 0 := gapLattice_index_ne_zero hli₁
+  have hL₂ : L₂.index ≠ 0 := gapLattice_index_ne_zero hli₂
+  set L := L₁ ⊓ L₂
+  have hLi : L.index ≠ 0 := AddSubgroup.index_inf_ne_zero hL₁ hL₂
+  obtain ⟨e⟩ : Nonempty (↥(L.toIntSubmodule) ≃ₗ[ℤ] (Fin d → ℤ)) :=
+    (Int.submodule_toAddSubgroup_index_ne_zero_iff).mp (by
+      rw [AddSubgroup.toIntSubmodule_toAddSubgroup]; exact hLi)
+  set bL : Module.Basis (Fin d) ℤ ↥(L.toIntSubmodule) :=
+    (Pi.basisFun ℤ (Fin d)).map e.symm
+  set w : Fin d → Fin d → ℤ := fun i ↦ (bL i : Fin d → ℤ)
+  have hwmem : ∀ i, w i ∈ L.toIntSubmodule := fun i ↦ (bL i).2
+  -- `index L = |det w| ≠ 0`, so `w` remains a basis over `ℝ`.
+  have hdet : L.index = (((Pi.basisFun ℤ (Fin d)).det w).natAbs) :=
+    AddSubgroup.index_eq_natAbs_det (Pi.basisFun ℤ (Fin d)) L bL
+  set vR : Fin d → Fin d → ℝ := fun i ↦ intVec (w i)
+  have hdetR : ((Pi.basisFun ℝ (Fin d)).det vR) ≠ 0 := by
+    rw [Module.Basis.det_apply]
+    intro hd
+    have hdZ : ((Pi.basisFun ℤ (Fin d)).det w) ≠ 0 := by
+      rw [hdet] at hLi
+      exact fun h0 ↦ hLi (congrArg Int.natAbs h0)
+    apply hdZ
+    rw [Module.Basis.det_apply]
+    have hmap : (Pi.basisFun ℝ (Fin d)).toMatrix vR =
+        (Int.castRingHom ℝ).mapMatrix
+          ((Pi.basisFun ℤ (Fin d)).toMatrix w) := by
+      ext i j
+      simp only [Module.Basis.toMatrix_apply, Pi.basisFun_repr,
+        RingHom.mapMatrix_apply, Int.coe_castRingHom]
+      exact intVec_apply _ _
+    rw [hmap, ← RingHom.map_det] at hd
+    simp only [Int.coe_castRingHom] at hd
+    exact_mod_cast hd
+  have hbasis : LinearIndependent ℝ vR ∧
+      Submodule.span ℝ (Set.range vR) = ⊤ :=
+    (Module.Basis.is_basis_iff_det _).mpr (isUnit_iff_ne_zero.mpr hdetR)
+  set bR : Module.Basis (Fin d) ℝ (Fin d → ℝ) :=
+    Module.Basis.mk hbasis.1 hbasis.2.ge
+  have hbR_eq : ⇑bR = vR := Module.Basis.coe_mk _ _
+  refine ⟨fun i ↦ ∑ j, |(vR j) i|, fun Tz ↦ ?_⟩
+  set T : Fin d → ℤ := ∑ j, ⌊bR.repr Tz j⌋ • w j with hTdef
+  have hTL : T ∈ L.toIntSubmodule :=
+    Submodule.sum_mem _ fun j _ ↦ Submodule.smul_mem _ _ (hwmem j)
+  have hT1 : T ∈ gapLattice P₁ := inf_le_left hTL
+  have hT2 : T ∈ gapLattice P₂ := inf_le_right hTL
+  refine ⟨T, hT1, hT2, fun i ↦ ?_⟩
+  have hTz : Tz = ∑ j, bR.repr Tz j • vR j := by
+    have h := bR.sum_repr Tz
+    rw [hbR_eq] at h
+    exact h.symm
+  have hTint : intVec T = ∑ j, (⌊bR.repr Tz j⌋ : ℝ) • vR j := by
+    rw [hTdef, intVec_sum]
+    exact Finset.sum_congr rfl fun j _ ↦ intVec_smul _ _
+  have hcoord : (T i : ℝ) - Tz i =
+      ∑ j, ((⌊bR.repr Tz j⌋ : ℝ) - bR.repr Tz j) * (vR j) i := by
+    have e1 : (intVec T) i =
+        ∑ j, (⌊bR.repr Tz j⌋ : ℝ) * (vR j) i := by
+      rw [hTint]
+      simp [Finset.sum_apply, Pi.smul_apply, smul_eq_mul]
+    have e2 : Tz i = ∑ j, bR.repr Tz j * (vR j) i := by
+      conv_lhs => rw [hTz]
+      simp [Finset.sum_apply, Pi.smul_apply, smul_eq_mul]
+    have e3 : (T i : ℝ) = (intVec T) i := (intVec_apply T i).symm
+    rw [e3, e1, e2, ← Finset.sum_sub_distrib]
+    exact Finset.sum_congr rfl fun j _ ↦ by ring
+  calc |(T i : ℝ) - Tz i|
+      = |∑ j, ((⌊bR.repr Tz j⌋ : ℝ) - bR.repr Tz j) * (vR j) i| := by
+        rw [hcoord]
+    _ ≤ ∑ j, |((⌊bR.repr Tz j⌋ : ℝ) - bR.repr Tz j) * (vR j) i| :=
+        Finset.abs_sum_le_sum_abs _ _
+    _ ≤ ∑ j, |(vR j) i| := by
+        apply Finset.sum_le_sum
+        intro j _
+        rw [abs_mul]
+        have hj : |(⌊bR.repr Tz j⌋ : ℝ) - bR.repr Tz j| ≤ 1 := by
+          have h1 : |(⌊bR.repr Tz j⌋ : ℝ) - bR.repr Tz j| =
+              Int.fract (bR.repr Tz j) := by
+            have e : (⌊bR.repr Tz j⌋ : ℝ) - bR.repr Tz j =
+                -(bR.repr Tz j - (⌊bR.repr Tz j⌋ : ℝ)) := by ring
+            rw [e, abs_neg, Int.self_sub_floor]
+            exact abs_of_nonneg (Int.fract_nonneg _)
+          rw [h1]
+          exact (Int.fract_lt_one _).le
+        calc |(⌊bR.repr Tz j⌋ : ℝ) - bR.repr Tz j| * |(vR j) i|
+            ≤ 1 * |(vR j) i| :=
+              mul_le_mul_of_nonneg_right hj (abs_nonneg _)
+          _ = |(vR j) i| := one_mul _
+
+/-- The coordinatewise rounding slack produced by
+`exists_lattice_intersection_rounding`. -/
+noncomputable def intersectionRoundingSlack {d : ℕ} [NeZero d]
+    {P₁ P₂ : GAP d d}
+    (hli₁ : LinearIndependent ℤ P₁.step)
+    (hli₂ : LinearIndependent ℤ P₂.step) : Fin d → ℝ :=
+  Classical.choose (exists_lattice_intersection_rounding hli₁ hli₂)
+
+/-- The rounding of `Tz` into `⟨P₁⟩ ∩ ⟨P₂⟩` at slack
+`intersectionRoundingSlack`. -/
+theorem intersectionRoundingSlack_spec {d : ℕ} [NeZero d]
+    {P₁ P₂ : GAP d d}
+    (hli₁ : LinearIndependent ℤ P₁.step)
+    (hli₂ : LinearIndependent ℤ P₂.step) (Tz : Fin d → ℝ) :
+    ∃ T : Fin d → ℤ, T ∈ gapLattice P₁ ∧ T ∈ gapLattice P₂ ∧
+      ∀ i, |(T i : ℝ) - Tz i| ≤ intersectionRoundingSlack hli₁ hli₂ i :=
+  Classical.choose_spec
+    (exists_lattice_intersection_rounding hli₁ hli₂) Tz
+
+/-- The covering radii: given the Lemma-11 column bound `C` and a common
+lattice point `T` exceeding the covolume bound `2^d·(d!·∏ Cⱼ)²` in
+coordinate `i₀`, the radii `r_{i₀} = 2^d·(d!·∏ Cⱼ)²`, `rᵢ = 1` (else)
+satisfy `r_nonneg`, `T_big`, `r_covol`, and stay at the covolume scale
+(`rᵢ ≤ bound + 1`). -/
+theorem seed_radii {d : ℕ} {C : Fin d → ℤ} {T : Fin d → ℤ} {i₀ : Fin d}
+    (hT : (2 : ℝ) ^ d *
+        (((d.factorial * ∏ j, (C j).natAbs) *
+          (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) < |(T i₀ : ℝ)|) :
+    ∃ r : Fin d → ℝ, (∀ i, 0 ≤ r i) ∧
+      (∀ i, r i ≤ (2 : ℝ) ^ d *
+          (((d.factorial * ∏ j, (C j).natAbs) *
+            (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) + 1) ∧
+      (∃ i₀, r i₀ < |(T i₀ : ℝ)|) ∧
+      (2 : ℝ) ^ d *
+          (((d.factorial * ∏ j, (C j).natAbs) *
+            (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) ≤ ∏ i, r i := by
+  classical
+  set B : ℝ := (2 : ℝ) ^ d *
+    (((d.factorial * ∏ j, (C j).natAbs) *
+      (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) with hBdef
+  have hB : 0 ≤ B := by
+    rw [hBdef]
+    exact mul_nonneg (pow_nonneg zero_le_two _) (Nat.cast_nonneg _)
+  refine ⟨fun i ↦ if i = i₀ then B else 1, fun i ↦ ?_, fun i ↦ ?_, ?_, ?_⟩
+  · by_cases hi : i = i₀
+    · rw [if_pos hi]; exact hB
+    · rw [if_neg hi]; exact zero_le_one
+  · by_cases hi : i = i₀
+    · rw [if_pos hi]; linarith
+    · rw [if_neg hi]; linarith
+  · exact ⟨i₀, by rw [if_pos rfl]; exact hT⟩
+  · have hprod : ∏ i, (if i = i₀ then B else (1 : ℝ)) = B := by
+      rw [Finset.prod_eq_single i₀ (fun b _ hb ↦ if_neg hb)
+        (fun h ↦ absurd (Finset.mem_univ i₀) h), if_pos rfl]
+    rw [hprod]
+
+/-- **Lemma 14** (eq. (15) covering assembly): every `⟨P⟩`-point of the
+box `T + ∏ [−rᵢ, rᵢ]` is a subset sum of `X`.  This is
+`mem_subsetSumsL_of_zonotope_translate` instantiated at the structure
+witness `W` (`X' = W.A'`, `K = W.k`, `q = W.t`, `P = W.P`): the translate
+containment is `W.htranslate`, `q ∈ ⟨P⟩` is `W.t_mem_gapLattice`, and
+`P` is homogeneous (`SubSumWitness.homogeneous`).  The three hypotheses
+`hXspan` (`X ⊆ ⟨P⟩`, the `Ā ⊆ P` refinement), `habs` (the
+`discrete_john_strong` absorption of a small `⟨P⟩`-point into `kP` over
+`(k/2)P`) and `hfat` (the fat box `z̄ + ξ|A|B ⊆ 𝒵_{X∖A'}` covering the
+region `T + box(r) − q − (k/2)P`) are the genuine Lemma-14 inputs. -/
+theorem fat_box_covering {d : ℕ} {c : ℝ} {X : Finset (Fin d → ℤ)}
+    (W : SubSumWitness X c d) {wX : Fin d → ℝ}
+    (hwX0 : ∀ i, 0 ≤ wX i)
+    (hwX : ∀ a ∈ X \ W.A', ∀ i, |(a i : ℝ)| ≤ wX i)
+    (hXspan : ∀ a ∈ X, a ∈ gapLattice W.P)
+    (habs : ∀ s : Fin d → ℤ, s ∈ gapLattice W.P →
+        (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * wX i) →
+        ∀ t ∈ (((W.k : ℤ) / 2) • W.P).toFinset,
+          s + t ∈ ((W.k : ℤ) • W.P).toFinset)
+    {T : Fin d → ℤ} {r : Fin d → ℝ}
+    (hfat : ∀ y : Fin d → ℤ, (∀ i, |((y - T) i : ℝ)| ≤ r i) →
+        ∃ t ∈ (((W.k : ℤ) / 2) • W.P).toFinset,
+          (fun i ↦ (y i : ℝ) - (W.t i : ℝ) - (t i : ℝ)) ∈
+            zonotope ((X \ W.A').image fun x i ↦ (x i : ℝ))) :
+    ∀ y : Fin d → ℤ, y ∈ gapLattice W.P →
+      (∀ i, |((y - T) i : ℝ)| ≤ r i) → y ∈ GAP.subsetSumsL X := by
+  classical
+  intro y hy hbd
+  obtain ⟨t, ht, hzt⟩ := hfat y hbd
+  apply mem_subsetSumsL_of_zonotope_translate (X' := W.A') (P := W.P)
+    (K := (W.k : ℤ)) (q := W.t) (wX := wX)
+  · exact W.hA'.trans W.hAh
+  · exact W.homogeneous
+  · exact W.t_mem_gapLattice
+  · exact hXspan
+  · exact W.htranslate
+  · exact hwX0
+  · exact hwX
+  · exact habs
+  · exact hy
+  · exact ⟨fun i ↦ (y i : ℝ) - (W.t i : ℝ) - (t i : ℝ), hzt, t, ht,
+      fun i ↦ by
+        show (y i : ℝ) =
+          (y i : ℝ) - (W.t i : ℝ) - (t i : ℝ) + (W.t i : ℝ) + (t i : ℝ)
+        ring⟩
+
+/-- **Residual input — Lemma 11 second half + Lemma 13 largeness.**  For
+all sufficiently large `|A|`, the minimal-dimension witnesses `W₁`, `W₂`
+supplied by Lemma 11's first half satisfy:
+
+* (`Pᵢ ⊆` translate of `C·B`, step bounds) each `Pᵢ.toFinset` is
+  contained in an integer coordinate box `∏ [loᵢ, hiᵢ]` whose widths are
+  bounded by the column bound `C` — feeding `lemma11_step_bound` and
+  `index_gapLattice_le`;
+* (rank) each `Pᵢ.step` is `ℤ`-linearly independent — in the paper this
+  is the minimal-dimension argument (a rank-deficient `⟨Pᵢ⟩` would allow
+  a lower-dimensional witness);
+* (`Tz` dominates the covolume bound plus the intersection-lattice
+  rounding slack) — the largeness of the common eq.-(13) zonotope point,
+  so that its `exists_lattice_intersection_rounding` image `T` still
+  exceeds `2^d·(d!·∏ Cⱼ)²` in some coordinate.
+
+The first two items are the Lemma-11 second half; the third is the
+Lemma-13 largeness of `Tz` (the rounding itself is proved —
+`exists_lattice_intersection_rounding`). -/
+theorem exists_lemma11_13_data {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      NonAveraging A → Irreducible W c' δ γ →
+      (Real.log (A.card : ℝ)) ^ (-(1 : ℝ) / C') ≤ γ →
+      0 < δ → δ < 1 → 0 < γ → γ < 1 → 4 * δ < 1 →
+      N₀ ≤ A.card →
+      a₀ ∈ W.imageAh →
+      B₁ ⊆ W.imageAh.erase a₀ → B₂ ⊆ W.imageAh.erase a₀ →
+      Disjoint B₁ B₂ → B₁ ∪ B₂ = W.imageAh.erase a₀ →
+      δ * (A.card : ℝ) ≤ (B₁.card : ℝ) →
+      δ * (A.card : ℝ) ≤ (B₂.card : ℝ) →
+      (∀ x ∈ B₁, ∀ i, |((x - a₀) i : ℝ)| ≤ (W.P.width i : ℝ)) →
+      (∀ x ∈ B₂, ∀ i, |((a₀ - x) i : ℝ)| ≤ (W.P.width i : ℝ)) →
+      SubSumDim (B₁.image (· - a₀)) c' = d →
+      SubSumDim (B₂.image (a₀ - ·)) c' = d →
+      (γ : ℝ) * (W.P.toFinset.card : ℝ) ≤ (W₁.P.toFinset.card : ℝ) →
+      (γ : ℝ) * (W.P.toFinset.card : ℝ) ≤ (W₂.P.toFinset.card : ℝ) →
+      Tz ∈ zonotope ((B₁.image (· - a₀)).image intVec) →
+      Tz ∈ zonotope ((B₂.image (a₀ - ·)).image intVec) →
+      ∃ (C lo₁ hi₁ lo₂ hi₂ : Fin d → ℤ)
+        (hli₁ : LinearIndependent ℤ W₁.P.step)
+        (hli₂ : LinearIndependent ℤ W₂.P.step),
+        (W₁.P.toFinset ⊆
+          Fintype.piFinset fun i ↦ Finset.Icc (lo₁ i) (hi₁ i)) ∧
+        (W₂.P.toFinset ⊆
+          Fintype.piFinset fun i ↦ Finset.Icc (lo₂ i) (hi₂ i)) ∧
+        (∀ j i, hi₁ i - lo₁ i ≤ C j) ∧
+        (∀ j i, hi₂ i - lo₂ i ≤ C j) ∧
+        ∃ i₀, (2 : ℝ) ^ d *
+            (((d.factorial * ∏ j, (C j).natAbs) *
+              (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) +
+          intersectionRoundingSlack hli₁ hli₂ i₀ < |(Tz i₀ : ℝ)| :=
+  sorry
+
+/-- **Residual input — Lemma 14 (eq. (15) covering).**  For all
+sufficiently large `|A|`:
+
+* (`Āᵢ ⊆ Pᵢ` refinement) the shifted pieces `Bᵢ ∓ a₀` lie in the
+  lattices `⟨Pᵢ⟩`;
+* (absorption) a lattice point `s ∈ ⟨Pᵢ⟩` coordinatewise bounded by
+  `d·w` is absorbed: `s + t ∈ kᵢ·Pᵢ` for every `t ∈ (kᵢ/2)·Pᵢ` — in the
+  paper this is the `discrete_john_strong` sandwich on `⟨Pᵢ⟩` combined
+  with `kᵢ ≈ s(A)` being large;
+* (fat-box covering) for the Lemma-11 column bound `C`, the Lemma-13
+  rounding `T` of `Tz` (within `intersectionRoundingSlack`), and any
+  covolume-scale radii `r`, the box `T + ∏[−rᵢ, rᵢ]` is covered:
+  `y − tᵢ − t ∈ 𝒵_{Xᵢ∖A'ᵢ}` for some `t ∈ (kᵢ/2)·Pᵢ` — the paper's
+  `z̄ᵢ + ξ|A|·B ⊆ 𝒵_{Xᵢ∖A'ᵢ}` fat-box containment.
+
+Together with `fat_box_covering` these give the `cov₁`/`cov₂` fields of
+`SubSumCoveringSeed`. -/
+theorem exists_lemma14_covering {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      NonAveraging A → Irreducible W c' δ γ →
+      (Real.log (A.card : ℝ)) ^ (-(1 : ℝ) / C') ≤ γ →
+      0 < δ → δ < 1 → 0 < γ → γ < 1 → 4 * δ < 1 →
+      N₀ ≤ A.card →
+      a₀ ∈ W.imageAh →
+      B₁ ⊆ W.imageAh.erase a₀ → B₂ ⊆ W.imageAh.erase a₀ →
+      Disjoint B₁ B₂ → B₁ ∪ B₂ = W.imageAh.erase a₀ →
+      δ * (A.card : ℝ) ≤ (B₁.card : ℝ) →
+      δ * (A.card : ℝ) ≤ (B₂.card : ℝ) →
+      (∀ x ∈ B₁, ∀ i, |((x - a₀) i : ℝ)| ≤ (W.P.width i : ℝ)) →
+      (∀ x ∈ B₂, ∀ i, |((a₀ - x) i : ℝ)| ≤ (W.P.width i : ℝ)) →
+      SubSumDim (B₁.image (· - a₀)) c' = d →
+      SubSumDim (B₂.image (a₀ - ·)) c' = d →
+      (γ : ℝ) * (W.P.toFinset.card : ℝ) ≤ (W₁.P.toFinset.card : ℝ) →
+      (γ : ℝ) * (W.P.toFinset.card : ℝ) ≤ (W₂.P.toFinset.card : ℝ) →
+      Tz ∈ zonotope ((B₁.image (· - a₀)).image intVec) →
+      Tz ∈ zonotope ((B₂.image (a₀ - ·)).image intVec) →
+      (∀ a ∈ B₁.image (· - a₀), a ∈ gapLattice W₁.P) ∧
+      (∀ a ∈ B₂.image (a₀ - ·), a ∈ gapLattice W₂.P) ∧
+      (∀ s : Fin d → ℤ, s ∈ gapLattice W₁.P →
+        (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
+        ∀ t ∈ (((W₁.k : ℤ) / 2) • W₁.P).toFinset,
+          s + t ∈ ((W₁.k : ℤ) • W₁.P).toFinset) ∧
+      (∀ s : Fin d → ℤ, s ∈ gapLattice W₂.P →
+        (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
+        ∀ t ∈ (((W₂.k : ℤ) / 2) • W₂.P).toFinset,
+          s + t ∈ ((W₂.k : ℤ) • W₂.P).toFinset) ∧
+      ∀ (C : Fin d → ℤ)
+        (hli₁ : LinearIndependent ℤ W₁.P.step)
+        (hli₂ : LinearIndependent ℤ W₂.P.step)
+        (T : Fin d → ℤ) (r : Fin d → ℝ),
+        T ∈ gapLattice W₁.P → T ∈ gapLattice W₂.P →
+        (∀ i, |(T i : ℝ) - Tz i| ≤
+          intersectionRoundingSlack hli₁ hli₂ i) →
+        (∀ i, 0 ≤ r i) →
+        (∀ i, r i ≤ (2 : ℝ) ^ d *
+            (((d.factorial * ∏ j, (C j).natAbs) *
+              (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) + 1) →
+        (∀ y : Fin d → ℤ, (∀ i, |((y - T) i : ℝ)| ≤ r i) →
+          ∃ t ∈ (((W₁.k : ℤ) / 2) • W₁.P).toFinset,
+            (fun i ↦ (y i : ℝ) - (W₁.t i : ℝ) - (t i : ℝ)) ∈
+              zonotope (((B₁.image (· - a₀)) \ W₁.A').image
+                fun x i ↦ (x i : ℝ))) ∧
+        (∀ y : Fin d → ℤ, (∀ i, |((y - T) i : ℝ)| ≤ r i) →
+          ∃ t ∈ (((W₂.k : ℤ) / 2) • W₂.P).toFinset,
+            (fun i ↦ (y i : ℝ) - (W₂.t i : ℝ) - (t i : ℝ)) ∈
+              zonotope (((B₂.image (a₀ - ·)) \ W₂.A').image
+                fun x i ↦ (x i : ℝ))) :=
+  sorry
+
 /-- **The Lemmas 11 (second half)–14 core** — the single remaining
 faithful input for Theorem 4.  For all sufficiently large `|A|`, the data
 produced by the paper's §3.3 argument — an irreducible `(δ,γ)`-witness
@@ -2238,7 +2621,60 @@ theorem exists_subSumCoveringSeed {ℓ : ℕ} {c c' δ γ C' : ℝ} :
       Tz ∈ zonotope ((B₁.image (· - a₀)).image intVec) →
       Tz ∈ zonotope ((B₂.image (a₀ - ·)).image intVec) →
       Nonempty (SubSumCoveringSeed W₁ W₂) := by
-  sorry
+  classical
+  obtain ⟨N₁, hN₁⟩ := exists_lemma11_13_data (ℓ := ℓ) (c := c) (c' := c')
+    (δ := δ) (γ := γ) (C' := C')
+  obtain ⟨N₂, hN₂⟩ := exists_lemma14_covering (ℓ := ℓ) (c := c)
+    (c' := c') (δ := δ) (γ := γ) (C' := C')
+  refine ⟨max N₁ N₂, ?_⟩
+  intro A d _ W a₀ B₁ B₂ W₁ W₂ Tz hNA hIrred hγlog hδ hδ1 hγ hγ1 hδ4
+    hN ha₀ hB₁e hB₂e hdisj hcover hδB₁ hδB₂ hb₁ hb₂ hdim₁ hdim₂ hP₁ hP₂
+    hTz₁ hTz₂
+  obtain ⟨C, lo₁, hi₁, lo₂, hi₂, hli₁, hli₂, hbox₁, hbox₂, hC₁, hC₂,
+    i₀, hi₀⟩ :=
+    hN₁ A d W a₀ B₁ B₂ W₁ W₂ Tz hNA hIrred hγlog hδ hδ1 hγ hγ1 hδ4
+      ((le_max_left N₁ N₂).trans hN) ha₀ hB₁e hB₂e hdisj hcover
+      hδB₁ hδB₂ hb₁ hb₂ hdim₁ hdim₂ hP₁ hP₂ hTz₁ hTz₂
+  obtain ⟨T, hT₁, hT₂, hTclose⟩ :=
+    intersectionRoundingSlack_spec hli₁ hli₂ Tz
+  -- `T` still exceeds the covolume bound in coordinate `i₀`.
+  have hTlt : (2 : ℝ) ^ d *
+      (((d.factorial * ∏ j, (C j).natAbs) *
+        (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) < |(T i₀ : ℝ)| := by
+    have hclose := hTclose i₀
+    have hsub : |(Tz i₀)| - |(T i₀ : ℝ)| ≤ |(T i₀ : ℝ) - Tz i₀| := by
+      have h := abs_sub_abs_le_abs_sub (Tz i₀) ((T i₀ : ℤ) : ℝ)
+      rwa [abs_sub_comm] at h
+    linarith
+  obtain ⟨r, hrnn, hrb, hrbig, hrcovol⟩ := seed_radii hTlt
+  obtain ⟨hX₁, hX₂, habs₁, habs₂, hfat⟩ :=
+    hN₂ A d W a₀ B₁ B₂ W₁ W₂ Tz hNA hIrred hγlog hδ hδ1 hγ hγ1 hδ4
+      ((le_max_right N₁ N₂).trans hN) ha₀ hB₁e hB₂e hdisj hcover
+      hδB₁ hδB₂ hb₁ hb₂ hdim₁ hdim₂ hP₁ hP₂ hTz₁ hTz₂
+  obtain ⟨hfat₁, hfat₂⟩ :=
+    hfat C hli₁ hli₂ T r hT₁ hT₂ hTclose hrnn hrb
+  have hwX0 : ∀ i, 0 ≤ (W.P.width i : ℝ) := fun i ↦ Nat.cast_nonneg _
+  have hwX₁ : ∀ a ∈ (B₁.image (· - a₀)) \ W₁.A', ∀ i,
+      |(a i : ℝ)| ≤ (W.P.width i : ℝ) := by
+    intro a ha i
+    obtain ⟨x, hx, rfl⟩ :=
+      Finset.mem_image.mp (Finset.mem_sdiff.mp ha).1
+    exact hb₁ x hx i
+  have hwX₂ : ∀ a ∈ (B₂.image (a₀ - ·)) \ W₂.A', ∀ i,
+      |(a i : ℝ)| ≤ (W.P.width i : ℝ) := by
+    intro a ha i
+    obtain ⟨x, hx, rfl⟩ :=
+      Finset.mem_image.mp (Finset.mem_sdiff.mp ha).1
+    exact hb₂ x hx i
+  exact ⟨{ li₁ := hli₁, li₂ := hli₂, C := C,
+    step₁ := lemma11_step_bound hbox₁ ⟨0, W₁.zero_mem_toFinset⟩
+      (fun j ↦ W₁.two_le_width hdim₁ j) hC₁,
+    step₂ := lemma11_step_bound hbox₂ ⟨0, W₂.zero_mem_toFinset⟩
+      (fun j ↦ W₂.two_le_width hdim₂ j) hC₂,
+    T := T, T_mem₁ := hT₁, T_mem₂ := hT₂, r := r,
+    r_nonneg := hrnn, T_big := hrbig, r_covol := hrcovol,
+    cov₁ := fat_box_covering W₁ hwX0 hwX₁ hX₁ habs₁ hfat₁,
+    cov₂ := fat_box_covering W₂ hwX0 hwX₂ hX₂ habs₂ hfat₂ }⟩
 
 /-- The covering package of Lemmas 11–14, obtained from the seed input
 `exists_subSumCoveringSeed` via `SubSumCoveringSeed.toPackage`. -/

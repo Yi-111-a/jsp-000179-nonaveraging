@@ -14,8 +14,10 @@ shifted pieces share a nonzero vector.
   centered progression `P(𝐯,𝐍) = {∑ nᵢ vᵢ : |nᵢ| ≤ Nᵢ}` as `GAP.centered`.
 * **§B** is Lemma 7 (discrete John): `exists_progBox_sandwich` is the
   qualitative version (proved, from `GeoNumbers.discrete_john`);
-  `discrete_john_strong` is the faithful uniform statement (left as a
-  gap).
+  `discrete_john_strong` is the faithful uniform statement, proved from
+  `exists_zbasis_adapted`, which in turn reduces to the single remaining
+  gap `exists_zbasis_mahler` (the Mahler-form basis bound extracted from
+  Minkowski's second theorem).
 * **§C** is the covolume machinery of Lemmas 11–12: the index of a
   generated lattice equals `|det|` of its step matrix
   (`index_intLattice_eq_natAbs_det`), a Hadamard-type bound on that
@@ -335,6 +337,50 @@ theorem smul_self_subset (hBc : Convex ℝ B) (hB0 : (0 : Fin d → ℝ) ∈ B)
   have h := hBc hB0 hy (sub_nonneg.mpr ht1) ht0 (by ring)
   simpa using h
 
+/-- **The Mahler-form lattice-basis input** — the geometry-of-numbers
+gap behind Lemma 7 (discrete John), isolated as a single statement.
+For every bounded symmetric convex `B ⊆ ℝ^d` containing `0`, the integer
+lattice `ℤ^d` admits a basis `v` together with its dual basis `w`
+(i.e. `∑_k v i k * w j k = δᵢⱼ`) and weights `M i ≥ 0` bounding the
+pairing `|⟨z, w i⟩|` of every integer point `z ∈ B`, such that `v i`
+lies in every dilation `t • B` with `t > C / M i` whenever `M i > 0`.
+
+This is the content that the classical proof of Lemma 7 (Tao–Vu,
+Theorem 3.36) extracts from **Minkowski's second theorem**
+`λ₁⋯λ_d · vol B ≤ 2^d` on the successive minima of `B`: the
+successive-minima vectors `uᵢ` of `B` (which exist greedily, cf.
+`GeoNumbers.exists_succMinima`) generate a sublattice `Λ'` of `ℤ^d` of
+index `[ℤ^d : Λ'] ≤ d!` — the cross-polytope bound
+`vol B ≥ 2^d·|det u| / (d!·λ₁⋯λ_d)` combined with the product bound —
+the flag `span(u₁,…,uᵢ) ∩ ℤ^d` then completes to a `ℤ`-basis `v`
+(Hermite normal form) with `gauge B (vᵢ) ≲_d λᵢ`, and Cramer's rule
+applied to `det(v₁,…,z,…,v_d)` gives `|⟨z, w i⟩| ≲_d λᵢ⁻¹` for
+`z ∈ B ∩ ℤ^d`; the last hypothesis here is the resulting product bound
+`gauge B (v i) · M i ≤ C` written in membership form.  Since the
+pairing `⟨z, w i⟩` is integral, `M i` is either `0` — exactly when
+`w i` annihilates `B ∩ ℤ^d`, i.e. for the directions outside
+`span B` — or at least `1`.
+
+Mathlib (v4.34.0) contains Minkowski's *first* theorem
+(`exists_ne_zero_mem_lattice_of_measure_mul_two_pow_lt_measure` and its
+weak-inequality variant in `MeasureTheory/Group/GeometryOfNumbers.lean`)
+and the `ZLattice` covolume API
+(`Algebra/Module/ZLattice/Covolume.lean`), but no successive-minima
+product bound (Minkowski's second theorem) and no Hermite/Smith normal
+form machinery producing bases adapted to a sublattice flag; this lemma
+is exactly that missing input. -/
+theorem exists_zbasis_mahler (d : ℕ) :
+    ∃ C : ℝ, 0 < C ∧ ∀ (B : Set (Fin d → ℝ)), Convex ℝ B →
+      (0 : Fin d → ℝ) ∈ B → (∀ x ∈ B, -x ∈ B) → Bornology.IsBounded B →
+      ∃ (v w : Fin d → Fin d → ℤ) (M : Fin d → ℝ),
+        LinearIndependent ℤ v ∧ Submodule.span ℤ (Set.range v) = ⊤ ∧
+        (∀ i j, ∑ k, v i k * w j k = if i = j then (1 : ℤ) else 0) ∧
+        (∀ i, 0 ≤ M i) ∧
+        (∀ z : Fin d → ℤ, intVec z ∈ B → ∀ i,
+            |(∑ k, (z k : ℝ) * (w i k : ℝ))| ≤ M i) ∧
+        (∀ i, 0 < M i → ∀ t : ℝ, C / M i < t → intVec (v i) ∈ t • B) := by
+  sorry
+
 /-- **The adapted integer basis lemma** — the geometry-of-numbers input
 behind Lemma 7 (discrete John): uniformly in the symmetric convex bounded
 body `B ∋ 0`, there is a `ℤ`-basis `v` of `ℤ^d` and "successive-minima
@@ -345,24 +391,14 @@ widths" `λᵢ ≥ 0` such that
   with `K / 0 = 0` this forces `mᵢ = 0` in directions outside `span B`,
   where `λᵢ` is set to `0`.
 
-This is precisely the lattice input that the proof of Lemma 7 (Tao–Vu,
-Theorem 3.36) extracts from **Minkowski's second theorem** on `ℤ^d`:
-the successive-minima vectors `wᵢ` (which exist by
-`GeoNumbers.exists_succMinima`) generate a sublattice `Λ'` of index
-`[ℤ^d : Λ'] ≤ d!` (the cross-polytope bound
-`vol B ≥ 2^d·|det w| / (d! · λ₁⋯λ_d)` combined with the successive-minima
-product bound `λ₁⋯λ_d · vol B ≤ 2^d`), the Hermite normal form completes
-`w` to a `ℤ`-basis `v` adapted to the flag `span(w₁,…,wᵢ) ∩ ℤ^d`, and
-the triangular coefficient relations together with the minimality of the
-`wᵢ` give `gauge B (vᵢ) ≲_d λᵢ` and `|mᵢ| ≲_d 1/λᵢ`.  Mathlib (v4.34.0)
-contains Minkowski's *first* theorem
-(`exists_ne_zero_mem_lattice_of_measure_mul_two_pow_lt_measure` and its
-weak-inequality variant in `MeasureTheory/Group/GeometryOfNumbers.lean`)
-and the `ZLattice` covolume API
-(`Algebra/Module/ZLattice/Covolume.lean`), but no successive-minima
-product bound (Minkowski's second theorem) and no Hermite/Smith normal
-form machinery for sublattices of `ℤ^d`; this lemma is exactly that
-missing input. -/
+The proof is a reduction to the Mahler-form input
+`exists_zbasis_mahler` (the missing Minkowski-second-theorem content):
+given a basis `v` with dual basis `w` and pairing bound
+`|⟨z, w i⟩| ≤ M i`, the `v`-coordinate `m i` of `z` equals `⟨z, w i⟩`
+by `∑_k v j k · w i k = δⱼᵢ`, and one takes `K = C + 1` and
+`λᵢ = C / (K · Mᵢ)` — then `K·λᵢ = C / Mᵢ` and
+`K / λᵢ = K²·Mᵢ / C ≥ Mᵢ` (with `Mᵢ = 0` giving `λᵢ = 0`, hence the
+required `mᵢ = 0`). -/
 theorem exists_zbasis_adapted (d : ℕ) :
     ∃ K : ℝ, 0 < K ∧ ∀ (B : Set (Fin d → ℝ)), Convex ℝ B →
       (0 : Fin d → ℝ) ∈ B → (∀ x ∈ B, -x ∈ B) →
@@ -374,7 +410,71 @@ theorem exists_zbasis_adapted (d : ℕ) :
             intVec (v i) ∈ t • B) ∧
         (∀ z : Fin d → ℤ, intVec z ∈ B → ∃ m : Fin d → ℤ,
             z = ∑ i, m i • v i ∧ ∀ i, |(m i : ℝ)| ≤ K / lam i) := by
-  sorry
+  classical
+  obtain ⟨C, hCpos, hC⟩ := exists_zbasis_mahler d
+  refine ⟨C + 1, by linarith, fun B hBc hB0 hBs hBb ↦ ?_⟩
+  obtain ⟨v, w, M, hli, hspan, hdual, hM, hzbound, hvt⟩ :=
+    hC B hBc hB0 hBs hBb
+  refine ⟨v, fun i ↦ C / ((C + 1) * M i), hli, hspan,
+    fun i ↦ div_nonneg hCpos.le (mul_nonneg (by linarith) (hM i)),
+    fun i hi t ht ↦ ?_, fun z hzB ↦ ?_⟩
+  · -- `0 < C/((C+1)·M i)` forces `0 < M i`, and `(C+1)·λᵢ = C/M i`
+    have hMpos : 0 < M i := by
+      rcases (hM i).eq_or_lt with h | h
+      · exfalso
+        rw [← h, mul_zero, div_zero] at hi
+        exact lt_irrefl _ hi
+      · exact h
+    have hKl : (C + 1) * (C / ((C + 1) * M i)) = C / M i := by
+      rw [mul_div_assoc',
+        mul_div_mul_left _ _ (by linarith : (C + 1 : ℝ) ≠ 0)]
+    rw [hKl] at ht
+    exact hvt i hMpos t ht
+  · obtain ⟨m, hm⟩ := (Submodule.mem_span_range_iff_exists_fun ℤ).mp
+      (hspan.ge Submodule.mem_top)
+    refine ⟨m, hm.symm, fun i ↦ ?_⟩
+    -- the `v`-coordinate `m i` equals the dual pairing `⟨z, w i⟩`
+    have hcoord : (m i : ℝ) = ∑ k, (z k : ℝ) * (w i k : ℝ) := by
+      conv_rhs => rw [← hm]
+      simp only [Finset.sum_apply, Pi.smul_apply, smul_eq_mul,
+        Int.cast_sum, Int.cast_mul, Finset.sum_mul]
+      rw [Finset.sum_comm]
+      calc ∑ j, ∑ k, ((m j : ℝ) * (v j k : ℝ)) * (w i k : ℝ)
+          = ∑ j, (m j : ℝ) * (∑ k, (v j k : ℝ) * (w i k : ℝ)) := by
+            refine Finset.sum_congr rfl fun j _ ↦ ?_
+            rw [Finset.mul_sum]
+            exact Finset.sum_congr rfl fun k _ ↦ (mul_assoc _ _ _).symm
+        _ = (m i : ℝ) := by
+            rw [Finset.sum_eq_single i]
+            · have hd : (∑ k, (v i k : ℝ) * (w i k : ℝ)) = 1 := by
+                have h := hdual i i
+                rw [if_pos rfl] at h
+                exact_mod_cast h
+              rw [hd, mul_one]
+            · intro j _ hji
+              have hd : (∑ k, (v j k : ℝ) * (w i k : ℝ)) = 0 := by
+                have h := hdual j i
+                rw [if_neg hji] at h
+                exact_mod_cast h
+              rw [hd, mul_zero]
+            · intro h
+              exact absurd (Finset.mem_univ i) h
+    calc |(m i : ℝ)| = |∑ k, (z k : ℝ) * (w i k : ℝ)| := by rw [hcoord]
+      _ ≤ M i := hzbound z hzB i
+      _ ≤ (C + 1) / (C / ((C + 1) * M i)) := by
+          rcases (hM i).eq_or_lt with h0 | hpos
+          · rw [← h0]
+            simp
+          · rw [div_div_eq_mul_div]
+            have heq : (C + 1) * ((C + 1) * M i) / C =
+                ((C + 1) ^ 2 / C) * M i := by ring
+            rw [heq]
+            have h1 : (1 : ℝ) ≤ (C + 1) ^ 2 / C := by
+              rw [one_le_div hCpos]
+              nlinarith [hCpos]
+            calc M i = 1 * M i := (one_mul _).symm
+              _ ≤ ((C + 1) ^ 2 / C) * M i :=
+                mul_le_mul_of_nonneg_right h1 (hM i)
 
 /-- **Lemma 7 (discrete John, Tao–Vu Theorem 3.36 form)**: there is a
 constant `c_d > 0` depending only on `d` such that for every bounded
@@ -392,8 +492,9 @@ successive minima of `B` requires the genuine argument via Minkowski's
 second theorem on the integer lattice.
 
 The proof here reduces the theorem to the adapted-basis lemma
-`exists_zbasis_adapted` (the missing Minkowski-second-theorem input,
-currently a gap): with `K` and `v`, `λ` from that lemma one takes
+`exists_zbasis_adapted` (itself reduced to the missing
+Minkowski-second-theorem input `exists_zbasis_mahler`, the only
+remaining gap): with `K` and `v`, `λ` from that lemma one takes
 `c = (4dK² + 1)⁻¹` and `Nᵢ = ⌊K/λᵢ⌋₊`.  The outer inclusion is immediate
 from the coordinate bound; the inner inclusion follows by writing
 `∑ rᵢvᵢ` (`|rᵢ| ≤ ⌊cNᵢ⌋`) as a positive combination

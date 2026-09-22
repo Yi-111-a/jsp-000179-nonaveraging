@@ -1088,8 +1088,12 @@ theorem size_stop_absurd {A : Finset (Fin ℓ → ℤ)} {δ ε γ K : ℝ} {β :
     {P0 : ℝ}
     (hδ : 0 < δ) (hε : 0 < ε) (hε3 : ε < 1 / 3) (hγ : 0 < γ)
     (hγδ : γ ≤ δ ^ K)
-    (hKbig : (2 : ℝ) * (2 * ℓ + β + 2) / ε ≤ K)
-    (hC₆₈ : 0 < C₆₈) (hsMin : 1 < sMin)
+    (hKbig : (2 : ℝ) * (2 * ℓ + β + 2) / ε < K)
+    (hC₆₈ : 0 < C₆₈) (hC₆₈1 : C₆₈ ≤ 1) (hsMin : 1 < sMin)
+    (hsMinA : (A.card : ℝ) ^ (1 - ε) ≤ sMin)
+    (hδA : (1 / δ) ^ (2 * K) ≤ (A.card : ℝ) ^ (1 - ε))
+    (hLarg : K * Real.log (1 / δ) * ((2 * ℓ + β + 2) / (1 - ε)) ≤
+        (K * ε / 2 - (2 * ℓ + β + 2)) * Real.log (A.card : ℝ))
     (hsize : (δ : ℝ) ^ (nd + nu + ns) * (A.card : ℝ) ≤ (X'.card : ℝ))
     (hsmall : (X'.card : ℝ) < (A.card : ℝ) ^ (1 - ε / 2))
     (hPb : (W'.P.toFinset.card : ℝ) ≤
@@ -1099,7 +1103,170 @@ theorem size_stop_absurd {A : Finset (Fin ℓ → ℤ)} {δ ε γ K : ℝ} {β :
     (hnd : (nd : ℝ) ≤ dinit + sd) (hnu : nu ≤ sd)
     (hdinit : (dinit : ℝ) ≤ (2 * ℓ + β + 2) / (1 - ε)) :
     False := by
-  sorry
+  set L := Real.log (A.card : ℝ) with hL
+  set t := Real.log (1 / δ) with ht
+  -- `|A| ≥ 1` (else `|X'| < 0`).
+  have hApos : (0 : ℝ) < (A.card : ℝ) := by
+    by_contra h0
+    push_neg at h0
+    have hz : (A.card : ℝ) = 0 := le_antisymm h0 (Nat.cast_nonneg _)
+    rw [hz, Real.zero_rpow (show (1 : ℝ) - ε / 2 ≠ 0 by linarith)] at hsmall
+    exact not_lt.mpr (Nat.cast_nonneg _) hsmall
+  have hA1 : (1 : ℝ) ≤ (A.card : ℝ) := by
+    have h1 : 1 ≤ A.card := by
+      rcases Nat.eq_zero_or_pos A.card with h | h
+      · exfalso; rw [h, Nat.cast_zero] at hApos; exact lt_irrefl _ hApos
+      · exact h
+    exact_mod_cast h1
+  -- `δ < 1` (else `|A| ≤ δ^M·|A| ≤ |X'| < |A|^{1-ε/2} ≤ |A|`).
+  have hδ1 : δ < 1 := by
+    by_contra h1
+    push_neg at h1
+    have hM : (1 : ℝ) ≤ δ ^ (nd + nu + ns) := one_le_pow₀ h1
+    have hle : (A.card : ℝ) ≤ δ ^ (nd + nu + ns) * (A.card : ℝ) := by
+      calc (A.card : ℝ) = 1 * (A.card : ℝ) := (one_mul _).symm
+        _ ≤ δ ^ (nd + nu + ns) * (A.card : ℝ) :=
+          mul_le_mul_of_nonneg_right hM hApos.le
+    have hle2 : (A.card : ℝ) ^ (1 - ε / 2) ≤ (A.card : ℝ) :=
+      Real.rpow_le_rpow_of_exponent_le hA1 (by linarith)
+    linarith [hsize, hsmall, hle, hle2]
+  have ht0 : (0 : ℝ) < t := by
+    rw [ht]
+    exact Real.log_pos ((one_lt_div hδ).mpr hδ1)
+  -- `|A| ≥ 2` (the `|A| = 1` case gives `δ^M ≤ |X'| < 1`, impossible).
+  have hA2 : (2 : ℝ) ≤ (A.card : ℝ) := by
+    by_contra h2
+    push_neg at h2
+    have hA1n : 1 ≤ A.card := by exact_mod_cast hA1
+    have hAeq : A.card = 1 := by omega
+    have hAeqr : (A.card : ℝ) = 1 := by exact_mod_cast hAeq
+    rw [hAeqr, Real.one_rpow] at hsmall
+    have hX0 : X'.card = 0 := by
+      by_contra hc
+      have : (1 : ℝ) ≤ (X'.card : ℝ) := by
+        exact_mod_cast Nat.one_le_iff_ne_zero.mpr hc
+      linarith
+    have hXr : (X'.card : ℝ) = 0 := by exact_mod_cast hX0
+    rw [hAeqr, hXr] at hsize
+    have hδM : (0 : ℝ) < δ ^ (nd + nu + ns) := pow_pos hδ _
+    linarith [hsize, hδM]
+  have hL0 : (0 : ℝ) < L := by
+    rw [hL]; exact Real.log_pos (by linarith : (1 : ℝ) < (A.card : ℝ))
+  have hβnn : (0 : ℝ) ≤ 2 * ℓ + β + 2 := by
+    by_contra hneg
+    push_neg at hneg
+    have hd0 : (0 : ℝ) ≤ (dinit : ℝ) := Nat.cast_nonneg _
+    have h1e : (0 : ℝ) < 1 - ε := by linarith
+    have hneg' : (2 * ℓ + β + 2) / (1 - ε) < 0 :=
+      div_neg_of_neg_of_pos hneg h1e
+    linarith [hdinit]
+  have hK0 : (0 : ℝ) < K := by
+    have h1 : (0 : ℝ) ≤ 2 * (2 * ℓ + β + 2) / ε := by positivity
+    linarith [hKbig]
+  have hlogδ : Real.log δ = -t := by
+    rw [ht, one_div, Real.log_inv, neg_neg]
+  have hlogγ : Real.log γ ≤ K * Real.log δ := by
+    have h := Real.log_le_log hγ hγδ
+    rwa [Real.log_rpow hδ] at h
+  have hlogC : Real.log C₆₈ ≤ 0 := Real.log_nonpos hC₆₈.le hC₆₈1
+  have hlogs : (1 - ε) * L ≤ Real.log sMin := by
+    have h := Real.log_le_log (Real.rpow_pos_of_pos hApos _) hsMinA
+    rwa [Real.log_rpow hApos, ← hL] at h
+  have hC3 : 2 * K * t ≤ (1 - ε) * L := by
+    have hpos' : (0 : ℝ) < (1 / δ) ^ (2 * K) :=
+      Real.rpow_pos_of_pos (by positivity) _
+    have h := Real.log_le_log hpos' hδA
+    rw [Real.log_rpow (by positivity : (0 : ℝ) < 1 / δ),
+      Real.log_rpow hApos, ← ht, ← hL] at h
+    exact h
+  have hP0pos : (0 : ℝ) < P0 := by
+    by_contra hp
+    push_neg at hp
+    have hfac : (0 : ℝ) ≤ C₆₈ ^ (nd + nu) * γ ^ ns * sMin ^ (-(sd : ℝ)) := by
+      positivity
+    have : C₆₈ ^ (nd + nu) * γ ^ ns * sMin ^ (-(sd : ℝ)) * P0 ≤ 0 :=
+      mul_nonpos_of_nonneg_of_nonpos hfac hp
+    linarith [hP1, hPb]
+  have hlogP0 : Real.log P0 ≤ (2 * ℓ + β + 2) * L := by
+    have h := Real.log_le_log hP0pos hP0
+    rwa [Real.log_rpow hApos, ← hL] at h
+  -- Taking logs in `1 ≤ C₆₈^{nd+nu}·γ^ns·sMin^{-sd}·P0` gives eq. (8):
+  -- `ns·K·t + sd·log sMin ≤ (2ℓ+β+2)·L`.
+  have hprod : (0 : ℝ) ≤ ((nd + nu : ℕ) : ℝ) * Real.log C₆₈ +
+      (ns : ℝ) * Real.log γ - (sd : ℝ) * Real.log sMin + Real.log P0 := by
+    have h1 : (1 : ℝ) ≤
+        C₆₈ ^ (nd + nu) * γ ^ ns * sMin ^ (-(sd : ℝ)) * P0 :=
+      le_trans hP1 hPb
+    have hlog := Real.log_nonneg h1
+    have hCpos : (0 : ℝ) < C₆₈ ^ (nd + nu) := pow_pos hC₆₈ _
+    have hγpos : (0 : ℝ) < γ ^ ns := pow_pos hγ _
+    have hspos : (0 : ℝ) < sMin ^ (-(sd : ℝ)) :=
+      Real.rpow_pos_of_pos (by linarith) _
+    rw [Real.log_mul (ne_of_gt (mul_pos (mul_pos hCpos hγpos) hspos))
+        (ne_of_gt hP0pos),
+      Real.log_mul (ne_of_gt (mul_pos hCpos hγpos)) (ne_of_gt hspos),
+      Real.log_mul (ne_of_gt hCpos) (ne_of_gt hγpos),
+      Real.log_pow, Real.log_pow,
+      Real.log_rpow (by linarith : (0 : ℝ) < sMin)] at hlog
+    push_cast at hlog ⊢
+    linarith [hlog]
+  have key : (ns : ℝ) * K * t + (sd : ℝ) * Real.log sMin ≤
+      (2 * ℓ + β + 2) * L := by
+    have hUlog : ((nd + nu : ℕ) : ℝ) * Real.log C₆₈ ≤ 0 :=
+      mul_nonpos_of_nonneg_of_nonpos (Nat.cast_nonneg _) hlogC
+    have hnsγ : (ns : ℝ) * Real.log γ ≤ -((ns : ℝ) * K * t) := by
+      have hKδ : K * Real.log δ = -(K * t) := by rw [hlogδ]; ring
+      have h1 : Real.log γ ≤ -(K * t) := by linarith [hlogγ]
+      have h2 := mul_le_mul_of_nonneg_left h1 (Nat.cast_nonneg _)
+      calc (ns : ℝ) * Real.log γ ≤ (ns : ℝ) * (-(K * t)) := h2
+        _ = -((ns : ℝ) * K * t) := by ring
+    linarith [hprod, hUlog, hnsγ, hlogP0]
+  -- Taking logs in `δ^{nd+nu+ns}·|A| < |A|^{1-ε/2}`:
+  -- `(nd+nu+ns)·t > (ε/2)·L`.
+  have hsz : δ ^ (nd + nu + ns) * (A.card : ℝ) < (A.card : ℝ) ^ (1 - ε / 2) :=
+    lt_of_le_of_lt hsize hsmall
+  have hsplit : (A.card : ℝ) ^ (1 - ε / 2) =
+      (A.card : ℝ) * (A.card : ℝ) ^ (-(ε / 2)) := by
+    rw [show (1 : ℝ) - ε / 2 = 1 + -(ε / 2) by ring,
+      Real.rpow_add hApos, Real.rpow_one]
+  have hδpow : δ ^ (nd + nu + ns) < (A.card : ℝ) ^ (-(ε / 2)) := by
+    rw [hsplit, mul_comm (A.card : ℝ) _] at hsz
+    exact (mul_lt_mul_iff_left₀ hApos).mp hsz
+  have htM : (ε / 2) * L < ((nd : ℝ) + (nu : ℝ) + (ns : ℝ)) * t := by
+    have hposδ : (0 : ℝ) < δ ^ (nd + nu + ns) := pow_pos hδ _
+    have h' := Real.log_lt_log hposδ hδpow
+    rw [Real.log_pow, Real.log_rpow hApos, hlogδ, ← hL] at h'
+    push_cast at h'
+    linarith [h']
+  -- Multiply by `K`, use `nd + nu ≤ dinit + 2·sd` and combine with `key`.
+  have hnslb : K * ((ε / 2) * L - ((nd : ℝ) + (nu : ℝ)) * t) <
+      K * ((ns : ℝ) * t) := by
+    have h1 : (ε / 2) * L - ((nd : ℝ) + (nu : ℝ)) * t < (ns : ℝ) * t := by
+      linarith [htM]
+    exact mul_lt_mul_of_pos_left h1 hK0
+  have hnd' : ((nd : ℝ) + (nu : ℝ)) ≤ (dinit : ℝ) + 2 * (sd : ℝ) := by
+    have hnur : (nu : ℝ) ≤ (sd : ℝ) := by exact_mod_cast hnu
+    linarith [hnd]
+  have hKUt : K * ((nd : ℝ) + (nu : ℝ)) * t ≤
+      K * ((dinit : ℝ) + 2 * (sd : ℝ)) * t := by
+    have hKt0 : (0 : ℝ) ≤ K * t := mul_nonneg hK0.le ht0.le
+    have h2 : (0 : ℝ) ≤
+        (K * t) * ((dinit : ℝ) + 2 * (sd : ℝ) - ((nd : ℝ) + (nu : ℝ))) :=
+      mul_nonneg hKt0 (by linarith [hnd'])
+    linarith [h2]
+  have hstep : (ε / 2) * K * L + (sd : ℝ) * (Real.log sMin - 2 * K * t) <
+      K * t * (dinit : ℝ) + (2 * ℓ + β + 2) * L := by
+    linarith [key, hnslb, hKUt]
+  have hsd0 : (0 : ℝ) ≤ (sd : ℝ) * (Real.log sMin - 2 * K * t) :=
+    mul_nonneg (Nat.cast_nonneg _) (by linarith [hlogs, hC3])
+  have hKtQ : K * t * (dinit : ℝ) ≤
+      K * t * ((2 * ℓ + β + 2) / (1 - ε)) :=
+    mul_le_mul_of_nonneg_left hdinit (mul_nonneg hK0.le ht0.le)
+  -- `(ε/2)·K·L < K·t·Q + (2ℓ+β+2)·L ≤ (K·ε/2)·L`, a contradiction.
+  have hcontra : (ε / 2) * K * L < (K * ε / 2) * L := by
+    linarith [hstep, hsd0, hKtQ, hLarg]
+  have heq : (ε / 2) * K * L = (K * ε / 2) * L := by ring
+  linarith [hcontra, heq]
 
 /-- **Final `|P̃|` bounds** (eq. (10) chained with the initial bound):
 at the terminal stage the accumulated multiplier
@@ -1123,8 +1290,11 @@ theorem final_P_bounds {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
     (s : L10Stage A δ ε γ c' D sMin C₆₈ P0 dinit)
     (hβ : 1 < β) (hε : 0 < ε) (hε3 : ε < 1 / 3) (hδ : 0 < δ) (hδ1 : δ < 1)
     (hγ : 0 < γ) (hγδ : γ ≤ δ ^ K)
-    (hKbig : (2 : ℝ) * (2 * ℓ + β + 2) / ε ≤ K)
-    (hC₆₈ : 0 < C₆₈) (hsMin : 1 < sMin)
+    (hKbig : (2 : ℝ) * (2 * ℓ + β + 2) / ε < K)
+    (hC₆₈ : 0 < C₆₈) (hC₆₈1 : C₆₈ ≤ 1) (hsMin : 1 < sMin)
+    (hA1 : (1 : ℝ) ≤ (A.card : ℝ))
+    (hsMinA : (A.card : ℝ) ^ (1 - ε) ≤ sMin)
+    (hδsMin : (1 / δ) ^ (2 * K) ≤ sMin)
     (hBβ : (B.card : ℝ) ≤ (A.card : ℝ) ^ β)
     (hinit : P0 ≤
       C₆₈ * sMin ^ (-(max 0 ((dinit : ℝ) - (ℓ : ℝ)))) * (B.card : ℝ))
@@ -1136,7 +1306,219 @@ theorem final_P_bounds {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
         C₆₈ * ((s.X.card : ℝ) / (A.card : ℝ)) ^ K * (B.card : ℝ)) ∧
     (SubSumDim s.X c' < ℓ → (s.W.P.toFinset.card : ℝ) ≤
         C₆₈ * (B.card : ℝ)) := by
-  sorry
+  set m : ℝ := max 0 ((dinit : ℝ) - (ℓ : ℝ)) with hm
+  set d̃ : ℕ := SubSumDim s.X c' with hd̃
+  set U : ℕ := s.nd + s.nu with hU
+  have hβ0 : (0 : ℝ) < β := by linarith
+  have hK0 : (0 : ℝ) < K := by
+    have h1 : (0 : ℝ) < 2 * (2 * ℓ + β + 2) / ε := by positivity
+    linarith [hKbig]
+  have hApos : (0 : ℝ) < (A.card : ℝ) := by linarith [hA1]
+  have hXpos : (0 : ℝ) < (s.X.card : ℝ) := by
+    have h1 : (0 : ℝ) < (A.card : ℝ) ^ (1 - ε / 2) :=
+      Real.rpow_pos_of_pos hApos _
+    linarith [s.size]
+  have hγ1 : γ ≤ 1 :=
+    le_trans hγδ (Real.rpow_le_one hδ.le hδ1.le hK0.le)
+  have hC₆₈U : C₆₈ ^ U ≤ 1 := pow_le_one₀ hC₆₈.le hC₆₈1
+  have hγns : γ ^ s.ns ≤ 1 := pow_le_one₀ hγ.le hγ1
+  have hsMin0 : (0 : ℝ) < sMin := by linarith
+  have hspos : (0 : ℝ) < sMin ^ (-(s.sd : ℝ)) :=
+    Real.rpow_pos_of_pos hsMin0 _
+  have hm0 : (0 : ℝ) ≤ m := le_max_left _ _
+  have hexp0 : -((s.sd : ℝ) + m) ≤ 0 := by
+    have hs0 : (0 : ℝ) ≤ (s.sd : ℝ) := Nat.cast_nonneg _
+    linarith
+  -- Master bound: chain the progression bound with the initial bound.
+  have hP0pos : (0 : ℝ) < P0 := by
+    by_contra hp
+    push_neg at hp
+    have hfac : (0 : ℝ) ≤ C₆₈ ^ U * γ ^ s.ns * sMin ^ (-(s.sd : ℝ)) := by
+      positivity
+    have : C₆₈ ^ U * γ ^ s.ns * sMin ^ (-(s.sd : ℝ)) * P0 ≤ 0 :=
+      mul_nonpos_of_nonneg_of_nonpos hfac hp
+    linarith [s.hPb, s.W.one_le_card_P]
+  have hmaster : (s.W.P.toFinset.card : ℝ) ≤
+      C₆₈ * (γ ^ s.ns * sMin ^ (-((s.sd : ℝ) + m))) * (B.card : ℝ) := by
+    have hfac : C₆₈ ^ U * γ ^ s.ns * sMin ^ (-(s.sd : ℝ)) ≤
+        γ ^ s.ns * sMin ^ (-(s.sd : ℝ)) := by
+      have hpos : (0 : ℝ) ≤ γ ^ s.ns * sMin ^ (-(s.sd : ℝ)) := by positivity
+      calc C₆₈ ^ U * γ ^ s.ns * sMin ^ (-(s.sd : ℝ))
+          = C₆₈ ^ U * (γ ^ s.ns * sMin ^ (-(s.sd : ℝ))) := by ring
+        _ ≤ 1 * (γ ^ s.ns * sMin ^ (-(s.sd : ℝ))) :=
+            mul_le_mul_of_nonneg_right hC₆₈U hpos
+        _ = γ ^ s.ns * sMin ^ (-(s.sd : ℝ)) := one_mul _
+    have h1 : (s.W.P.toFinset.card : ℝ) ≤
+        γ ^ s.ns * sMin ^ (-(s.sd : ℝ)) * P0 :=
+      le_trans s.hPb (mul_le_mul_of_nonneg_right hfac hP0pos.le)
+    have hpos2 : (0 : ℝ) ≤ γ ^ s.ns * sMin ^ (-(s.sd : ℝ)) := by positivity
+    have h2 : γ ^ s.ns * sMin ^ (-(s.sd : ℝ)) * P0 ≤
+        γ ^ s.ns * sMin ^ (-(s.sd : ℝ)) *
+          (C₆₈ * sMin ^ (-m) * (B.card : ℝ)) :=
+      mul_le_mul_of_nonneg_left hinit hpos2
+    have h3 : γ ^ s.ns * sMin ^ (-(s.sd : ℝ)) *
+          (C₆₈ * sMin ^ (-m) * (B.card : ℝ))
+        = C₆₈ * (γ ^ s.ns * sMin ^ (-((s.sd : ℝ) + m))) * (B.card : ℝ) := by
+      rw [show -((s.sd : ℝ) + m) = -(s.sd : ℝ) + -m by ring,
+        Real.rpow_add hsMin0]
+      ring
+    rw [h3] at h2
+    exact le_trans h1 h2
+  -- The γ-free version (using `γ^ns ≤ 1`).
+  have hmaster' : (s.W.P.toFinset.card : ℝ) ≤
+      C₆₈ * sMin ^ (-((s.sd : ℝ) + m)) * (B.card : ℝ) := by
+    have h1 : γ ^ s.ns * sMin ^ (-((s.sd : ℝ) + m)) ≤
+        sMin ^ (-((s.sd : ℝ) + m)) := by
+      calc γ ^ s.ns * sMin ^ (-((s.sd : ℝ) + m))
+          ≤ 1 * sMin ^ (-((s.sd : ℝ) + m)) :=
+            mul_le_mul_of_nonneg_right hγns (Real.rpow_nonneg hsMin0.le _)
+        _ = sMin ^ (-((s.sd : ℝ) + m)) := one_mul _
+    calc (s.W.P.toFinset.card : ℝ)
+        ≤ C₆₈ * (γ ^ s.ns * sMin ^ (-((s.sd : ℝ) + m))) * (B.card : ℝ) :=
+          hmaster
+      _ ≤ C₆₈ * sMin ^ (-((s.sd : ℝ) + m)) * (B.card : ℝ) :=
+          mul_le_mul_of_nonneg_right
+            (mul_le_mul_of_nonneg_left h1 hC₆₈.le) (Nat.cast_nonneg _)
+  refine ⟨?_, ?_, ?_⟩
+  · -- `d̃ > ℓ`: each net dimension increase costs a factor `sMin^{-1}`,
+    -- and `sMin ≥ |A|^{1-ε}` converts this into `|A|^{-(1-ε)(d̃-ℓ)}`.
+    intro hlt
+    have hdimr : (d̃ : ℝ) = (dinit : ℝ) + (s.sd : ℝ) - (s.sdd : ℝ) := by
+      have h := congrArg (fun z : ℤ ↦ (z : ℝ)) s.hdim
+      push_cast at h
+      exact h
+    have hdle : (d̃ : ℝ) - ℓ ≤ (s.sd : ℝ) + m := by
+      have hmge : (dinit : ℝ) - ℓ ≤ m := le_max_right _ _
+      have hsdd0 : (0 : ℝ) ≤ (s.sdd : ℝ) := Nat.cast_nonneg _
+      linarith [hdimr]
+    have h1ε : (0 : ℝ) < 1 - ε := by linarith
+    have hstep1 : sMin ^ (-((s.sd : ℝ) + m)) ≤
+        ((A.card : ℝ) ^ (1 - ε)) ^ (-((s.sd : ℝ) + m)) :=
+      Real.rpow_le_rpow_of_nonpos (Real.rpow_pos_of_pos hApos _) hsMinA hexp0
+    rw [← Real.rpow_mul hApos.le] at hstep1
+    have hex : (1 - ε) * -((s.sd : ℝ) + m) ≤
+        -(1 - ε) * ((d̃ : ℝ) - ℓ) := by
+      have hmul := mul_le_mul_of_nonneg_left hdle h1ε.le
+      linarith [hmul]
+    have hstep3 : (A.card : ℝ) ^ ((1 - ε) * -((s.sd : ℝ) + m)) ≤
+        (A.card : ℝ) ^ (-(1 - ε) * ((d̃ : ℝ) - ℓ)) :=
+      Real.rpow_le_rpow_of_exponent_le hA1 hex
+    calc (s.W.P.toFinset.card : ℝ)
+        ≤ C₆₈ * sMin ^ (-((s.sd : ℝ) + m)) * (B.card : ℝ) := hmaster'
+      _ ≤ C₆₈ * (A.card : ℝ) ^ (-(1 - ε) * ((d̃ : ℝ) - ℓ)) * (B.card : ℝ) :=
+          mul_le_mul_of_nonneg_right
+            (mul_le_mul_of_nonneg_left
+              (le_trans hstep1 hstep3) hC₆₈.le) (Nat.cast_nonneg _)
+  · -- `d̃ = ℓ`: `γ^ns ≤ (|X̃|/|A|)^K·δ^{-UK}` and `δ^{-UK} ≤ sMin^{sd+m}`
+    -- since `nd + nu ≤ sdd + sd = 2·sd + (dinit - ℓ) ≤ 2·sd + m`.
+    intro heq
+    have hδUp : (0 : ℝ) < δ ^ U := pow_pos hδ _
+    have hsz : δ ^ U * δ ^ s.ns * (A.card : ℝ) ≤ (s.X.card : ℝ) := by
+      have h := s.hsz
+      rw [pow_add] at h
+      exact h
+    have hδns : δ ^ s.ns ≤
+        ((s.X.card : ℝ) / (A.card : ℝ)) * (δ ^ U)⁻¹ := by
+      have h2 : δ ^ s.ns ≤ (s.X.card : ℝ) / (δ ^ U * (A.card : ℝ)) := by
+        rw [le_div_iff₀ (mul_pos hδUp hApos)]
+        calc δ ^ s.ns * (δ ^ U * (A.card : ℝ))
+            = δ ^ U * δ ^ s.ns * (A.card : ℝ) := by ring
+          _ ≤ (s.X.card : ℝ) := hsz
+      calc δ ^ s.ns ≤ (s.X.card : ℝ) / (δ ^ U * (A.card : ℝ)) := h2
+        _ = ((s.X.card : ℝ) / (A.card : ℝ)) * (δ ^ U)⁻¹ := by
+            rw [div_eq_mul_inv, mul_inv, div_eq_mul_inv]
+            ring
+    -- `γ^ns ≤ δ^{K·ns} = (δ^ns)^K ≤ (|X̃|/|A|)^K·δ^{-UK}`.
+    have hγδns : γ ^ s.ns ≤
+        ((s.X.card : ℝ) / (A.card : ℝ)) ^ K * δ ^ (-(U : ℝ) * K) := by
+      have h1 : γ ^ s.ns ≤ (δ ^ K) ^ s.ns :=
+        pow_le_pow_left₀ hγ.le hγδ _
+      have h2 : (δ ^ K) ^ (s.ns : ℕ) = δ ^ (K * (s.ns : ℝ)) := by
+        rw [← Real.rpow_natCast, ← Real.rpow_mul hδ.le]
+      have h3 : δ ^ (K * (s.ns : ℝ)) = (δ ^ s.ns) ^ K := by
+        rw [mul_comm K, Real.rpow_mul hδ.le, Real.rpow_natCast]
+      have h4 : (δ ^ s.ns) ^ K ≤
+          (((s.X.card : ℝ) / (A.card : ℝ)) * (δ ^ U)⁻¹) ^ K :=
+        Real.rpow_le_rpow (pow_nonneg hδ.le _) hδns hK0.le
+      have h5 : (((s.X.card : ℝ) / (A.card : ℝ)) * (δ ^ U)⁻¹) ^ K =
+          ((s.X.card : ℝ) / (A.card : ℝ)) ^ K * ((δ ^ U)⁻¹) ^ K :=
+        Real.mul_rpow (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
+          (inv_nonneg.mpr (pow_nonneg hδ.le _))
+      have h6 : ((δ ^ U)⁻¹) ^ K = δ ^ (-(U : ℝ) * K) := by
+        rw [← Real.rpow_natCast δ U, ← Real.rpow_neg hδ.le,
+          ← Real.rpow_mul hδ.le]
+      rw [h2, h3] at h1
+      rw [h5, h6] at h4
+      exact le_trans h1 h4
+    have hsddr : (s.sdd : ℝ) = (dinit : ℝ) + (s.sd : ℝ) - (ℓ : ℝ) := by
+      have h := s.hdim
+      rw [heq] at h
+      have h2 : (s.sdd : ℤ) = (dinit : ℤ) + (s.sd : ℤ) - (ℓ : ℤ) := by omega
+      have h3 := congrArg (fun z : ℤ ↦ (z : ℝ)) h2
+      push_cast at h3
+      exact h3
+    have hUle : (U : ℝ) ≤ 2 * (s.sd : ℝ) + m := by
+      have hnu : (s.nu : ℝ) ≤ (s.sd : ℝ) := by exact_mod_cast s.hnu
+      have hnd : (s.nd : ℝ) ≤ (s.sdd : ℝ) := by exact_mod_cast s.hnd
+      have hmge : (dinit : ℝ) - (ℓ : ℝ) ≤ m := le_max_right _ _
+      have hUr : (U : ℝ) = (s.nd : ℝ) + (s.nu : ℝ) := by simp [hU]
+      linarith [hsddr, hmge, hnu, hnd, hUr]
+    have h1δ : (1 : ℝ) ≤ 1 / δ := (one_le_div hδ).mpr hδ1.le
+    have hUK : (U : ℝ) * K ≤ 2 * K * ((s.sd : ℝ) + m) := by
+      have h := mul_le_mul_of_nonneg_right hUle hK0.le
+      linarith [h]
+    have hδinv : δ ^ (-(U : ℝ) * K) = (1 / δ) ^ ((U : ℝ) * K) := by
+      rw [show (-(U : ℝ) * K) = (-1) * ((U : ℝ) * K) by ring,
+        Real.rpow_mul hδ.le, Real.rpow_neg_one, one_div]
+    have hδUbound : δ ^ (-(U : ℝ) * K) ≤ sMin ^ ((s.sd : ℝ) + m) := by
+      rw [hδinv]
+      calc (1 / δ) ^ ((U : ℝ) * K)
+          ≤ (1 / δ) ^ (2 * K * ((s.sd : ℝ) + m)) :=
+            Real.rpow_le_rpow_of_exponent_le h1δ hUK
+        _ = ((1 / δ) ^ (2 * K)) ^ ((s.sd : ℝ) + m) := by
+            rw [← Real.rpow_mul (by positivity : (0 : ℝ) ≤ 1 / δ)]
+        _ ≤ sMin ^ ((s.sd : ℝ) + m) :=
+            Real.rpow_le_rpow
+              (Real.rpow_nonneg (by positivity : (0 : ℝ) ≤ 1 / δ) _)
+              hδsMin (by linarith [hexp0])
+    have hcomb : δ ^ (-(U : ℝ) * K) * sMin ^ (-((s.sd : ℝ) + m)) ≤ 1 := by
+      have h1 := mul_le_mul_of_nonneg_right hδUbound
+        (Real.rpow_nonneg hsMin0.le _)
+      have h2 : sMin ^ ((s.sd : ℝ) + m) * sMin ^ (-((s.sd : ℝ) + m)) = 1 := by
+        rw [← Real.rpow_add hsMin0,
+          show (s.sd : ℝ) + m + -((s.sd : ℝ) + m) = 0 by ring,
+          Real.rpow_zero]
+      rwa [h2] at h1
+    have hg' : γ ^ s.ns * sMin ^ (-((s.sd : ℝ) + m)) ≤
+        ((s.X.card : ℝ) / (A.card : ℝ)) ^ K := by
+      have h1 := mul_le_mul_of_nonneg_right hγδns
+        (Real.rpow_nonneg hsMin0.le _)
+      have hbase : (0 : ℝ) ≤ ((s.X.card : ℝ) / (A.card : ℝ)) ^ K :=
+        Real.rpow_nonneg (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)) _
+      have h2 := mul_le_mul_of_nonneg_left hcomb hbase
+      calc γ ^ s.ns * sMin ^ (-((s.sd : ℝ) + m))
+          ≤ (((s.X.card : ℝ) / (A.card : ℝ)) ^ K * δ ^ (-(U : ℝ) * K)) *
+              sMin ^ (-((s.sd : ℝ) + m)) := h1
+        _ = ((s.X.card : ℝ) / (A.card : ℝ)) ^ K *
+              (δ ^ (-(U : ℝ) * K) * sMin ^ (-((s.sd : ℝ) + m))) := by ring
+        _ ≤ ((s.X.card : ℝ) / (A.card : ℝ)) ^ K * 1 := h2
+        _ = ((s.X.card : ℝ) / (A.card : ℝ)) ^ K := mul_one _
+    calc (s.W.P.toFinset.card : ℝ)
+        ≤ C₆₈ * (γ ^ s.ns * sMin ^ (-((s.sd : ℝ) + m))) * (B.card : ℝ) :=
+          hmaster
+      _ ≤ C₆₈ * ((s.X.card : ℝ) / (A.card : ℝ)) ^ K * (B.card : ℝ) :=
+          mul_le_mul_of_nonneg_right
+            (mul_le_mul_of_nonneg_left hg' hC₆₈.le) (Nat.cast_nonneg _)
+  · -- `d̃ < ℓ`: `sMin^{-(sd+m)} ≤ 1` already suffices.
+    intro _
+    have hle1 : sMin ^ (-((s.sd : ℝ) + m)) ≤ 1 :=
+      Real.rpow_le_one_of_one_le_of_nonpos hsMin.le hexp0
+    calc (s.W.P.toFinset.card : ℝ)
+        ≤ C₆₈ * sMin ^ (-((s.sd : ℝ) + m)) * (B.card : ℝ) := hmaster'
+      _ ≤ C₆₈ * 1 * (B.card : ℝ) :=
+          mul_le_mul_of_nonneg_right
+            (mul_le_mul_of_nonneg_left hle1 hC₆₈.le) (Nat.cast_nonneg _)
+      _ = C₆₈ * (B.card : ℝ) := by rw [mul_one]
 
 /-- Transport along a dimension-index equality does not change `P`. -/
 theorem SubSumWitness.P_cast {n : ℕ} {X : Finset (Fin n → ℤ)} {c : ℝ}
@@ -1551,7 +1933,7 @@ theorem iterates_to_irreducible
     {β ε δ γ K : ℝ} {c' sMin C₆₈ β' : ℝ} {D : ℕ}
     (hβ : 1 < β) (hε : 0 < ε) (hε3 : ε < 1 / 3)
     (hδ : 0 < δ) (hδ1 : δ < 1) (hγ : 0 < γ) (hγδ : γ ≤ δ ^ K)
-    (hKbig : (2 : ℝ) * (2 * ℓ + β + 2) / ε ≤ K)
+    (hKbig : (2 : ℝ) * (2 * ℓ + β + 2) / ε < K)
     (hc' : 0 < c') (hC₆₈ : 0 < C₆₈) (hsMin : 1 < sMin)
     (hCs : C₆₈ ^ 2 < sMin) (hβ' : 0 < β') (hℓD : ℓ ≤ D)
     {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
@@ -1560,6 +1942,11 @@ theorem iterates_to_irreducible
     (hA1 : (1 : ℝ) ≤ (A.card : ℝ))
     (hC₆₈b : C₆₈ ≤ (A.card : ℝ))
     (hAvac : (1 : ℝ) < δ * (A.card : ℝ) ^ (1 - ε / 2))
+    (hC₆₈1 : C₆₈ ≤ 1)
+    (hsMinA : (A.card : ℝ) ^ (1 - ε) ≤ sMin)
+    (hδA : (1 / δ) ^ (2 * K) ≤ (A.card : ℝ) ^ (1 - ε))
+    (hLarg : K * Real.log (1 / δ) * ((2 * ℓ + β + 2) / (1 - ε)) ≤
+        (K * ε / 2 - (2 * ℓ + β + 2)) * Real.log (A.card : ℝ))
     (hmove : MoveBound68 c' δ sMin C₆₈)
     (hwit0 : ∃ d' ≤ ℓ, Nonempty (SubSumWitness A c' d'))
     (hwit' : ∀ ⦃d : ℕ⦄, d ≤ D → ∀ {X : Finset (Fin d → ℤ)} {B' : GAP.Box d},
@@ -1637,7 +2024,8 @@ theorem iterates_to_irreducible
       (X'.card : ℝ) < (A.card : ℝ) ^ (1 - ε / 2) →
       (nd : ℝ) ≤ (dinit : ℝ) + sd → nu ≤ sd → False := by
     intro d X' nd nu ns sd W' hsize' hPb' hsmall' hnd' hnu'
-    exact size_stop_absurd hδ hε hε3 hγ hγδ hKbig hC₆₈ hsMin
+    exact size_stop_absurd hδ hε hε3 hγ hγδ hKbig hC₆₈ hC₆₈1 hsMin
+      hsMinA hδA hLarg
       hsize' hsmall' hPb' hP0b W'.one_le_card_P hnd' hnu' hdinitv
   -- the initial stage
   have hsz0 : (δ : ℝ) ^ (0 + 0 + 0) * (A.card : ℝ) ≤ (A.card : ℝ) := by
@@ -1654,10 +2042,11 @@ theorem iterates_to_irreducible
     ⟨ℓ, A, DerivedFrom.refl, W0, hdim_le, hsize0, 0, 0, 0, 0, 0,
       hsz0, hPb0, hdim0, le_refl 0, le_refl 0⟩).elim ?_
   intro s' hirr
+  have hδsMin : (1 / δ) ^ (2 * K) ≤ sMin := le_trans hδA hsMinA
   refine ⟨s'.n, s'.X, SubSumDim s'.X c', s'.W, s'.der,
     s'.der.nonAveraging hNA, ?_, s'.dim, hirr,
-    final_P_bounds s' hβ hε hε3 hδ hδ1 hγ hγδ hKbig hC₆₈ hsMin hBβ
-      hP0def.le hdinitv⟩
+    final_P_bounds s' hβ hε hε3 hδ hδ1 hγ hγδ hKbig hC₆₈ hC₆₈1 hsMin
+      hA1 hsMinA hδsMin hBβ hP0def.le hdinitv⟩
   exact le_trans
     (Real.rpow_le_rpow_of_exponent_le hA1 (by linarith : (1 - ε) ≤ 1 - ε / 2))
     s'.size
@@ -1688,7 +2077,8 @@ only the elementary counting bounds `|P'| ≤ (2s'+1)^d·3^d·∏wᵢ` are
 currently available (`SubSumWitness.card_P'_le_of_imageAh_sub_witness`). -/
 theorem irreduciblization_faithful {β ε δ γ K : ℝ}
     (hβ : 1 < β) (hε : 0 < ε) (hε3 : ε < 1 / 3) (hδ : 0 < δ) (hδ1 : δ < 1)
-    (hγ : 0 < γ) (hγδ : γ ≤ δ ^ K) :
+    (hγ : 0 < γ) (hγδ : γ ≤ δ ^ K)
+    (hKbig : (2 : ℝ) * (2 * ℓ + β + 2) / ε < K) :
     ∃ (c₀ c' C : ℝ) (D N : ℕ), 0 < c₀ ∧ 0 < c' ∧ 0 < C ∧
       ∀ {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ},
         B.IsInterval → NonAveraging A → A ⊆ B.toFinset →
@@ -1721,7 +2111,13 @@ theorem irreduciblization_faithful {β ε δ γ K : ℝ}
   set Cmax := (Finset.range (D + 1)).sup fun d ↦ max (C₀ d) 0
   set T1 := (1 / δ) ^ (1 / a : ℝ)
   set T2 := (Cmax / δ) ^ (1 / a : ℝ)
-  set N := max 1 (⌈max T1 T2⌉₊ + 1)
+  -- `T3`: makes `(1/δ)^{2K} ≤ |A|^{1-ε}` (the `δ^{-2K} ≤ sMin` input of
+  -- `final_P_bounds`, with `sMin := |A|^{1-ε}`); `T4`: the largeness
+  -- `K·t·Q ≤ (Kε/2 - (2ℓ+β+2))·log|A|` needed by `size_stop_absurd`.
+  set T3 := (1 / δ) ^ (2 * K / (1 - ε))
+  set T4 := Real.exp (K * Real.log (1 / δ) * ((2 * ℓ + β + 2) / (1 - ε)) /
+    (K * ε / 2 - (2 * ℓ + β + 2)))
+  set N := max 1 (⌈max T1 (max T2 (max T3 T4))⌉₊ + 1)
   refine ⟨c', c', 1, D, N, hc', hc', zero_lt_one, ?_⟩
   intro A B hBint hNA hsub hBβ hγA hN
   have hNR : (N : ℝ) ≤ (A.card : ℝ) := by exact_mod_cast hN
@@ -1735,12 +2131,13 @@ theorem irreduciblization_faithful {β ε δ γ K : ℝ}
     dsimp [T2]
     rw [← Real.rpow_mul (by positivity : (0 : ℝ) ≤ Cmax / δ),
       div_mul_cancel₀ _ (ne_of_gt ha), Real.rpow_one]
-  have hAgt : max T1 T2 < (A.card : ℝ) := by
-    have h1 : max T1 T2 ≤ (⌈max T1 T2⌉₊ : ℝ) := Nat.le_ceil _
-    have h2 : (⌈max T1 T2⌉₊ : ℝ) + 1 ≤ (N : ℝ) := by
-      have : ⌈max T1 T2⌉₊ + 1 ≤ N := le_max_right _ _
+  have hAgt : max T1 (max T2 (max T3 T4)) < (A.card : ℝ) := by
+    have h1 : max T1 (max T2 (max T3 T4)) ≤
+        (⌈max T1 (max T2 (max T3 T4))⌉₊ : ℝ) := Nat.le_ceil _
+    have h2 : (⌈max T1 (max T2 (max T3 T4))⌉₊ : ℝ) + 1 ≤ (N : ℝ) := by
+      have : ⌈max T1 (max T2 (max T3 T4))⌉₊ + 1 ≤ N := le_max_right _ _
       exact_mod_cast this
-    have h3 : max T1 T2 < (N : ℝ) := by linarith
+    have h3 : max T1 (max T2 (max T3 T4)) < (N : ℝ) := by linarith
     linarith
   have hAvac : (1 : ℝ) < δ * (A.card : ℝ) ^ a := by
     have h1 : T1 < (A.card : ℝ) := lt_of_le_of_lt (le_max_left _ _) hAgt
@@ -1755,7 +2152,8 @@ theorem irreduciblization_faithful {β ε δ γ K : ℝ}
         apply mul_lt_mul_of_pos_left h3 hδ
   have hC₀bound : ∀ d ≤ D, (C₀ d : ℝ) ≤ δ * (A.card : ℝ) ^ a := by
     intro d hd
-    have h1 : T2 < (A.card : ℝ) := lt_of_le_of_lt (le_max_right _ _) hAgt
+    have h1 : T2 < (A.card : ℝ) :=
+      lt_of_le_of_lt (le_trans (le_max_left _ _) (le_max_right _ _)) hAgt
     have h2 : (0 : ℝ) ≤ T2 := by
       dsimp [T2]; positivity
     have h3 : T2 ^ a < (A.card : ℝ) ^ a :=
@@ -1798,14 +2196,60 @@ theorem irreduciblization_faithful {β ε δ γ K : ℝ}
       le_trans (hC₀bound d hd) hthr
     exact (hval hd hBi hsubX hBX hC₀d).imp
       fun d' ⟨h1, h2⟩ ↦ ⟨le_trans h1 hd, h2⟩
-  -- The `K ≥ C_{β,ε}` input (eq. (10)): **not** supplied by the
-  -- `γ ≤ δ^K` interface — this is the residual large-`K` hypothesis.
-  have hKbig : (2 : ℝ) * (2 * ℓ + β + 2) / ε ≤ K := by
-    sorry
+  -- `|A| > 1` (since `δ·|A|^a > 1` and `δ ≤ 1`), giving `sMin := |A|^{1-ε} > 1`.
+  have hAgt1 : (1 : ℝ) < (A.card : ℝ) := by
+    have h1 : (1 : ℝ) < (A.card : ℝ) ^ a := by
+      have hδle : δ * (A.card : ℝ) ^ a ≤ 1 * (A.card : ℝ) ^ a :=
+        mul_le_mul_of_nonneg_right hδ1.le
+          (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+      linarith [hAvac]
+    by_contra hle
+    push_neg at hle
+    have hle' : (A.card : ℝ) ^ a ≤ 1 :=
+      Real.rpow_le_one (Nat.cast_nonneg _) hle ha.le
+    linarith
+  have hsMin' : (1 : ℝ) < (A.card : ℝ) ^ (1 - ε) :=
+    Real.one_lt_rpow hAgt1 (by linarith : (0 : ℝ) < 1 - ε)
+  -- `(1/δ)^{2K} ≤ |A|^{1-ε}` from `N ≥ T3` (the `δ^{-2K} ≤ sMin` input).
+  have hδA : (1 / δ) ^ (2 * K) ≤ (A.card : ℝ) ^ (1 - ε) := by
+    have h1ε : (0 : ℝ) < 1 - ε := by linarith
+    have hT3le : T3 ≤ (A.card : ℝ) :=
+      le_trans (le_trans (le_max_left _ _) (le_max_right _ _))
+        (le_trans (le_max_left _ _) hAgt.le)
+    have hT3eq : T3 ^ (1 - ε) = (1 / δ) ^ (2 * K) := by
+      dsimp [T3]
+      rw [← Real.rpow_mul (by positivity : (0 : ℝ) ≤ 1 / δ),
+        div_mul_cancel₀ _ (ne_of_gt h1ε)]
+    rw [← hT3eq]
+    exact Real.rpow_le_rpow (by dsimp [T3]; positivity) hT3le h1ε.le
+  -- `K·t·Q ≤ (Kε/2 − (2ℓ+β+2))·log|A|` from `N ≥ T4` (the `size_stop_absurd`
+  -- largeness input); `Δ' > 0` follows from the strict `hKbig`.
+  have hLarg : K * Real.log (1 / δ) * ((2 * ℓ + β + 2) / (1 - ε)) ≤
+      (K * ε / 2 - (2 * ℓ + β + 2)) * Real.log (A.card : ℝ) := by
+    have hΔ' : (0 : ℝ) < K * ε / 2 - (2 * ℓ + β + 2) := by
+      have h := (div_lt_iff₀ hε).mp hKbig
+      linarith [h]
+    have hT4le : T4 ≤ (A.card : ℝ) :=
+      le_trans (le_trans (le_max_right _ _) (le_max_right _ _))
+        (le_trans (le_max_left _ _) hAgt.le)
+    have hexp' : Real.log T4 = K * Real.log (1 / δ) *
+        ((2 * ℓ + β + 2) / (1 - ε)) / (K * ε / 2 - (2 * ℓ + β + 2)) := by
+      dsimp [T4]
+      rw [Real.log_exp]
+    have hlog : K * Real.log (1 / δ) * ((2 * ℓ + β + 2) / (1 - ε)) /
+        (K * ε / 2 - (2 * ℓ + β + 2)) ≤ Real.log (A.card : ℝ) := by
+      rw [← hexp']
+      exact Real.log_le_log (by dsimp [T4]; exact Real.exp_pos _) hT4le
+    have h := (div_le_iff₀ hΔ').mp hlog
+    linarith [h]
+  -- The `K ≥ C_{β,ε}` input (eq. (10)) is now the explicit strict
+  -- hypothesis `hKbig`, and `sMin := |A|^{1-ε}` (the paper's `s(A_j) ≥
+  -- |A|^{1-ε}` bookkeeping), `C₆₈ := 1`.
   exact iterates_to_irreducible hβ hε hε3 hδ hδ1 hγ hγδ hKbig hc'
-    zero_lt_one (by norm_num : (1 : ℝ) < 2)
-    (by norm_num : (1 : ℝ) ^ 2 < 2) hβ' hℓD
+    zero_lt_one hsMin'
+    (by simpa using hsMin') hβ' hℓD
     hBint hNA hsub hBβ hA1 hA1 hAvac
+    (le_refl 1) (le_refl _) hδA hLarg
     lem68_move_bound hwit0 hwit' moved_set_is_lb
 
 end Nonaveraging

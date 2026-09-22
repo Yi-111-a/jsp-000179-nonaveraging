@@ -1485,7 +1485,29 @@ analysis, including the Appendix-A `H`-sizing (`κ = 10ℓ³`, `H = n^κ`,
 (`Σ` is not translation-invariant; the paper's `WLOG B = [n]^ℓ` is only
 directly justified for anchored boxes, while Lemma-8-style applications
 use symmetric boxes — a faithful derivation must resolve this, e.g. by
-padding the decoded GAP to absorb the shift). -/
+padding the decoded GAP to absorb the shift).
+
+**Proof status / missing input.**  The decode lemmas `GAP.gap_pullback`,
+`GAP.subsetSumsL_smul_translate_unpack` require digit vectors
+`dig i : Fin ℓ → ℤ` of the *undilated* steps `P₀.step i 0` — the paper's
+`q_{0i} ∈ 2sQ` step.  There `csP₀` is the `cs`-fold *sumset* (CFP23's
+`cQ`, coefficient-interval scaling), which contains `P₀` itself since
+`0 ∈ P₀`; hence `q_{0i} ∈ P₀ ⊆ csP₀ ⊆ Σ(A'₀) − x₀ ⊆ 2sQ` is a `2s`-fold
+sum of `ϕ`-images of `≤ n`-bounded vectors, so `dig i` exists with
+`|dig i| ≤ 2sn`.  Here `cfp_main` instead yields the pointwise *dilation*
+`k • P₀ = {k • p}` (`GAP.smul` scales the base and steps, keeping the
+widths), so only `k·q_{0i} = σ_{eᵢ} − σ₀ ∈ 4sQ` is available — a digit
+vector of `k·q_{0i}`, not of `q_{0i}`.  A small digit vector for `q_{0i}`
+exists iff `k` divides that digit vector componentwise, which the dilated
+containment does not give.  Two further gaps: the decoded GAP is symmetric
+only when the center digit vector `2·bdig + ∑ (wᵢ − 1) • dig i` is
+componentwise even (automatic for odd widths / centered `P₀`, but
+`cfp_main` does not provide `P₀` in centered form), and for non-anchored
+`B` the shift back by `lo` needs fixed-cardinality subset sums
+(`subsetSumsL_translate_of_card`), which `cfp_main`'s conclusion does not
+supply.  Closing this `sorry` therefore needs a `cfp_main` with the
+sumset-shaped containment `x₀ + csP ⊆ Σ(A')` of the papers (with `P`
+returned centered), plus a treatment of the unanchored shift. -/
 theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1) :
     ∃ c d : ℝ, 0 < c ∧ 0 < d ∧ ∀ (A : Finset (Fin ℓ → ℤ)) (B : GAP.Box ℓ) (s : ℕ),
       A.Nonempty → B.IsInterval →
@@ -1500,7 +1522,40 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
             ∃ t : Fin ℓ → ℤ,
               ((k • P).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
               (k • P).Proper := by
-  sorry
+  classical
+  -- Packing pushes the ambient exponent to `β' = (10ℓ³ + 1)·β` (the packed
+  -- range is `≍ ℓ·M·H^ℓ` with `H` a high power of the box scale); `cfp_main`
+  -- is applied at that exponent.
+  obtain ⟨c, d, hc, hd, hcfp⟩ :=
+    cfp_main (β := β * (10 * (ℓ : ℝ) ^ 3 + 1)) (by
+      have hℓ : (1 : ℝ) ≤ 10 * (ℓ : ℝ) ^ 3 + 1 := by positivity
+      nlinarith [hβ]) hη hη1
+  refine ⟨c, d + 1, hc, by linarith, ?_⟩
+  intro A B s hA hB hAB hBcard hs1 hs2
+  rcases ℓ.eq_zero_or_pos with hℓ0 | hℓ
+  · -- `ℓ = 0`: `Fin 0 → ℤ` is a subsingleton, so `A.card = 1` and the
+    -- hypothesis `s ≤ c·1/log 1 = 0` contradicts `1 = 1^η ≤ s`.
+    subst hℓ0
+    exfalso
+    have hAcard : A.card = 1 := by
+      have h1 : ∀ a b : Fin 0 → ℤ, a = b := fun a b ↦ funext fun i ↦ i.elim0
+      have hsub : A ⊆ Finset.univ := Finset.subset_univ _
+      have : A.card ≤ 1 := by
+        calc A.card ≤ (Finset.univ : Finset (Fin 0 → ℤ)).card :=
+              Finset.card_le_card hsub
+          _ = 1 := Finset.card_eq_one.mpr
+              ⟨fun _ ↦ 0, by ext x; simp [h1 x (fun _ ↦ 0), Finset.mem_univ]⟩
+      omega
+    rw [hAcard] at hs1 hs2
+    rw [Real.log_one, div_zero] at hs2
+    have : (s : ℝ) ≤ 0 := by
+      calc (s : ℝ) ≤ c * (1 : ℝ) / 0 := hs2
+        _ = 0 := div_zero _
+    have hs0 : s = 0 := by exact_mod_cast (by linarith : (s : ℝ) ≤ 0)
+    rw [hs0] at hs1
+    have : (1 : ℝ) ^ η ≤ 0 := by simpa using hs1
+    nlinarith [Real.one_rpow η]
+  · sorry
 
 /-- **Corollary 5**: Theorem 3 at `s = ⌊m / log² m⌋`; `P` may be taken
 symmetric and `kP` proper.  Requires `m ≥ C` so that `s` lies in the

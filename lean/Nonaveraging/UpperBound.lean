@@ -961,7 +961,8 @@ theorem thm2_step_bookkeeping (ζ₀ : ℝ) (hζ₀ : 0 < ζ₀) :
     -- what the `d̃ < d` uniform gain `g − ε ≥ g/2 ≥ ι` needs),
     -- `U = ⌈(1−ζ₀)/ι⌉` the dimension-change budget,
     -- `ε ≤ 0.01ζ₀, c₀/8, g/2, 1/(8U)` small,
-    -- `κ = 16(U+1)` so `4(U+1)/κ = 1/4`, `K = max 100 (2κ)`,
+    -- `κ = 16(U+1)` so `4(U+1)/κ = 1/4`, `K = max 100 (max 2κ
+    -- (2(2D₀+6)/ε + 1))`,
     -- `q = 1 − 2ε`, `θ x = ι / log x`.
     have hD0 : (0 : ℝ) < ((⌈2 / ζ₀⌉₊ : ℕ) : ℝ) := by
       exact_mod_cast Nat.ceil_pos.mpr (div_pos two_pos hζ₀)
@@ -1009,12 +1010,17 @@ theorem thm2_step_bookkeeping (ζ₀ : ℝ) (hζ₀ : 0 < ζ₀) :
     have hε3 : ε < 1 / 3 := by linarith
     set κ : ℝ := 16 * ((U : ℝ) + 1) with hκ_def
     have hκ : 0 < κ := by rw [hκ_def]; positivity
-    set K : ℝ := max 100 (2 * κ) with hK_def
+    set K : ℝ := max 100
+      (max (2 * κ) (2 * (2 * (⌈2 / ζ₀⌉₊ : ℝ) + 6) / ε + 1)) with hK_def
     have hK : 100 ≤ K := by rw [hK_def]; exact le_max_left _ _
-    have hKκ : 2 * κ ≤ K := by rw [hK_def]; exact le_max_right _ _
+    have hKκ : 2 * κ ≤ K := by
+      rw [hK_def]; exact le_trans (le_max_left _ _) (le_max_right _ _)
     have hK0 : 0 < K := by linarith
     obtain ⟨N₀, hl10⟩ := Thm2.lemma10_data (ε := ε) (K := K) hε hε3 hK0
-      ⌈2 / ζ₀⌉₊
+      ⌈2 / ζ₀⌉₊ (by
+        rw [hK_def]
+        exact lt_of_lt_of_le (lt_add_one _)
+          (le_trans (le_max_right _ _) (le_max_right _ _)))
     set q := 1 - 2 * ε with hq_def
     have hq0 : 0 < q := by rw [hq_def]; linarith
     have hq1 : q ≤ 1 := by rw [hq_def]; linarith

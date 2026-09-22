@@ -2004,6 +2004,136 @@ private theorem t_mem_gapLattice {d : ℕ} {c : ℝ}
 
 end SubSumWitness
 
+/-! ### The Lemmas 11–14 covering package
+
+The input that the Minkowski assembly `exists_ne_zero_subsetSum_inter`
+(`Nonaveraging/DiscreteJohn.lean`) consumes to produce the nonzero common
+subset sum `v ∈ Σ(X₁) ∩ Σ(X₂)` needed at the end of Theorem 4.  A
+`SubSumCoveringPackage` bundles:
+
+* `T` — a common basepoint in `⟨W₁.P⟩ ∩ ⟨W₂.P⟩` (in the paper, a lattice
+  point of the intersection lattice near the shared zonotope point
+  `z₁ = z₂` of eq. (13));
+* `r` — the radii of a coordinate box large enough for the covolume
+  bound `2^d·index⟨P₁⟩·index⟨P₂⟩ ≤ ∏ rᵢ` (Lemma 11's `Pᵢ ⊆ C·B` step
+  bounds feed `index_gapLattice_le`; the nonzero indices are the
+  `⟨Pᵢ⟩`-rank input coming from the same containment);
+* `T_big` — `T` exceeds the box in some coordinate, forcing the output
+  `y = T + z` nonzero (the paper's alternative phrasing: the fat box
+  `z₁ + ξ'|A|B` captures `≥ 2` common lattice points, one of which is
+  nonzero);
+* `cov₁`, `cov₂` — the eq.-(15) covering: every `⟨Pᵢ⟩`-point within
+  `r` of `T` is a subset sum of `Xᵢ` (via
+  `mem_subsetSumsL_of_zonotope_translate`, using the Lemma-14 fat box
+  `z̄ᵢ + ξ|A|B ⊆ 𝒵` and the `discrete_john_strong` absorption of the
+  Lemma-13 rounding error into `(kᵢ/2)Pᵢ`). -/
+structure SubSumCoveringPackage {d : ℕ} [NeZero d] {c₁ c₂ : ℝ}
+    {X₁ X₂ : Finset (Fin d → ℤ)}
+    (W₁ : SubSumWitness X₁ c₁ d) (W₂ : SubSumWitness X₂ c₂ d) : Prop where
+  /-- The common basepoint. -/
+  T : Fin d → ℤ
+  /-- The box radii. -/
+  r : Fin d → ℝ
+  /-- `⟨P₁⟩` has finite index in `ℤ^d` (the `P₁`-rank input). -/
+  idx₁ : (gapLattice W₁.P).toAddSubgroup.index ≠ 0
+  /-- `⟨P₂⟩` has finite index in `ℤ^d` (the `P₂`-rank input). -/
+  idx₂ : (gapLattice W₂.P).toAddSubgroup.index ≠ 0
+  /-- `T ∈ ⟨P₁⟩`. -/
+  T_mem₁ : T ∈ gapLattice W₁.P
+  /-- `T ∈ ⟨P₂⟩`. -/
+  T_mem₂ : T ∈ gapLattice W₂.P
+  /-- Nonnegativity of the radii. -/
+  r_nonneg : ∀ i, 0 ≤ r i
+  /-- `T` exceeds the box in some coordinate (nondegeneracy). -/
+  T_big : ∃ i₀, r i₀ < |(T i₀ : ℝ)|
+  /-- The `⟨P₁⟩ ∩ ⟨P₂⟩` covolume bound. -/
+  covol_le : 2 ^ d *
+      (((gapLattice W₁.P).toAddSubgroup.index *
+        (gapLattice W₂.P).toAddSubgroup.index : ℕ) : ℝ) ≤ ∏ i, r i
+  /-- The eq.-(15) covering for `X₁`: `⟨P₁⟩`-points of `T + box(r)` are
+  subset sums. -/
+  cov₁ : ∀ y : Fin d → ℤ, y ∈ gapLattice W₁.P →
+      (∀ i, |((y - T) i : ℝ)| ≤ r i) → y ∈ GAP.subsetSumsL X₁
+  /-- The eq.-(15) covering for `X₂`. -/
+  cov₂ : ∀ y : Fin d → ℤ, y ∈ gapLattice W₂.P →
+      (∀ i, |((y - T) i : ℝ)| ≤ r i) → y ∈ GAP.subsetSumsL X₂
+
+/-- Given the covering package, the Minkowski assembly
+(`exists_ne_zero_mem_inf_mem_box` inside
+`exists_ne_zero_subsetSum_inter`, both proved) produces the nonzero
+common subset sum. -/
+theorem SubSumCoveringPackage.exists_common_subsetSum {d : ℕ} [NeZero d]
+    {c₁ c₂ : ℝ} {X₁ X₂ : Finset (Fin d → ℤ)}
+    {W₁ : SubSumWitness X₁ c₁ d} {W₂ : SubSumWitness X₂ c₂ d}
+    (cov : SubSumCoveringPackage W₁ W₂) :
+    ∃ v : Fin d → ℤ, v ≠ 0 ∧ v ∈ GAP.subsetSumsL X₁ ∧
+      v ∈ GAP.subsetSumsL X₂ :=
+  exists_ne_zero_subsetSum_inter cov.idx₁ cov.idx₂ cov.T_mem₁ cov.T_mem₂
+    cov.r_nonneg cov.T_big cov.covol_le cov.cov₁ cov.cov₂
+
+/-- **The Lemmas 11 (second half)–14 core** — the single remaining
+faithful input for Theorem 4.  For all sufficiently large `|A|`, the data
+produced by the paper's §3.3 argument — an irreducible `(δ,γ)`-witness
+`W` of the non-averaging set `A`, the non-`μ`-convex-position basepoint
+`a₀`, the equitable pieces `B₁ ⊔ B₂ = ϕ_P(Â) ∖ {a₀}` with `|Bᵢ| ≥ δ|A|`,
+the piecewise minimal witnesses `W₁`, `W₂` for `B₁ ∓ a₀` supplied by
+Lemma 11's first half (`SubSumDim = d`, `|Pᵢ| ≥ γ|P|`), the coefficient
+box bound `Bᵢ ∓ a₀ ⊆ ∏ [−wⱼ, wⱼ]`, and the common zonotope point
+`Tz ∈ 𝒵_{B₁−a₀} ∩ 𝒵_{a₀−B₂}` of eq. (13) — admit a
+`SubSumCoveringPackage`.
+
+This bundles exactly the three unformalized ingredients of §3.3:
+
+* **Lemma 11, second half** (`Pᵢ ⊆` translate of `C·B`): gives the step
+  bounds `|step_j| ≪ wⱼ`, hence `LinearIndependent ℤ Wᵢ.P.step` and
+  `index ⟨Pᵢ⟩ ≤ d!·∏ (C·wⱼ)` via `step_abs_le_of_subset` and
+  `index_gapLattice_le` — the `idxᵢ` and `covol_le` inputs.  (In this
+  formalization `index ≠ 0` is *not* a consequence of the minimality
+  `hdimᵢ`: dependent-step GAPs can be proper minimal-dimension
+  witnesses.)
+* **Lemma 13 rounding into the intersection lattice**: the real common
+  point `Tz` is rounded to `T ∈ ⟨P₁⟩ ∩ ⟨P₂⟩` (another application of
+  `exists_ne_zero_mem_inf_mem_box` at scale `≈ |Tz|`; note that the
+  Lemma-13 roundings of `Tz` are sums of `Bᵢ ∓ a₀`, and
+  `Bᵢ ∓ a₀ ⊄ ⟨Pᵢ⟩`, so lattice membership is part of the input —
+  in the paper it is supplied by the `Āᵢ ⊆ Pᵢ` refinement).
+  `T_big` is the largeness of `Tz`.
+* **Lemma 14 fat-box covering**: `covᵢ` is
+  `mem_subsetSumsL_of_zonotope_translate` applied with `X' = Wᵢ.A'`,
+  `K = Wᵢ.k`, `q = Wᵢ.t`; its absorption hypothesis `habs` uses the
+  `discrete_john_strong` sandwich on `⟨Pᵢ⟩`, and the zonotope
+  containment uses the fat box `z̄ᵢ + ξ|A|B ⊆ 𝒵_{Xᵢ ∖ A'ᵢ}`.
+
+The statement is deliberately conditional on the full §3.3 hypothesis
+list, with its own threshold `N₀`, so that it is *strictly* the missing
+geometric input — every other step of Theorem 4 is formalized. -/
+theorem exists_subSumCoveringPackage {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      NonAveraging A → Irreducible W c' δ γ →
+      (Real.log (A.card : ℝ)) ^ (-(1 : ℝ) / C') ≤ γ →
+      0 < δ → δ < 1 → 0 < γ → γ < 1 → 4 * δ < 1 →
+      N₀ ≤ A.card →
+      a₀ ∈ W.imageAh →
+      B₁ ⊆ W.imageAh.erase a₀ → B₂ ⊆ W.imageAh.erase a₀ →
+      Disjoint B₁ B₂ → B₁ ∪ B₂ = W.imageAh.erase a₀ →
+      δ * (A.card : ℝ) ≤ (B₁.card : ℝ) →
+      δ * (A.card : ℝ) ≤ (B₂.card : ℝ) →
+      (∀ x ∈ B₁, ∀ i, |((x - a₀) i : ℝ)| ≤ (W.P.width i : ℝ)) →
+      (∀ x ∈ B₂, ∀ i, |((a₀ - x) i : ℝ)| ≤ (W.P.width i : ℝ)) →
+      SubSumDim (B₁.image (· - a₀)) c' = d →
+      SubSumDim (B₂.image (a₀ - ·)) c' = d →
+      (γ : ℝ) * (W.P.toFinset.card : ℝ) ≤ (W₁.P.toFinset.card : ℝ) →
+      (γ : ℝ) * (W.P.toFinset.card : ℝ) ≤ (W₂.P.toFinset.card : ℝ) →
+      Tz ∈ zonotope ((B₁.image (· - a₀)).image intVec) →
+      Tz ∈ zonotope ((B₂.image (a₀ - ·)).image intVec) →
+      Nonempty (SubSumCoveringPackage W₁ W₂) := by
+  sorry
+
 /-- **Theorem 4** (contrapositive form used in §4).  There is a threshold
 `N` such that whenever `A ⊆ B ⊆ ℤ^ℓ` is non-averaging, `|B| ≤ |A|^β`,
 `(δ,γ)`-irreducible via its canonical witness `W` (so `d = d(A)` and
@@ -2036,21 +2166,29 @@ theorem embedded_in_mu_convex_position {ℓ : ℕ} {β c c' δ γ μ C C' : ℝ}
   -- `|Â| ≥ δ|A|` (from `W.hAhcard`).
   -- The threshold `N` also enforces `|A| ≥ 6/(1−4δ)` so that the
   -- equitable halves satisfy `|Bᵢ| ≥ δ·|A|` (via `δ < 1/4`).
-  refine ⟨⌈Real.exp (max (max (2 / c) (1 / (c * (1 - δ)))) 1)⌉₊ + 3 +
-      ⌈6 / (1 - 4 * δ)⌉₊, ?_⟩
+  -- The Lemmas 11–14 covering package (the single remaining input, see
+  -- `exists_subSumCoveringPackage`) is quantified by its own threshold
+  -- `N₀`; take `N` to dominate both thresholds.
+  obtain ⟨N₀, hN₀⟩ := exists_subSumCoveringPackage (ℓ := ℓ) (c := c)
+    (c' := c') (δ := δ) (γ := γ) (C' := C')
+  refine ⟨max (⌈Real.exp (max (max (2 / c) (1 / (c * (1 - δ)))) 1)⌉₊ + 3 +
+      ⌈6 / (1 - 4 * δ)⌉₊) N₀, ?_⟩
   intro A B d W hBint hNA hAB hBcard hIrred hγlog hN
+  have hN' : ⌈Real.exp (max (max (2 / c) (1 / (c * (1 - δ)))) 1)⌉₊ + 3 +
+      ⌈6 / (1 - 4 * δ)⌉₊ ≤ A.card := (le_max_left _ _).trans hN
+  have hNN₀ : N₀ ≤ A.card := (le_max_right _ _).trans hN
   have hc : 0 < c := W.cpos
   have hN3 : 3 ≤ A.card := by
     have : 3 ≤ ⌈Real.exp (max (max (2 / c) (1 / (c * (1 - δ)))) 1)⌉₊ +
         3 + ⌈6 / (1 - 4 * δ)⌉₊ := by omega
-    exact this.trans hN
+    exact this.trans hN'
   have hA3 : (3 : ℝ) ≤ (A.card : ℝ) := by exact_mod_cast hN3
   have hApos : (0 : ℝ) < (A.card : ℝ) := by linarith
   have hexp : Real.exp (max (max (2 / c) (1 / (c * (1 - δ)))) 1)
       ≤ (A.card : ℝ) :=
     (Nat.le_ceil _).trans
       (by exact_mod_cast ((Nat.le_add_right _ _).trans
-        (Nat.le_add_right _ _)).trans hN)
+        (Nat.le_add_right _ _)).trans hN')
   have hlogM : max (max (2 / c) (1 / (c * (1 - δ)))) 1
       ≤ Real.log (A.card : ℝ) :=
     (Real.le_log_iff_exp_le hApos).mpr hexp
@@ -2283,7 +2421,7 @@ theorem embedded_in_mu_convex_position {ℓ : ℕ} {β c c' δ γ μ C C' : ℝ}
   have hden : (0 : ℝ) < 1 - 4 * δ := by linarith [hδ4]
   have hAceil : (6 : ℝ) / (1 - 4 * δ) ≤ (A.card : ℝ) := by
     refine (Nat.le_ceil _).trans ?_
-    exact_mod_cast (Nat.le_add_left _ _).trans hN
+    exact_mod_cast (Nat.le_add_left _ _).trans hN'
   have hAmain : δ * (A.card : ℝ) ≤ (A.card : ℝ) / 4 - 3 / 2 := by
     have h6 : (6 : ℝ) ≤ (A.card : ℝ) * (1 - 4 * δ) := by
       rwa [div_le_iff₀ hden] at hAceil
@@ -2378,27 +2516,27 @@ theorem embedded_in_mu_convex_position {ℓ : ℕ} {β c c' δ γ μ C C' : ℝ}
       GAP.subsetSumsL (B₁.image (· - a₀)) := W₁.subsetSumsL_superset
   have htr₂ : ((W₂.k • W₂.P).translate W₂.t).toFinset ⊆
       GAP.subsetSumsL (B₂.image (a₀ - ·)) := W₂.subsetSumsL_superset
-  -- What is missing (the genuinely hard part of the paper):
-  --   1. Lemma 14 (fat-box covering): every `⟨Pᵢ⟩`-point of the box
-  --      `z̄ᵢ + ξ|A|B ⊆ 𝒵_{Bᵢ ∓ a₀}` is a subset sum — a separation
-  --      argument using irreducibility of strip slices; partially
-  --      packaged by `mem_subsetSumsL_of_zonotope_translate`, whose
-  --      absorption hypothesis in turn needs `discrete_john_strong`.
-  --   2. `⟨P₁⟩ ∩ ⟨P₂⟩` covolume bound (Lemma 11 second half —
-  --      `index_gapLattice_le` + `step_abs_le_of_subset` once
-  --      `Pᵢ ⊆` translate of `C·B` is known; the `2 ≤ width` hypothesis
-  --      is now `hw₁`/`hw₂`) feeding `exists_ne_zero_mem_inf_mem_box`.
-  --   3. `(gapLattice Wᵢ.P).index ≠ 0` is NOT a consequence of the
-  --      minimality `hdimᵢ` in this formalization: dependent-step GAPs
-  --      can be proper minimal-dimension witnesses (see the caveat in
-  --      the section header above).  A `⟨P⟩`-rank input is missing —
-  --      e.g. from the paper's `Pᵢ ⊆ C·B` containment, which is itself
-  --      the unformalized Lemma 11 second half.
-  --   4. A common basepoint `T ∈ ⟨W₁.P⟩ ∩ ⟨W₂.P⟩` larger than the box:
-  --      the Lemma-13 roundings `hclose₁`, `hclose₂` produce subset sums
-  --      of `Bᵢ ∓ a₀`, but `Bᵢ ∓ a₀ ⊄ ⟨Wᵢ.P⟩` (only `Wᵢ.Ah ⊆ Wᵢ.P`), so
-  --      lattice membership of the rounded sums is not derivable without
-  --      the paper's `Āᵢ ⊆ Pᵢ` refinement of the zonotope.
-  sorry
+  -- === The residual: the Lemmas 11–14 covering package ===
+  -- The single remaining faithful input is
+  -- `exists_subSumCoveringPackage` (defined and documented just above
+  -- Theorem 4): it packages Lemma 11's second half (`Pᵢ ⊆ C·B`, which
+  -- supplies both the `⟨Pᵢ⟩`-rank `index ≠ 0` and the covolume bound via
+  -- `step_abs_le_of_subset` + `index_gapLattice_le`), the Lemma-13
+  -- rounding of the common zonotope point into `⟨P₁⟩ ∩ ⟨P₂⟩`, and the
+  -- Lemma-14 fat-box covering (eq. (15)).  Everything else — the
+  -- Minkowski assembly `exists_ne_zero_subsetSum_inter` and the
+  -- contradiction with `NonAveraging.not_subsetSum_shift_eq` — is
+  -- proved.
+  haveI : NeZero d := ⟨hd⟩
+  have hTz₂ : (μ * (W.Ah.card : ℝ)) • (∑ x ∈ B₁, w x • intVec (x - a₀)) ∈
+      zonotope ((B₂.image (a₀ - ·)).image intVec) := by
+    rw [hTeq]
+    exact hT₂
+  obtain ⟨cov⟩ := hN₀ A d W a₀ B₁ B₂ W₁ W₂
+    ((μ * (W.Ah.card : ℝ)) • ∑ x ∈ B₁, w x • intVec (x - a₀))
+    hNA hIrred hγlog hδ hδ1 hγ hγ1 hδ4 hNN₀ ha₀
+    hB₁e hB₂e hdisj (hcover.trans hS₀def) hδB₁ hδB₂ hb₁ hb₂
+    hdim₁ hdim₂ hP₁ hP₂ hT₁ hTz₂
+  exact cov.exists_common_subsetSum
 
 end Nonaveraging

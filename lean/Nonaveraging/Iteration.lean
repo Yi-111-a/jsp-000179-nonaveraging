@@ -737,7 +737,8 @@ dimension.  The bridging steps:
   constants vary with `d`: `thm2_step` supplies `D₀ = ⌈2/ζ₀⌉` via
   `dim_lt_of_slack`. -/
 theorem lemma10_data {ε K : ℝ} (hε : 0 < ε) (hε3 : ε < 1 / 3)
-    (_hK : 0 < K) (D₀ : ℕ) :
+    (_hK : 0 < K) (D₀ : ℕ)
+    (hKbig : (2 : ℝ) * (2 * D₀ + 6) / ε < K) :
     ∃ N : ℕ, ∀ {d : ℕ} {A : Finset (Fin d → ℤ)} {B : GAP.Box d},
       d ≤ D₀ → B.IsInterval → NonAveraging A → A ⊆ B.toFinset →
       (B.card : ℝ) ≤ (A.card : ℝ) ^ (4 : ℝ) → N ≤ A.card →
@@ -747,31 +748,48 @@ theorem lemma10_data {ε K : ℝ} (hε : 0 < ε) (hε3 : ε < 1 / 3)
   have hδ1 : (1 / 8 : ℝ) < 1 := by norm_num
   have hγ : (0 : ℝ) < (1 / 8 : ℝ) ^ K := Real.rpow_pos_of_pos hδ _
   -- the faithful constants are dimension-dependent; collect them per `d`.
-  have hf := fun (d : ℕ) ↦
+  -- `hKbig` supplies each `d ≤ D₀` with the eq.-(10) largeness of `K`
+  -- (at `ℓ = d`, `β = 4` the threshold is `2(2d+6)/ε ≤ 2(2D₀+6)/ε < K`).
+  have hKbigd : ∀ {d : ℕ}, d ≤ D₀ →
+      (2 : ℝ) * (2 * (d : ℝ) + 4 + 2) / ε < K := by
+    intro d hd
+    have hd' : (d : ℝ) ≤ (D₀ : ℝ) := by exact_mod_cast hd
+    have h1 : (2 : ℝ) * (2 * (d : ℝ) + 4 + 2) ≤ 2 * (2 * (D₀ : ℝ) + 6) := by
+      linarith
+    calc (2 : ℝ) * (2 * (d : ℝ) + 4 + 2) / ε
+        ≤ (2 : ℝ) * (2 * (D₀ : ℝ) + 6) / ε :=
+          div_le_div_of_nonneg_right h1 hε.le
+      _ < K := hKbig
+  have hf := fun (d : ℕ) (hd : d ≤ D₀) ↦
     irreduciblization_faithful (ℓ := d) hβ4 hε hε3 hδ hδ1 hγ (le_refl _)
+      (hKbigd hd)
   choose c₀ c' Cf Df Nf hfA using hf
   -- per-dimension threshold: the faithful `Nf d`, the largeness
   -- `|A| ≥ γ^{-3}` making `|A|^{-1/3} ≤ γ`,
   -- `|A| ≥ exp(2c₀⁻¹/(1-ε))` making `2c₀⁻¹ ≤ (1-ε)·log|A| ≤ log|Ã|`, and
   -- `|A| ≥ (2·max(C d,1))^{4/ε}` making `2C ≤ |A|^{ε/4}`.
-  refine ⟨max 4 ((Finset.range (D₀ + 1)).sup fun d ↦
-    max (Nf d) (max ⌈((1 / 8 : ℝ) ^ K) ^ (-3 : ℝ)⌉₊
-      (max ⌈Real.exp (2 * (c₀ d)⁻¹ / (1 - ε))⌉₊
-        ⌈(2 * max (Cf d) 1 : ℝ) ^ (4 / ε : ℝ)⌉₊))), ?_⟩
+  refine ⟨max 4 ((Finset.range (D₀ + 1)).attach.sup fun x ↦
+    max (Nf x.1 (Nat.lt_succ_iff.mp (Finset.mem_range.mp x.2)))
+      (max ⌈((1 / 8 : ℝ) ^ K) ^ (-3 : ℝ)⌉₊
+        (max ⌈Real.exp (2 * (c₀ x.1 (Nat.lt_succ_iff.mp
+            (Finset.mem_range.mp x.2)))⁻¹ / (1 - ε))⌉₊
+          ⌈(2 * max (Cf x.1 (Nat.lt_succ_iff.mp
+            (Finset.mem_range.mp x.2))) 1 : ℝ) ^ (4 / ε : ℝ)⌉₊))), ?_⟩
   intro d A B hdD hBint hNA hsub hB hN
   have hmem : d ∈ Finset.range (D₀ + 1) :=
     Finset.mem_range.mpr (Nat.lt_succ_iff.mpr hdD)
-  have hTd : max (Nf d) (max ⌈((1 / 8 : ℝ) ^ K) ^ (-3 : ℝ)⌉₊
-      (max ⌈Real.exp (2 * (c₀ d)⁻¹ / (1 - ε))⌉₊
-        ⌈(2 * max (Cf d) 1 : ℝ) ^ (4 / ε : ℝ)⌉₊)) ≤ A.card :=
-    (Finset.le_sup hmem).trans (le_trans (le_max_right _ _) hN)
-  have hNf : Nf d ≤ A.card := (le_max_left _ _).trans hTd
+  have hTd : max (Nf d hdD) (max ⌈((1 / 8 : ℝ) ^ K) ^ (-3 : ℝ)⌉₊
+      (max ⌈Real.exp (2 * (c₀ d hdD)⁻¹ / (1 - ε))⌉₊
+        ⌈(2 * max (Cf d hdD) 1 : ℝ) ^ (4 / ε : ℝ)⌉₊)) ≤ A.card := by
+    have h1 := Finset.le_sup (Finset.mem_attach _ ⟨d, hmem⟩)
+    exact h1.trans (le_trans (le_max_right _ _) hN)
+  have hNf : Nf d hdD ≤ A.card := (le_max_left _ _).trans hTd
   have hγ3N : ⌈((1 / 8 : ℝ) ^ K) ^ (-3 : ℝ)⌉₊ ≤ A.card :=
     ((le_max_left _ _).trans (le_max_right _ _)).trans hTd
-  have hexpN : ⌈Real.exp (2 * (c₀ d)⁻¹ / (1 - ε))⌉₊ ≤ A.card :=
+  have hexpN : ⌈Real.exp (2 * (c₀ d hdD)⁻¹ / (1 - ε))⌉₊ ≤ A.card :=
     ((le_max_left _ _).trans ((le_max_right _ _).trans
       (le_max_right _ _))).trans hTd
-  have hC4N : ⌈(2 * max (Cf d) 1 : ℝ) ^ (4 / ε : ℝ)⌉₊ ≤ A.card :=
+  have hC4N : ⌈(2 * max (Cf d hdD) 1 : ℝ) ^ (4 / ε : ℝ)⌉₊ ≤ A.card :=
     ((le_max_right _ _).trans ((le_max_right _ _).trans
       (le_max_right _ _))).trans hTd
   have h4 : (4 : ℝ) ≤ (A.card : ℝ) := by
@@ -800,24 +818,24 @@ theorem lemma10_data {ε K : ℝ} (hε : 0 < ε) (hε3 : ε < 1 / 3)
         (Real.rpow_pos_of_pos hγ _)).mpr hr3
     rwa [Real.rpow_neg_one, inv_inv] at h2
   -- apply the faithful lemma at dimension `d`
-  obtain ⟨_hc₀, _hc', _hCf, hfB⟩ := hfA d
+  obtain ⟨_hc₀, _hc', _hCf, hfB⟩ := hfA d hdD
   obtain ⟨n, At, dt, Wt, hder, _hNAt, hAtcard, _hdtD, hirr, hup, hsame,
     hdown⟩ := hfB hBint hNA hsub hB hAγ hNf
   -- `2c₀⁻¹ ≤ (1-ε)·log|A| ≤ log|Ã|`, hence `|Ât| ≥ |Ã|/2`.
-  have hlogA : 2 * (c₀ d)⁻¹ ≤ (1 - ε) * Real.log (A.card : ℝ) := by
-    have hexp : Real.exp (2 * (c₀ d)⁻¹ / (1 - ε)) ≤ (A.card : ℝ) :=
+  have hlogA : 2 * (c₀ d hdD)⁻¹ ≤ (1 - ε) * Real.log (A.card : ℝ) := by
+    have hexp : Real.exp (2 * (c₀ d hdD)⁻¹ / (1 - ε)) ≤ (A.card : ℝ) :=
       (Nat.le_ceil _).trans (by exact_mod_cast hexpN)
-    have h1 : 2 * (c₀ d)⁻¹ / (1 - ε) ≤ Real.log (A.card : ℝ) :=
-      calc 2 * (c₀ d)⁻¹ / (1 - ε)
-          = Real.log (Real.exp (2 * (c₀ d)⁻¹ / (1 - ε))) :=
+    have h1 : 2 * (c₀ d hdD)⁻¹ / (1 - ε) ≤ Real.log (A.card : ℝ) :=
+      calc 2 * (c₀ d hdD)⁻¹ / (1 - ε)
+          = Real.log (Real.exp (2 * (c₀ d hdD)⁻¹ / (1 - ε))) :=
             (Real.log_exp _).symm
         _ ≤ Real.log (A.card : ℝ) :=
             Real.log_le_log (Real.exp_pos _) hexp
-    calc 2 * (c₀ d)⁻¹ ≤ Real.log (A.card : ℝ) * (1 - ε) :=
+    calc 2 * (c₀ d hdD)⁻¹ ≤ Real.log (A.card : ℝ) * (1 - ε) :=
           (div_le_iff₀ h1ε).mp h1
       _ = (1 - ε) * Real.log (A.card : ℝ) := mul_comm _ _
-  have hlogAt : 2 * (c₀ d)⁻¹ ≤ Real.log (At.card : ℝ) :=
-    calc 2 * (c₀ d)⁻¹ ≤ (1 - ε) * Real.log (A.card : ℝ) := hlogA
+  have hlogAt : 2 * (c₀ d hdD)⁻¹ ≤ Real.log (At.card : ℝ) :=
+    calc 2 * (c₀ d hdD)⁻¹ ≤ (1 - ε) * Real.log (A.card : ℝ) := hlogA
       _ = Real.log ((A.card : ℝ) ^ (1 - ε)) :=
           (Real.log_rpow hApos _).symm
       _ ≤ Real.log (At.card : ℝ) :=
@@ -826,12 +844,12 @@ theorem lemma10_data {ε K : ℝ} (hε : 0 < ε) (hε3 : ε < 1 / 3)
     rw [Wt.card_imageAh]
     exact half_le_Ah_card Wt hlogAt
   -- `|A| ≥ (2C)^{4/ε}` gives `2C ≤ |A|^{ε/4}`.
-  have hC4 : ((2:ℝ) * max (Cf d) 1) ^ (4 / ε : ℝ) ≤ (A.card : ℝ) :=
+  have hC4 : ((2:ℝ) * max (Cf d hdD) 1) ^ (4 / ε : ℝ) ≤ (A.card : ℝ) :=
     (Nat.le_ceil _).trans (by exact_mod_cast hC4N)
-  have hCa : 2 * max (Cf d) 1 ≤ (A.card : ℝ) ^ (ε / 4 : ℝ) := by
-    have hCpos : (0 : ℝ) ≤ 2 * max (Cf d) 1 := by positivity
-    have h2 : ((2 * max (Cf d) 1 : ℝ) ^ (4 / ε : ℝ)) ^ (ε / 4 : ℝ)
-        = 2 * max (Cf d) 1 := by
+  have hCa : 2 * max (Cf d hdD) 1 ≤ (A.card : ℝ) ^ (ε / 4 : ℝ) := by
+    have hCpos : (0 : ℝ) ≤ 2 * max (Cf d hdD) 1 := by positivity
+    have h2 : ((2 * max (Cf d hdD) 1 : ℝ) ^ (4 / ε : ℝ)) ^ (ε / 4 : ℝ)
+        = 2 * max (Cf d hdD) 1 := by
       rw [← Real.rpow_mul hCpos]
       rw [show (4 / ε : ℝ) * (ε / 4) = 1 by
         rw [div_mul_div_comm, show (4 : ℝ) * ε = ε * 4 from mul_comm _ _,
@@ -840,8 +858,8 @@ theorem lemma10_data {ε K : ℝ} (hε : 0 < ε) (hε3 : ε < 1 / 3)
     rw [← h2]
     exact Real.rpow_le_rpow hCpos hC4 (by positivity : (0 : ℝ) ≤ ε / 4)
   -- assemble the bundle with `C := max (Cf d) 1`
-  refine ⟨n, dt, At, c₀ d, Wt, c' d, 1 / 8, (1 / 8 : ℝ) ^ K,
-    max (Cf d) 1, hδ, by norm_num, hγ, le_refl _, hAγ, hder,
+  refine ⟨n, dt, At, c₀ d hdD, Wt, c' d hdD, 1 / 8, (1 / 8 : ℝ) ^ K,
+    max (Cf d hdD) 1, hδ, by norm_num, hγ, le_refl _, hAγ, hder,
     le_max_right _ _, hCa, hAtcard, hAh2, hirr, ?_, ?_, ?_⟩
   · intro hlt
     rw [witness_card_coeffBox Wt]
@@ -1382,7 +1400,7 @@ theorem thm2_step (ζ₀ : ℝ) (hζ₀ : 0 < ζ₀) :
   rcases lt_or_ge ζ₀ 1 with hζ1 | hζ1
   · obtain ⟨c₀, hc₀, hc₀1, hobs15⟩ := observation15_ge hζ₀ hζ1
     -- parameters: `D` the dimension bound, `g` the down-move gap floor,
-    -- `ε` small in `ζ₀, c₀, g`, `K = 100`, `q = 1 - 2ε`,
+    -- `ε` small in `ζ₀, c₀, g`, `K = max 100 (2(2D₀+6)/ε + 1)`, `q = 1 - 2ε`,
     -- `ι = min(c₀/16, g)`, `θ x = ι / log x`.
     have hD0 : (0 : ℝ) < ((⌈2 / ζ₀⌉₊ : ℕ) : ℝ) := by
       exact_mod_cast Nat.ceil_pos.mpr (div_pos two_pos hζ₀)
@@ -1403,8 +1421,10 @@ theorem thm2_step (ζ₀ : ℝ) (hζ₀ : 0 < ζ₀) :
       exact le_trans (min_le_right _ _) (min_le_left _ _)
     have hε1 : ε < 1 := by linarith
     have hε3 : ε < 1 / 3 := by linarith
-    obtain ⟨N₀, hl10⟩ := lemma10_data (ε := ε) (K := 100) hε hε3
-      (by norm_num) ⌈2 / ζ₀⌉₊
+    obtain ⟨N₀, hl10⟩ := lemma10_data (ε := ε)
+      (K := max 100 (2 * (2 * (⌈2 / ζ₀⌉₊ : ℝ) + 6) / ε + 1)) hε hε3
+      (by positivity) ⌈2 / ζ₀⌉₊
+      (lt_of_lt_of_le (lt_add_one _) (le_max_right _ _))
     set q := 1 - 2 * ε with hq_def
     have hq0 : 0 < q := by rw [hq_def]; linarith
     have hq1 : q ≤ 1 := by rw [hq_def]; linarith
@@ -1553,7 +1573,8 @@ theorem thm2_step (ζ₀ : ℝ) (hζ₀ : 0 < ζ₀) :
     · -- **Residual cases** (`d̃ < d`, `d̃ = d`, degenerate `d̃ > d`).
       clear hcase
       exact residual_step hd (hζ₀.trans_le hζ) hαζ hBint hNA hsub hcex
-        hN hε hεg hg hg12 (le_refl _) hq0 (le_of_eq hq_def) hgap hι hc₀ hεc
+        hN hε hεg hg hg12 (le_max_left _ _) hq0 (le_of_eq hq_def) hgap hι
+        hc₀ hεc
         hobs15all hincr hincrι hincrg4 hincrc hincrθ hεpow
         ⟨n, dt, At, ct, Wt, c', δ, γ, C, hδ, hδ4, hγ, hγδ, hγa, hder, hC,
           hCa, hAt, hAh, hirr, hup, hsame, hdown⟩

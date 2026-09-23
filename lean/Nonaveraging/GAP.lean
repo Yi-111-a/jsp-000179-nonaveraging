@@ -2316,21 +2316,79 @@ theorem appendix_decode {ℓ : ℕ} (_hℓ : 0 < ℓ) {H : ℤ} (hH : 1 < H)
       Proper.unpack (P₀ := (P₀.liveStep k).widthScale k) hdig' hbdig' hQp
     exact hdec
 
+/-- **Anchored case of `cfp_unshift`.**  When `lo = 0` there is no shift to
+absorb and `P' = P` itself works — at the *same* dimension `d'`.  (The
+`d' + 1` padding in `cfp_unshift` exists only to absorb `lo`; at `lo = 0`
+a padded `(d' + 1)`-dimensional witness is impossible in general anyway for
+`k ≥ 2`, since `widthScale k` inflates the pad width to `k·w₀ ≥ 2` and a
+*proper* `csP'` then has `≥ k^(d'+1)` points while `Σ(A'₀)` is only
+guaranteed a `k^(d')`-sized translate — e.g. `P = {0}` (`d' = 1`, one
+step `5` of width `1`), `k = 2`, `A'₀ = {5}` gives `Σ(A'₀) = {0, 5}` but
+`|csP'| ≥ 4`.)  This is the special case the paper's
+`WLOG B = [n]^ℓ` reduction (anchored box, corner `lo = 0`) actually
+needs; the caller can then use the dimension bound `d' ≤ d`. -/
+theorem cfp_unshift_zero {ℓ d' : ℕ} {P : GAP ℓ d'} {lo : Fin ℓ → ℤ} {k : ℕ}
+    {Â₀ A'₀ : Finset (Fin ℓ → ℤ)} {tdig : Fin ℓ → ℤ}
+    (hlo : lo = 0) (hPmem : Â₀ ∪ {0} ⊆ P.toFinset) (hPs : P.Symmetric)
+    (hcont : ((P.widthScale k).translate tdig).toFinset ⊆ subsetSumsL A'₀)
+    (hkP : (P.widthScale k).Proper) :
+    ∃ P' : GAP ℓ d', P'.Symmetric ∧ (Â₀.image (· + lo) ∪ {0}) ⊆ P'.toFinset ∧
+      ∃ t : Fin ℓ → ℤ, ((P'.widthScale k).translate t).toFinset ⊆
+        subsetSumsL (A'₀.image (· + lo)) ∧ (P'.widthScale k).Proper := by
+  subst hlo
+  have h0 : ∀ A : Finset (Fin ℓ → ℤ), A.image (· + (0 : Fin ℓ → ℤ)) = A := by
+    intro A
+    ext x
+    simp only [Finset.mem_image, add_zero]
+    constructor
+    · rintro ⟨a, ha, rfl⟩
+      exact ha
+    · intro hx
+      exact ⟨x, hx, rfl⟩
+  rw [h0, h0]
+  exact ⟨P, hPs, hPmem, tdig, hcont, hkP⟩
+
 /-- **Residual input — the unanchored-box lift.**  If the Appendix-A
 conclusion holds for the anchored translate `A₀ = A − lo`, it lifts to `A`
 itself: a padded `P'` (dimension `d' + 1`, the extra `padStep` absorbing
 the corner `lo`) containing `(Â₀ + lo) ∪ {0}`, and a translate of
 `widthScale k P'` inside `Σ(A'₀ + lo)`.
 
-The obstruction is the translation non-invariance of `Σ`: an element of
-`Σ(A'₀)` is a `j`-element subset sum of `A'₀` shifted by `j • lo`, with `j`
-varying over the point, so a *uniform* translate inside `Σ(A'₀ + lo)`
-requires the fixed-cardinality machinery of `subsetSumsL_translate_of_card`
-— which `cfp_main`'s all-cardinality `Σ` conclusion does not supply.  For
-`lo = 0` (the paper's `WLOG B = [n]^ℓ`) it is immediate
-(`P' = P.padStep 0 1`, `t = tdig`; `widthScale` commutes with `padStep`
-and `translate`, and `P.padStep 0 1` has the same point set as `P`); the
-general case is the WLOG step the paper elides. -/
+**Status: the statement as written is false in general**, on two
+independent grounds, so this `sorry` cannot be discharged without
+strengthening the hypotheses (or weakening the conclusion):
+
+* *Translation non-invariance* (`lo ≠ 0`): an element of `Σ(A'₀)` is a
+  `j`-element subset sum of `A'₀`, shifted to `σ + j • lo` in
+  `Σ(A'₀ + lo)` with `j` varying over the point, while the pad direction
+  `v = lo` needed for `(Â₀ + lo) ⊆ P'` contributes `m • lo` with `m`
+  ranging over `k·w₀ ≥ 2` slices.  Matching needs every `tdig + u` to be an
+  `r`-element subset sum for *all* `r` in an interval of length `k·w₀` —
+  fixed-cardinality data (`subsetSumsL_translate_of_card`, a single `j`)
+  does **not** suffice.  Counterexample: `ℓ = 1`, `d' = 0`, `P = {0}`,
+  `Â₀ = {0}`, `A'₀ = {a}`, `lo = b ≠ 0`, `k = 1`, `tdig = 0`: any symmetric
+  `P' ⊇ {0, b}` with `|csP'| ≤ |Σ(A'₀ + lo)| = 2` is `{0, b}` itself, whose
+  translates never lie inside `{0, a + b}`.
+* *Pad-width inflation* (`k ≥ 2`, even at `lo = 0`): `widthScale k`
+  multiplies all `d' + 1` widths, so `csP'` proper forces
+  `|csP'| ≥ k^(d'+1)` points inside `Σ(A'₀)`, which may only have room for
+  the `k^(d')`-sized `csP + tdig`.  `P.padStep 0 1` does have the same point
+  set as `P`, but `(P.padStep 0 1).widthScale k = csP.padStep 0 k` is
+  *improper* for `k ≥ 2` (the last coefficient is invisible to `eval`).
+  Counterexample: `P = {0}`, `k = 2`, `A'₀ = {a}` gives `Σ = {0, a}` while
+  `|csP'| ≥ 4`.
+
+A genuinely sufficient strengthened hypothesis is a *cardinality
+interval*: `tdig + u ∈ subsetSumsLCard A'₀ r` for every `r` in
+`[c, c + k·w₀)` (then `P' = P.padStep lo 3`, `t = tdig + c • lo`, plus a
+`lo`-vs-`csP` separation hypothesis for `csP'` properness).  Neither
+`cfp_main` nor `cfp_main_centered` currently supplies such
+fixed-cardinality control — their `Σ(A')` conclusions are
+all-cardinality.  The faithful repairs are (a) restrict `cfp_structure`
+to boxes anchored at `0` (the paper's `WLOG B = [n]^ℓ`), where
+`cfp_unshift_zero` above applies directly, or (b) strengthen the
+black-box `cfp_main_centered` to produce cardinality-interval subset
+sums (not presently justified by CFP23). -/
 theorem cfp_unshift {ℓ d' : ℕ} {P : GAP ℓ d'} {lo : Fin ℓ → ℤ} {k : ℕ}
     {Â₀ A'₀ : Finset (Fin ℓ → ℤ)} {tdig : Fin ℓ → ℤ}
     (hPmem : Â₀ ∪ {0} ⊆ P.toFinset) (hPs : P.Symmetric)
@@ -2469,9 +2527,13 @@ sum of `ϕ`-images of `≤ n`-bounded vectors, so `dig i` exists with
 `(widthScale k P₀).translate t₀ ⊆ Σ(ϕ A'₀)`, matching the paper's shape;
 the remaining gaps are isolated in `appendix_decode` (digit vectors of the
 undilated steps, the symmetry-center parity, dead dimensions `k·wᵢ = 1`)
-and `cfp_unshift` (for non-anchored `B` the shift back by `lo` needs
-fixed-cardinality subset sums `subsetSumsL_translate_of_card`, which
-`cfp_main`'s all-cardinality `Σ` conclusion does not supply). -/
+and `cfp_unshift` — which is in fact *false as stated*: for non-anchored
+`B` the shift back by `lo` needs a cardinality-interval subset-sum
+containment (single-`j` fixed-cardinality data via
+`subsetSumsL_translate_of_card` does not suffice, and for `k ≥ 2` the
+`d' + 1` padding is too large for `Σ` even at `lo = 0`); see the
+`cfp_unshift` docstring for counterexamples and the proved anchored
+special case `cfp_unshift_zero`. -/
 theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1) :
     ∃ c d : ℝ, 0 < c ∧ 0 < d ∧ ∀ (A : Finset (Fin ℓ → ℤ)) (B : GAP.Box ℓ) (s : ℕ),
       A.Nonempty → B.IsInterval →

@@ -828,10 +828,19 @@ have `P = Q.widthScale k`, `k_wit = 1`).
 *Faithfulness caveat.*  The implied constant is a genuine `C_n > 1`
 (Lemma 7's `c_d^{−dim H}` and the `|B''| ≲ |B|` factor), so the statement
 is honest only at `C ≥ C_n` with `sMin` a uniform lower bound on the
-`s(A_j)` of the iteration; with free `C`, `sMin` it inherits the
-degenerate-instantiation caveat documented at `lem68_move_bound`. -/
+`s(A_j)` of the iteration.  The hypotheses `1 ≤ C`, `1 ≤ sMin` record
+this regime: they exclude the trivially-false instantiations (`C ≤ 0` or
+`sMin ≤ 0` makes the right side `≤ 0 < 1 ≤ |P'|`, since `0 ∈ P'` via
+`W'.hsub`) but do *not* supply the covolume content itself — even at
+`C = 1`, `sMin = 1`, `d' ≤ n` the claim is `|P'| ≤ |B'|`, the paper's
+Lemma 8, whereas the best elementary bound in scope is
+`card_P_le_interval`'s `|P'| ≤ (|A'|+1)^{2n}·|B'|`.  The leaf below is
+therefore the discrete-John/covolume input at the honest regime
+(matching the `C₆₈ = 1`, `sMin = |A|^{1-ε} > 1` instantiation in
+`irreduciblization_faithful`). -/
 theorem lem68_covolume {n : ℕ} {X' : Finset (Fin n → ℤ)}
     {B' : GAP.Box n} {c' sMin C : ℝ}
+    (hC : 1 ≤ C) (hsMin : 1 ≤ sMin)
     (_hB : B'.IsInterval) (_hsub : X' ⊆ B'.toFinset)
     (W' : SubSumWitness X' c' (SubSumDim X' c')) :
     (W'.P.toFinset.card : ℝ) ≤
@@ -862,9 +871,13 @@ applies the covolume bridge `lem68_covolume` to the ambient box
 (`GAP.Box.coeffBox_translate_isInterval`) containing `X'`
 (`SubSumWitness.imageAh_sub_subset_coeffBox_translate`) and has
 `|B'| = ∏ᵢ wᵢ = |P|` exactly (`GAP.coeffBox_card` +
-`GAP.card_toFinset_of_proper` applied to `P`, proper since `kP` is). -/
+`GAP.card_toFinset_of_proper` applied to `P`, proper since `kP` is).
+The hypotheses `1 ≤ C₆₈`, `1 ≤ sMin` are the honest regime of
+`lem68_covolume` (met by the `C₆₈ = 1`, `sMin = |A|^{1-ε}` instantiation
+in `irreduciblization_faithful`). -/
 theorem lem68_move_bound {n : ℕ} {X : Finset (Fin n → ℤ)} {d : ℕ}
     {c' δ sMin C₆₈ : ℝ}
+    (hC₆₈ : 1 ≤ C₆₈) (hsMin : 1 ≤ sMin)
     (W : SubSumWitness X c' d) (hd : SubSumDim X c' = d)
     {A₁ : Finset (Fin d → ℤ)} {x : Fin d → ℤ}
     (hA₁ : A₁ ⊆ W.imageAh) (hx : x ∈ W.imageP)
@@ -890,13 +903,14 @@ theorem lem68_move_bound {n : ℕ} {X : Finset (Fin n → ℤ)} {d : ℕ}
       (GAP.proper_smul_iff (by exact_mod_cast W.kpos.ne')).mp W.hproper
     exact_mod_cast (GAP.card_toFinset_of_proper _ hproper).symm
   rw [← hPcard]
-  exact lem68_covolume (GAP.Box.coeffBox_translate_isInterval _ _)
+  exact lem68_covolume hC₆₈ hsMin (GAP.Box.coeffBox_translate_isInterval _ _)
     hsub' W'
 
 /-- **Lemmas-6/8 move bound, hypothesis form** — the `∀`-statement of
 `lem68_move_bound` with the constants `c' δ sMin C₆₈` fixed.  Passed to
 `iterates_to_irreducible`/`l10_descent` as `hmove`; the call site
-supplies `lem68_move_bound`. -/
+supplies `lem68_move_bound` partially applied to its regime hypotheses
+`1 ≤ C₆₈`, `1 ≤ sMin`. -/
 abbrev MoveBound68 (c' δ sMin C₆₈ : ℝ) : Prop :=
   ∀ {n : ℕ} {X : Finset (Fin n → ℤ)} {d : ℕ}
     (W : SubSumWitness X c' d), SubSumDim X c' = d →
@@ -983,23 +997,91 @@ theorem irreducible_of_imageAh_small {n : ℕ} {X : Finset (Fin n → ℤ)}
     exact_mod_cast Finset.card_le_card hA'sub
   linarith
 
+/-- **Algebraic reduction of `moved_set_card_residual`** — proved modulo
+the three non-elementary inputs.  If `X` sits in an ambient interval box
+`B_X` with `|B_X| ≤ |X|^β` (the `(n,β)`-set invariant), and the canonical
+witness obeys the covolume bound `∏ᵢ wᵢ ≤ C·|B_X|` (`lem68_covolume`
+applied to `X` and `B_X`), and `|X'| = |A₁ − x|` is large enough to
+absorb the slack (`C·δ^{−β} ≤ |X'|^{β'−β}`), then
+`∏ᵢ wᵢ ≤ C·|X|^β ≤ C·δ^{−β}·|X'|^β ≤ |X'|^{β'}` — using
+`|X| ≤ δ⁻¹·|X'|` from `δ·|X| ≤ |A₁| = |X'|` (the translate `· − x` is
+injective).  This isolates exactly what the residual leaf below lacks:
+the ambient-box invariant (untracked by `L10Stage`), the covolume bound,
+and the largeness. -/
+theorem moved_set_card_of_covolume {n d : ℕ} {X : Finset (Fin n → ℤ)}
+    {c' δ β β' C : ℝ} {A₁ : Finset (Fin d → ℤ)} {x : Fin d → ℤ}
+    {BX : GAP.Box n} (W : SubSumWitness X c' d)
+    (_hXsub : X ⊆ BX.toFinset)
+    (hBX : (BX.card : ℝ) ≤ (X.card : ℝ) ^ β)
+    (hcov : ((∏ i, W.P.width i : ℕ) : ℝ) ≤ C * (BX.card : ℝ))
+    (hC : 0 < C) (hδ : 0 < δ) (hβ : 0 ≤ β) (_hββ' : β ≤ β')
+    (hcard : δ * (X.card : ℝ) ≤ (A₁.card : ℝ))
+    (habs : C * δ ^ (-β) ≤ ((A₁.image (· - x)).card : ℝ) ^ (β' - β)) :
+    ((∏ i, W.P.width i : ℕ) : ℝ) ≤
+      ((A₁.image (· - x)).card : ℝ) ^ β' := by
+  set X' := A₁.image (· - x) with hX'def
+  have hX'eq : X'.card = A₁.card := by
+    rw [hX'def]
+    exact Finset.card_image_of_injective _ sub_left_injective
+  have hXpos : (0 : ℝ) < (X.card : ℝ) := by
+    have h := W.two_le_card
+    exact_mod_cast lt_of_lt_of_le (by norm_num : (0 : ℕ) < 2) h
+  have hδX : (0 : ℝ) < δ * (X.card : ℝ) := mul_pos hδ hXpos
+  have hX'pos : (0 : ℝ) < (X'.card : ℝ) := by
+    rw [hX'eq]; linarith [hcard]
+  have hXle : (X.card : ℝ) ≤ δ⁻¹ * (X'.card : ℝ) := by
+    rw [hX'eq, inv_mul_eq_div, le_div_iff₀ hδ, mul_comm]
+    exact hcard
+  calc ((∏ i, W.P.width i : ℕ) : ℝ)
+      ≤ C * (BX.card : ℝ) := hcov
+    _ ≤ C * (X.card : ℝ) ^ β := mul_le_mul_of_nonneg_left hBX hC.le
+    _ ≤ C * (δ⁻¹ * (X'.card : ℝ)) ^ β :=
+        mul_le_mul_of_nonneg_left
+          (Real.rpow_le_rpow (Nat.cast_nonneg _) hXle hβ) hC.le
+    _ = C * δ ^ (-β) * (X'.card : ℝ) ^ β := by
+        have e1 : (δ⁻¹ * (X'.card : ℝ)) ^ β =
+            (δ⁻¹ : ℝ) ^ β * (X'.card : ℝ) ^ β :=
+          Real.mul_rpow (inv_nonneg.mpr hδ.le) (Nat.cast_nonneg _)
+        have e2 : (δ⁻¹ : ℝ) ^ β = δ ^ (-β) := by
+          rw [Real.inv_rpow hδ.le, ← Real.rpow_neg hδ.le]
+        rw [e1, e2]; ring
+    _ ≤ (X'.card : ℝ) ^ (β' - β) * (X'.card : ℝ) ^ β :=
+        mul_le_mul_of_nonneg_right habs
+          (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+    _ = (X'.card : ℝ) ^ β' := by
+        rw [← Real.rpow_add hX'pos, sub_add_cancel]
+
 /-- **Residual of `moved_set_is_lb`** — the `|B'| ≤ |X'|^{β'}` half of
 the `(d,β')`-set property of a move `X' = A₁ − x`, instantiated at the
 ambient interval box `B' = coeffBox P − x` (whose cardinality is
 `∏ᵢ wᵢ = |P|` exactly, `GAP.coeffBox_card` + `card_toFinset_of_proper`).
 
-Paper content: Lemma 8 applied to `X`'s `(n,β)`-box `B_X` gives
-`|P| ≪_d |B_X|` (the same `lem68_covolume` input), then
-`|P| ≲ |B_X| ≤ |X|^β ≲ δ^{−β}|X'|^β ≤ |X'|^{β'}` — the last step needs
-`β < β'` and `|X'|` large enough to absorb the `C·δ^{−β}` factor.
-*Faithfulness caveat*: `X`'s ambient `(n,β)`-box is the `(d,β')`-set
-invariant that `L10Stage` does not currently track (the crude
-`DerivedFrom.exists_interval_box` bound `2^{|A|} + |B_A|` is
-exponential), and `β'`, `δ` are free here, so this is honest only at the
-intended instantiation `β' = 3β`, `|X'|` large. -/
+*Status: NOT implied by the stated hypotheses.*  The paper's proof is the
+chain `|P| ≪_d |B_X| ≤ |X|^β ≤ δ^{−β}|X'|^β ≤ |X'|^{β'}`, whose three
+inputs are exactly the extra hypotheses of the proved companion
+`moved_set_card_of_covolume`:
+
+1. the ambient `(n,β)`-box `B_X` of `X` with `|B_X| ≤ |X|^β` — the
+   `(d,β')`-set invariant that `L10Stage` does not currently track (the
+   crude `DerivedFrom.exists_interval_box` bound `2^{|A|} + |B_A|` is
+   exponential, and `X` here is an arbitrary set with a witness, not
+   known to be an `(n,β)`-set — e.g. `X = {0,2,…,2^{m'}} ⊆ ℤ` admits the
+   canonical `d = 1` witness `P = [0,2^{m'})` with `∏wᵢ = 2^{m'}`
+   super-polynomial in `|X'| ≲ m`, so *some* box hypothesis is
+   indispensable);
+2. the covolume bound `∏ᵢ wᵢ ≤ C·|B_X|` — the same
+   `lem68_covolume`/discrete-John input as `lem68_move_bound`;
+3. the absorption `C·δ^{−β} ≤ |X'|^{β'−β}` — valid at the intended
+   instantiation `β' = 3β`, `|X'| ≥ δ·|A|^{1−ε/2}` large.
+
+The hypotheses added here (`SubSumDim X c' = d` — the bound is claimed
+only for the *canonical* witness; `0 < δ` — else `A₁ = ∅` falsifies;
+`0 < β'` — else `|X'|^{β'} ≤ 1` falsifies) record the minimal honest
+regime supplyable by the in-file callers; they do not close the gap. -/
 theorem moved_set_card_residual {n d : ℕ} {X : Finset (Fin n → ℤ)}
     {c' δ β' : ℝ} {A₁ : Finset (Fin d → ℤ)} {x : Fin d → ℤ}
-    (W : SubSumWitness X c' d) (_hA₁ : A₁ ⊆ W.imageAh)
+    (W : SubSumWitness X c' d) (_hd : SubSumDim X c' = d)
+    (_hδ : 0 < δ) (_hβ' : 0 < β') (_hA₁ : A₁ ⊆ W.imageAh)
     (_hx : x ∈ W.imageP)
     (_hcard : δ * (X.card : ℝ) ≤ (A₁.card : ℝ)) :
     ((∏ i, W.P.width i : ℕ) : ℝ) ≤
@@ -1016,7 +1098,8 @@ discrete-John/covolume input as `lem68_move_bound`; what remains is
 `moved_set_card_residual` (`∏ᵢ wᵢ = |P| ≤ |X'|^{β'}`). -/
 theorem moved_set_is_lb {n d : ℕ} {X : Finset (Fin n → ℤ)}
     {c' δ β' : ℝ} {A₁ : Finset (Fin d → ℤ)} {x : Fin d → ℤ}
-    (W : SubSumWitness X c' d) (hA₁ : A₁ ⊆ W.imageAh) (hx : x ∈ W.imageP)
+    (W : SubSumWitness X c' d) (hd : SubSumDim X c' = d)
+    (hδ : 0 < δ) (hβ' : 0 < β') (hA₁ : A₁ ⊆ W.imageAh) (hx : x ∈ W.imageP)
     (hcard : δ * (X.card : ℝ) ≤ (A₁.card : ℝ)) :
     ∃ B' : GAP.Box d, B'.IsInterval ∧ A₁.image (· - x) ⊆ B'.toFinset ∧
       (B'.card : ℝ) ≤ ((A₁.image (· - x)).card : ℝ) ^ β' := by
@@ -1025,7 +1108,7 @@ theorem moved_set_is_lb {n d : ℕ} {X : Finset (Fin n → ℤ)}
   · exact (Finset.image_subset_image hA₁).trans
       (W.imageAh_sub_subset_coeffBox_translate x)
   · rw [GAP.Box.card_translate, GAP.coeffBox_card]
-    exact_mod_cast moved_set_card_residual W hA₁ hx hcard
+    exact_mod_cast moved_set_card_residual W hd hδ hβ' hA₁ hx hcard
 
 /-- **Lemmas 6 + 8, initial-set form** — the `|P(A)|` bound at the start
 of the iteration, `|P₀| ≪ s(A)^{−max(0,d₀−ℓ)}·|B|` (Lemma 6 when
@@ -1033,12 +1116,13 @@ of the iteration, `|P₀| ≪ s(A)^{−max(0,d₀−ℓ)}·|B|` (Lemma 6 when
 input as `lem68_move_bound`. -/
 theorem lem68_initial_bound {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
     {c' sMin C₆₈ : ℝ}
+    (hC₆₈ : 1 ≤ C₆₈) (hsMin : 1 ≤ sMin)
     (hBint : B.IsInterval) (hsub : A ⊆ B.toFinset)
     (W : SubSumWitness A c' (SubSumDim A c')) :
     (W.P.toFinset.card : ℝ) ≤
       C₆₈ * sMin ^ (-(max 0 ((SubSumDim A c' : ℝ) - (ℓ : ℝ))))
         * (B.card : ℝ) :=
-  lem68_covolume hBint hsub W
+  lem68_covolume hC₆₈ hsMin hBint hsub W
 
 /-- **Per-dimension Cor-5 family**: apply `cfp_structure` (at `η = 1/2`)
 in every ambient dimension `d` and collect the constants into functions
@@ -1931,6 +2015,7 @@ theorem l10_descent {A : Finset (Fin ℓ → ℤ)} {δ ε γ : ℝ} {c' β' sMin
         ∃ d', Nonempty (SubSumWitness X c' d'))
     (hlb : ∀ ⦃n d : ℕ⦄ {X : Finset (Fin n → ℤ)} {A₁ : Finset (Fin d → ℤ)}
         {x : Fin d → ℤ} (W : SubSumWitness X c' d),
+        SubSumDim X c' = d →
         A₁ ⊆ W.imageAh → x ∈ W.imageP →
         δ * (X.card : ℝ) ≤ (A₁.card : ℝ) →
         ∃ B' : GAP.Box d, B'.IsInterval ∧ A₁.image (· - x) ⊆ B'.toFinset ∧
@@ -1984,7 +2069,7 @@ theorem l10_descent {A : Finset (Fin ℓ → ℤ)} {δ ε γ : ℝ} {c' β' sMin
   have hX'thr : δ * (A.card : ℝ) ^ (1 - ε / 2) ≤ (X'.card : ℝ) := by
     rw [hX'card]
     exact le_trans (mul_le_mul_of_nonneg_left s.size hδ.le) hA₁card
-  obtain ⟨B', hB'int, hX'sub, hB'card⟩ := hlb s.W hA₁ hx hA₁card
+  obtain ⟨B', hB'int, hX'sub, hB'card⟩ := hlb s.W rfl hA₁ hx hA₁card
   obtain ⟨d₂, hwit2⟩ := hwit' s.dim hB'int hX'sub hB'card hX'thr
   have hwitne : ∃ d', Nonempty (SubSumWitness X' c' d') := ⟨d₂, hwit2⟩
   obtain ⟨W', hW'b⟩ := hmove s.W rfl hA₁ hx hA₁card hwitne
@@ -2414,7 +2499,7 @@ theorem iterates_to_irreducible
     (hA1 : (1 : ℝ) ≤ (A.card : ℝ))
     (hC₆₈b : C₆₈ ≤ (A.card : ℝ))
     (hAvac : (1 : ℝ) < δ * (A.card : ℝ) ^ (1 - ε / 2))
-    (hC₆₈1 : C₆₈ ≤ 1)
+    (hC₆₈1 : C₆₈ ≤ 1) (hC₆₈ge : 1 ≤ C₆₈)
     (hsMinA : (A.card : ℝ) ^ (1 - ε) ≤ sMin)
     (hδA : (1 / δ) ^ (2 * K) ≤ (A.card : ℝ) ^ (1 - ε))
     (hLarg : K * Real.log (1 / δ) * (D : ℝ) ≤
@@ -2427,6 +2512,7 @@ theorem iterates_to_irreducible
         ∃ d', Nonempty (SubSumWitness X c' d'))
     (hlb : ∀ ⦃n d : ℕ⦄ {X : Finset (Fin n → ℤ)} {A₁ : Finset (Fin d → ℤ)}
         {x : Fin d → ℤ} (W : SubSumWitness X c' d),
+        SubSumDim X c' = d →
         A₁ ⊆ W.imageAh → x ∈ W.imageP →
         δ * (X.card : ℝ) ≤ (A₁.card : ℝ) →
         ∃ B' : GAP.Box d, B'.IsInterval ∧ A₁.image (· - x) ⊆ B'.toFinset ∧
@@ -2457,7 +2543,7 @@ theorem iterates_to_irreducible
     C₆₈ * sMin ^ (-(max 0 ((dinit : ℝ) - (ℓ : ℝ)))) * (B.card : ℝ)
     with hP0def
   have hinit : (W0.P.toFinset.card : ℝ) ≤ P0 := by
-    rw [hP0def]; exact lem68_initial_bound hBint hsub W0
+    rw [hP0def]; exact lem68_initial_bound hC₆₈ge hsMin.le hBint hsub W0
   have h1ε : (0 : ℝ) < 1 - ε := by linarith
   have hdinitD : dinit ≤ D :=
     le_trans hdinit (le_trans (Nat.le_add_right _ _) hGD)
@@ -2759,9 +2845,9 @@ theorem irreduciblization_faithful {β ε δ γ K : ℝ}
     zero_lt_one hsMin'
     (by simpa using hsMin') hβ' hℓD hGD
     hBint hNA hsub hBβ hA1 hA1 hAvac
-    (le_refl 1) (le_refl _) hδA hLarg
-    lem68_move_bound hwit0 hwit'
-      (by intro n d X A₁ x W hA₁ hx hcard
-          exact moved_set_is_lb W hA₁ hx hcard)
+    (le_refl 1) (le_refl (1 : ℝ)) (le_refl _) hδA hLarg
+    (lem68_move_bound (le_refl (1 : ℝ)) hsMin'.le) hwit0 hwit'
+      (by intro n d X A₁ x W hd hA₁ hx hcard
+          exact moved_set_is_lb W hd hδ hβ' hA₁ hx hcard)
 
 end Nonaveraging

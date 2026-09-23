@@ -3150,7 +3150,7 @@ theorem exists_mem_one_smul_notMem_two_smul {d : ℕ} {P : GAP ℓ d}
 
 end GAP
 
-/-- **Residual input — Lemma 14, absorption.**  For `|A|` large, a
+/-! **Residual input — Lemma 14, absorption.**  For `|A|` large, a
 lattice point `s ∈ ⟨Pᵢ⟩` coordinatewise bounded by `d·w` is absorbed by
 the width-scaled progression: `s + t ∈ kᵢPᵢ` for every `t ∈ (kᵢ/2)Pᵢ`,
 and the translated `kᵢPᵢ` lies in `Σ(A'ᵢ)` — where `kᵢPᵢ` is the

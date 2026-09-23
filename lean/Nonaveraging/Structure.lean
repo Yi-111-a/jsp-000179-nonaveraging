@@ -2210,15 +2210,19 @@ def SubSumCoveringSeed.toPackage {d : ℕ} [NeZero d] {c₁ c₂ : ℝ}
 `exists_lemma11_rank` and `exists_lemma14_covering` below, whose
 conclusions are exactly the unformalized mathematics of the paper's
 §3.3.  They are assembled from the four atomic residuals
-`exists_lemma11_rank` (minimal-dimension rank),
+`exists_sandwich_of_rank_deficient` (the sandwich produced by rank
+deficiency, discharging `exists_lemma11_rank` through
+`SubSumWitness.no_sandwich_of_minimal`),
 `exists_lemma13_14_data` (the Lemma-11 column bound `C` with its
 coordinate boxes, the largeness of the common zonotope point `Tz` at
 the covolume scale `bound(C)`, and the Lemma-14 fat-box covering at
 that same scale — the three must share one `C`, see its docstring),
 `exists_lemma14_lattice_core` (the `Āᵢ ⊆ Pᵢ` refinement for elements
-outside `Wᵢ.Ah`), and `exists_lemma14_absorption` (the
-`discrete_john_strong` sandwich), all sharing the hypothesis bundle
-`lemma33Hypotheses`.  Everything else is proved: the step bound
+outside `Wᵢ.Ah`), and `exists_lemma14_absorption_residual` (the
+`discrete_john_strong` sandwich absorption together with the `kᵢ ≥ 2`
+translate containment — the `kᵢ = 1` case of the latter is proved by
+`SubSumWitness.translate_widthScale_subset_of_k_eq_one`), all sharing
+the hypothesis bundle `lemma33Hypotheses`.  Everything else is proved: the step bound
 (`lemma11_step_bound`, via `step_abs_le_of_subset`), the `Wᵢ.Ah`-part
 of the lattice refinement (`SubSumWitness.Ah_mem_gapLattice`), the
 Lemma-13 rounding of `Tz` into `⟨P₁⟩ ∩ ⟨P₂⟩`
@@ -2708,30 +2712,52 @@ theorem exists_int_coord_bound {d : ℕ} (S : Finset (Fin d → ℤ)) :
   rw [← Int.natCast_natAbs]
   exact_mod_cast h3
 
-/-- **Residual input — Lemma 11 second half (rank).**  For `|A|` large,
-the steps of the minimal-dimension witnesses `Wᵢ.P` are `ℤ`-linearly
-independent.  In the paper this is the minimal-dimension argument: a
-rank-deficient `⟨Pᵢ⟩` would place `Pᵢ` in a lower-dimensional
-sublattice and (via the `Pᵢ ⊆ C·B` containment) compress it to a
-witness of dimension `< d`, contradicting `SubSumDim (Bᵢ ∓ a₀) c' = d`.
+/-- **Residual input — Lemma 11 second half (sandwich production).**
+Under the §3.3 hypothesis bundle, rank deficiency of `⟨Wᵢ.P⟩` —
+`Wᵢ.P.step` failing to be `ℤ`-linearly independent — produces a
+*compressing sandwich*: a proper GAP `Q` of dimension `r < d` with
+`Wᵢ.Ah ∪ {0} ⊆ Q.toFinset ⊆ Wᵢ.P.toFinset` pointwise.
 
-The algebraic half of that compression is proved:
-`SubSumWitness.compress_of_subgap` builds a lower-dimensional
-`SubSumWitness` from a *sandwich* GAP `Q` (proper, `r < d`, with
-`Wᵢ.Ah ∪ {0} ⊆ Q ⊆ Wᵢ.P` pointwise), and
-`SubSumWitness.no_sandwich_of_minimal` shows such a `Q` cannot exist at
-`SubSumDim = d`.  The genuine missing input is thus exactly: rank
-deficiency of `⟨Pᵢ⟩` (which confines `Pᵢ` to a lower-dimensional lattice
-coset) produces such a sandwich — the paper supplies it through the
-`Pᵢ ⊆` translate-of-`C·B` containment, which is not among the
-hypotheses here (no bound on `Pᵢ` at all is assumed).  (Per the caveat
-at `SubSumWitness.two_le_width`, minimality alone does not imply step
-independence in this formalization, so this remains an input.)
+This is the precise geometric content the paper obtains from the
+`Pᵢ ⊆` translate-of-`C·B` containment of Lemma 11's second half: rank
+deficiency confines `Pᵢ` to a coset of a lower-rank sublattice of
+`ℤ^d`, and the box containment is what lets a lower-dimensional
+progression covering `Âᵢ ∪ {0}` be chosen *inside* `Pᵢ`.  The
+`lemma33Hypotheses` bundle supplies no bound on `Pᵢ` at all, so this
+remains an input; combined with the proved `SubSumWitness.compress_of_subgap`
+and `SubSumWitness.no_sandwich_of_minimal` it discharges
+`exists_lemma11_rank` below. -/
+theorem exists_sandwich_of_rank_deficient {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      (¬ LinearIndependent ℤ W₁.P.step →
+        ∃ (r : ℕ) (Q : GAP d r), r < d ∧ Q.Proper ∧
+          (W₁.Ah ∪ {0}) ⊆ Q.toFinset ∧ Q.toFinset ⊆ W₁.P.toFinset) ∧
+      (¬ LinearIndependent ℤ W₂.P.step →
+        ∃ (r : ℕ) (Q : GAP d r), r < d ∧ Q.Proper ∧
+          (W₂.Ah ∪ {0}) ⊆ Q.toFinset ∧ Q.toFinset ⊆ W₂.P.toFinset) :=
+  sorry
 
-Note also the strength of the quantification: the conclusion is claimed
-for *every* `c'`-witness `Wᵢ` of `Bᵢ ∓ a₀`, whereas the paper applies
-the minimal-dimension argument to the canonical witness
-`Pᵢ = P(Bᵢ ∓ a₀)` returned by Lemma 11's first half. -/
+/-- **Lemma 11 second half (rank), proved modulo the residual
+`exists_sandwich_of_rank_deficient`.**  For `|A|` large, the steps of
+the minimal-dimension witnesses `Wᵢ.P` are `ℤ`-linearly independent.
+This is the paper's minimal-dimension argument: a rank-deficient
+`⟨Pᵢ⟩` produces (via the residual's sandwich `Q`, supplied in the paper
+by the `Pᵢ ⊆` translate-of-`C·B` containment) a witness of dimension
+`< d` through `SubSumWitness.compress_of_subgap`, contradicting
+`SubSumDim (Bᵢ ∓ a₀) c' = d` via
+`SubSumWitness.no_sandwich_of_minimal`.
+
+Note the strength of the quantification: the conclusion is claimed for
+*every* `c'`-witness `Wᵢ` of `Bᵢ ∓ a₀`, whereas the paper applies the
+minimal-dimension argument to the canonical witness `Pᵢ = P(Bᵢ ∓ a₀)`
+returned by Lemma 11's first half. -/
 theorem exists_lemma11_rank {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
@@ -2741,8 +2767,22 @@ theorem exists_lemma11_rank {ℓ : ℕ} {c c' δ γ C' : ℝ} :
         (Tz : Fin d → ℝ),
       lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
         N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
-      LinearIndependent ℤ W₁.P.step ∧ LinearIndependent ℤ W₂.P.step :=
-  sorry
+      LinearIndependent ℤ W₁.P.step ∧ LinearIndependent ℤ W₂.P.step := by
+  classical
+  obtain ⟨N₀, hN₀⟩ := exists_sandwich_of_rank_deficient (ℓ := ℓ)
+    (c := c) (c' := c') (δ := δ) (γ := γ) (C' := C')
+  refine ⟨N₀, ?_⟩
+  intro A d _ W a₀ B₁ B₂ W₁ W₂ Tz h
+  obtain ⟨hs₁, hs₂⟩ := hN₀ A d W a₀ B₁ B₂ W₁ W₂ Tz h
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hdim₁,
+    hdim₂, _, _, _, _⟩ := h
+  refine ⟨?_, ?_⟩
+  · by_contra hdep
+    obtain ⟨r, Q, hr, hQ, hAh, hfit⟩ := hs₁ hdep
+    exact W₁.no_sandwich_of_minimal hdim₁ ⟨r, Q, hr, hQ, hAh, hfit⟩
+  · by_contra hdep
+    obtain ⟨r, Q, hr, hQ, hAh, hfit⟩ := hs₂ hdep
+    exact W₂.no_sandwich_of_minimal hdim₂ ⟨r, Q, hr, hQ, hAh, hfit⟩
 
 /-- **Residual input — Lemmas 13 + 14 (largeness and fat-box covering
 at a shared scale).**  For `|A|` large there is a *single* column bound
@@ -3144,7 +3184,74 @@ Two bookkeeping conventions:
   for the canonical witness, whose `kᵢ` is `1` and whose `Pᵢ` is
   already the widened progression — while for `kᵢ ≥ 2` it is a genuine
   extra input, `kᵢ • Pᵢ` and `Pᵢ.widthScale kᵢ` being incomparable in
-  general. -/
+  general.  Accordingly the `kᵢ = 1` case of the containment is proved
+  (`SubSumWitness.translate_widthScale_subset_of_k_eq_one`) and only
+  `kᵢ ≥ 2` remains in the residual `exists_lemma14_absorption_residual`. -/
+namespace SubSumWitness
+
+/-- The `k = 1` case of the Lemma-14 translate containment is already in
+`SubSumWitness.htranslate`: `P.widthScale 1 = P = 1 • P`. -/
+theorem translate_widthScale_subset_of_k_eq_one {d : ℕ} {c : ℝ}
+    {X : Finset (Fin ℓ → ℤ)} (W : SubSumWitness X c d)
+    (hk : W.k = 1) :
+    ((W.P.widthScale W.k).translate W.t).toFinset ⊆
+      GAP.subsetSumsL W.A' := by
+  have h := W.htranslate
+  rw [hk] at h ⊢
+  rw [GAP.nsmul_eq_zsmul, Nat.cast_one, GAP.one_smul'] at h
+  rwa [GAP.widthScale_one]
+
+end SubSumWitness
+
+/-- **Residual input — Lemma 14, absorption (all `kᵢ`) and the `kᵢ ≥ 2`
+translate containment.**  For `|A|` large,
+
+* (absorption) a lattice point `s ∈ ⟨Pᵢ⟩` coordinatewise bounded by
+  `d·w` is absorbed by the width-scaled progression:
+  `s + t ∈ kᵢPᵢ = Wᵢ.P.widthScale Wᵢ.k` for every
+  `t ∈ insert 0 (Wᵢ.P.widthScale (Wᵢ.k/2)).toFinset` — the paper's
+  `r + (cs/2)P ⊆ csP` of eq. (15).  Its content is a step-basis
+  coefficient representation `s = Σ cⱼ·stepⱼ` with
+  `0 ≤ cⱼ + nⱼ < kᵢ·wⱼ` for `t = eval(n)`, supplied by the
+  `discrete_john_strong` sandwich on `⟨Pᵢ⟩` together with the
+  coefficient bound on the Lemma-13 rounding error; and
+* (translate containment, `kᵢ ≥ 2`) `(Wᵢ.P.widthScale Wᵢ.k).translate Wᵢ.t
+  ⊆ Σ(A'ᵢ)` — the paper's `qᵢ + csᵢPᵢ ⊆ Σ(A'ᵢ)`.  For `kᵢ ≥ 2` the
+  width-scaled `Pᵢ.widthScale kᵢ` and the pointwise dilate `kᵢ • Pᵢ`
+  stored in `SubSumWitness.htranslate` are incomparable, so this is a
+  genuine extra input; the `kᵢ = 1` case is proved (it coincides with
+  `htranslate`, see
+  `SubSumWitness.translate_widthScale_subset_of_k_eq_one`). -/
+theorem exists_lemma14_absorption_residual {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      (∀ s : Fin d → ℤ, s ∈ gapLattice W₁.P →
+        (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
+        ∀ t ∈ insert (0 : Fin d → ℤ)
+            (W₁.P.widthScale (W₁.k / 2)).toFinset,
+          s + t ∈ (W₁.P.widthScale W₁.k).toFinset) ∧
+      (2 ≤ W₁.k → ((W₁.P.widthScale W₁.k).translate W₁.t).toFinset ⊆
+        GAP.subsetSumsL W₁.A') ∧
+      (∀ s : Fin d → ℤ, s ∈ gapLattice W₂.P →
+        (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
+        ∀ t ∈ insert (0 : Fin d → ℤ)
+            (W₂.P.widthScale (W₂.k / 2)).toFinset,
+          s + t ∈ (W₂.P.widthScale W₂.k).toFinset) ∧
+      (2 ≤ W₂.k → ((W₂.P.widthScale W₂.k).translate W₂.t).toFinset ⊆
+        GAP.subsetSumsL W₂.A') :=
+  sorry
+
+/-- **Lemma 14, absorption — proved modulo the residual
+`exists_lemma14_absorption_residual`.**  The absorption conjunct is the
+residual verbatim; the translate containment is discharged at `kᵢ = 1`
+by `SubSumWitness.translate_widthScale_subset_of_k_eq_one` and deferred
+to the residual at `kᵢ ≥ 2`. -/
 theorem exists_lemma14_absorption {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
@@ -3167,8 +3274,22 @@ theorem exists_lemma14_absorption {ℓ : ℕ} {c c' δ γ C' : ℝ} :
             (W₂.P.widthScale (W₂.k / 2)).toFinset,
           s + t ∈ (W₂.P.widthScale W₂.k).toFinset) ∧
         ((W₂.P.widthScale W₂.k).translate W₂.t).toFinset ⊆
-          GAP.subsetSumsL W₂.A') :=
-  sorry
+          GAP.subsetSumsL W₂.A') := by
+  classical
+  obtain ⟨N₀, hN₀⟩ := exists_lemma14_absorption_residual (ℓ := ℓ)
+    (c := c) (c' := c') (δ := δ) (γ := γ) (C' := C')
+  refine ⟨N₀, ?_⟩
+  intro A d _ W a₀ B₁ B₂ W₁ W₂ Tz h
+  obtain ⟨ha₁, hb₁, ha₂, hb₂⟩ := hN₀ A d W a₀ B₁ B₂ W₁ W₂ Tz h
+  refine ⟨⟨ha₁, ?_⟩, ⟨ha₂, ?_⟩⟩
+  · rcases Nat.lt_or_ge W₁.k 2 with hk | hk
+    · exact W₁.translate_widthScale_subset_of_k_eq_one
+        (by have := W₁.kpos; omega)
+    · exact hb₁ hk
+  · rcases Nat.lt_or_ge W₂.k 2 with hk | hk
+    · exact W₂.translate_widthScale_subset_of_k_eq_one
+        (by have := W₂.kpos; omega)
+    · exact hb₂ hk
 
 /-- **Lemma 14 (eq. (15) covering)** — assembled from the residual
 inputs above:

@@ -1667,12 +1667,21 @@ adapted basis satisfies `|coord| · λᵢ ≤ C`, where `λᵢ` is the `i`-th
 successive minimum `gauge B (uᵢ)` and `C` depends only on the ambient
 dimension `d`.
 
-Classically this is the unique step of Mahler's lemma that uses
-Minkowski's second theorem `λ₁ ⋯ λ_d · vol(B ∩ V_d) ≤ 2^d` (applied to
-the intersection `B ∩ Vᵢ` and the lattice `Lᵢ = Vᵢ ∩ ℤ^d`), together
-with the determinant bounds from `adaptedToFlag`.  Mathlib currently
-provides only Minkowski's *first* theorem, so this remains the single
-intentional `sorry` of the formalization. -/
+**Why this is the deep step.**  Since `v` is a `ℤ`-basis with
+`det V = ±1` (`intMat_isUnit_det`), Cramer's rule gives the coordinate
+`mᵢ = ⟨z, dualVec v i⟩` as the `r`-dimensional determinant
+`det(v₀,…,v_{i-1}, z, v_{i+1},…,v_{r-1})` normalized by
+`covol(Lᵣ)` inside `Vᵣ = intSpan B`, where `Lᵣ = Vᵣ ∩ ℤ^d`.  The
+parallelepiped spanned by `r` vectors of gauge `≤ gⱼ` is contained in
+`(∑ gⱼ) • (B ∩ Vᵣ)`, so `|mᵢ|·λᵢ ≤ C_d · (∏ⱼ λⱼ) · vol(B ∩ Vᵣ) /
+covol(Lᵣ)` — bounded by `2^r` times a dimension constant precisely by
+the *upper-bound half* of Minkowski's second theorem applied to the
+slice `B ∩ Vᵣ` and the lattice `Lᵣ`.
+
+Mathlib currently provides only Minkowski's *first* theorem
+(`MeasureTheory.exists_ne_zero_mem_lattice_of_measure_mul_two_pow_lt_measure`),
+so this remains the single remaining proof obligation of the
+formalization; every other step of Mahler's lemma is fully formalized. -/
 theorem mahler_coord_bound (d : ℕ) :
     ∃ C : ℝ, 0 < C ∧ ∀ (B : Set (Fin d → ℝ)), Convex ℝ B →
       (0 : Fin d → ℝ) ∈ B → (∀ x ∈ B, -x ∈ B) → Bornology.IsBounded B →
@@ -1702,7 +1711,7 @@ minimum) with `|⟨z, w i⟩| · r ≤ C` for every integer point `z ∈ B` and
 `v i ∈ t • B` for all `t > r`.
 
 **Proof structure.**  Three parts; the first two are now fully formalized
-and the third is isolated as the single remaining `sorry`
+and the third is isolated as the remaining proof obligation
 (`mahler_coord_bound` above):
 
 1. **Successive minima for a bounded (not necessarily open) `B`** —

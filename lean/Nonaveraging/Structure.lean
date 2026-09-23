@@ -3203,25 +3203,92 @@ theorem translate_widthScale_subset_of_k_eq_one {d : ℕ} {c : ℝ}
 
 end SubSumWitness
 
-/-- **Residual input — Lemma 14, absorption (all `kᵢ`) and the `kᵢ ≥ 2`
-translate containment.**  For `|A|` large,
+/-- **Residual input — Lemma 14, absorption of a bounded lattice
+point (all `kᵢ`).**  For `|A|` large, a lattice point `s ∈ ⟨Pᵢ⟩`
+coordinatewise bounded by `d·w` is absorbed by the width-scaled
+progression: `s + t ∈ kᵢPᵢ = Wᵢ.P.widthScale Wᵢ.k` for every
+`t ∈ insert 0 (Wᵢ.P.widthScale (Wᵢ.k/2)).toFinset` — the paper's
+`r + (cs/2)P ⊆ csP` of eq. (15).
 
-* (absorption) a lattice point `s ∈ ⟨Pᵢ⟩` coordinatewise bounded by
-  `d·w` is absorbed by the width-scaled progression:
-  `s + t ∈ kᵢPᵢ = Wᵢ.P.widthScale Wᵢ.k` for every
-  `t ∈ insert 0 (Wᵢ.P.widthScale (Wᵢ.k/2)).toFinset` — the paper's
-  `r + (cs/2)P ⊆ csP` of eq. (15).  Its content is a step-basis
-  coefficient representation `s = Σ cⱼ·stepⱼ` with
-  `0 ≤ cⱼ + nⱼ < kᵢ·wⱼ` for `t = eval(n)`, supplied by the
-  `discrete_john_strong` sandwich on `⟨Pᵢ⟩` together with the
-  coefficient bound on the Lemma-13 rounding error; and
-* (translate containment, `kᵢ ≥ 2`) `(Wᵢ.P.widthScale Wᵢ.k).translate Wᵢ.t
-  ⊆ Σ(A'ᵢ)` — the paper's `qᵢ + csᵢPᵢ ⊆ Σ(A'ᵢ)`.  For `kᵢ ≥ 2` the
-  width-scaled `Pᵢ.widthScale kᵢ` and the pointwise dilate `kᵢ • Pᵢ`
-  stored in `SubSumWitness.htranslate` are incomparable, so this is a
-  genuine extra input; the `kᵢ = 1` case is proved (it coincides with
-  `htranslate`, see
-  `SubSumWitness.translate_widthScale_subset_of_k_eq_one`). -/
+The content is a step-basis coefficient representation
+`s = Σ cⱼ • stepⱼ` with `0 ≤ cⱼ + nⱼ < kᵢ·wⱼ` for every coefficient
+tuple `n` of the half progression `widthScale (kᵢ/2)` (evaluating at
+`mⱼ = cⱼ + nⱼ`, since `(widthScale k).eval = P.eval` and the scaled
+progressions share `base` and `step`); the adjoined `t = 0` case asks
+`s ∈ kᵢPᵢ` itself, i.e. a representation of `s` relative to the
+homogeneous base (`Wᵢ.homogeneous`), which at `kᵢ = 1` — where the
+half progression is empty and `H = {0}` — reduces to
+`s ∈ Pᵢ.toFinset`.  In the paper the required coefficient bound is
+supplied by the `discrete_john_strong` sandwich on `⟨Pᵢ⟩` applied to
+the box `Pᵢ ⊆` translate-of-`C·B` (the residual
+`exists_lemma13_14_data`), together with the `sᵢ ≫ √(d|Aᵢ|)` largeness
+that lets the Lemma-13 rounding error `r` land inside the `(kᵢ/2)Pᵢ`
+coefficient range.  The `lemma33Hypotheses` bundle supplies no bound
+on `Wᵢ.P.step` at all, so this remains an input; it is isolated here
+so that it can be discharged independently of the translate
+containment (`exists_lemma14_translate_widthScale_residual`). -/
+theorem exists_lemma14_absorption_core {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      (∀ s : Fin d → ℤ, s ∈ gapLattice W₁.P →
+        (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
+        ∀ t ∈ insert (0 : Fin d → ℤ)
+            (W₁.P.widthScale (W₁.k / 2)).toFinset,
+          s + t ∈ (W₁.P.widthScale W₁.k).toFinset) ∧
+      (∀ s : Fin d → ℤ, s ∈ gapLattice W₂.P →
+        (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
+        ∀ t ∈ insert (0 : Fin d → ℤ)
+            (W₂.P.widthScale (W₂.k / 2)).toFinset,
+          s + t ∈ (W₂.P.widthScale W₂.k).toFinset) :=
+  sorry
+
+/-- **Residual input — Lemma 14, the `kᵢ ≥ 2` width-scaled translate
+containment.**  For `|A|` large,
+`tᵢ + kᵢPᵢ = (Wᵢ.P.widthScale Wᵢ.k).translate Wᵢ.t ⊆ Σ(A'ᵢ)` — the
+paper's `qᵢ + csᵢPᵢ ⊆ Σ(A'ᵢ)` of eq. (15), the faithful form of the
+witness axiom `SubSumWitness.htranslate` (which stores the pointwise
+dilate `kᵢ • Pᵢ`).
+
+For `kᵢ ≥ 2` the two progressions are *incomparable* as sets — the
+points of `kᵢ • Pᵢ` have `kᵢ`-divisible step coefficients and scaled
+base `kᵢ·base`, while `Pᵢ.widthScale kᵢ` keeps `base` and allows every
+coefficient `< kᵢ·wⱼ` — so `htranslate` supplies neither inclusion
+direction (e.g. with `base = −step₁`, `w₁ = 2`, `k = 2` the point
+`−2·step₁` lies in `2 • P` but not in `widthScale 2`; with `base = 0`
+the point `step₁` lies in `widthScale 2` but not in `2 • P`, its
+coefficient `1` not being `2`-divisible).  At `kᵢ = 1` they coincide
+(`1 • Q = Q = Q.widthScale 1`) and the containment is proved
+(`SubSumWitness.translate_widthScale_subset_of_k_eq_one`); only
+`kᵢ ≥ 2` remains here. -/
+theorem exists_lemma14_translate_widthScale_residual {ℓ : ℕ}
+    {c c' δ γ C' : ℝ} :
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      (2 ≤ W₁.k → ((W₁.P.widthScale W₁.k).translate W₁.t).toFinset ⊆
+        GAP.subsetSumsL W₁.A') ∧
+      (2 ≤ W₂.k → ((W₂.P.widthScale W₂.k).translate W₂.t).toFinset ⊆
+        GAP.subsetSumsL W₂.A') :=
+  sorry
+
+/-- **Residual input — Lemma 14, absorption (all `kᵢ`) and the `kᵢ ≥ 2`
+translate containment** — the conjunction of the two isolable inputs
+`exists_lemma14_absorption_core` (absorption of a bounded `⟨Pᵢ⟩`-point
+into `kᵢPᵢ`, the paper's `r + (cs/2)P ⊆ csP`) and
+`exists_lemma14_translate_widthScale_residual` (the `kᵢ ≥ 2`
+containment `tᵢ + kᵢPᵢ ⊆ Σ(A'ᵢ)`, the paper's `qᵢ + csᵢPᵢ ⊆ Σ(A'ᵢ)`),
+combined at the shared threshold `max N₁ N₂`. -/
 theorem exists_lemma14_absorption_residual {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
@@ -3244,8 +3311,26 @@ theorem exists_lemma14_absorption_residual {ℓ : ℕ} {c c' δ γ C' : ℝ} :
             (W₂.P.widthScale (W₂.k / 2)).toFinset,
           s + t ∈ (W₂.P.widthScale W₂.k).toFinset) ∧
       (2 ≤ W₂.k → ((W₂.P.widthScale W₂.k).translate W₂.t).toFinset ⊆
-        GAP.subsetSumsL W₂.A') :=
-  sorry
+        GAP.subsetSumsL W₂.A') := by
+  classical
+  obtain ⟨N₁, hN₁⟩ := exists_lemma14_absorption_core (ℓ := ℓ) (c := c)
+    (c' := c') (δ := δ) (γ := γ) (C' := C')
+  obtain ⟨N₂, hN₂⟩ := exists_lemma14_translate_widthScale_residual
+    (ℓ := ℓ) (c := c) (c' := c') (δ := δ) (γ := γ) (C' := C')
+  refine ⟨max N₁ N₂, ?_⟩
+  intro A d _ W a₀ B₁ B₂ W₁ W₂ Tz h
+  obtain ⟨hNA, hIrred, hγlog, hδ, hδ1, hγ, hγ1, hδ4, hN, ha₀, hB₁e,
+    hB₂e, hdisj, hcover, hδB₁, hδB₂, hb₁, hb₂, hdim₁, hdim₂, hP₁, hP₂,
+    hTz₁, hTz₂⟩ := h
+  obtain ⟨ha₁, ha₂⟩ := hN₁ A d W a₀ B₁ B₂ W₁ W₂ Tz
+    ⟨hNA, hIrred, hγlog, hδ, hδ1, hγ, hγ1, hδ4,
+      (le_max_left N₁ N₂).trans hN, ha₀, hB₁e, hB₂e, hdisj, hcover,
+      hδB₁, hδB₂, hb₁, hb₂, hdim₁, hdim₂, hP₁, hP₂, hTz₁, hTz₂⟩
+  obtain ⟨hb₁, hb₂⟩ := hN₂ A d W a₀ B₁ B₂ W₁ W₂ Tz
+    ⟨hNA, hIrred, hγlog, hδ, hδ1, hγ, hγ1, hδ4,
+      (le_max_right N₁ N₂).trans hN, ha₀, hB₁e, hB₂e, hdisj, hcover,
+      hδB₁, hδB₂, hb₁, hb₂, hdim₁, hdim₂, hP₁, hP₂, hTz₁, hTz₂⟩
+  exact ⟨ha₁, hb₁, ha₂, hb₂⟩
 
 /-- **Lemma 14, absorption — proved modulo the residual
 `exists_lemma14_absorption_residual`.**  The absorption conjunct is the

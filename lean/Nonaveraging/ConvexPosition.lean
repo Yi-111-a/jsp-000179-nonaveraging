@@ -2952,6 +2952,165 @@ theorem InDeltaConvexPosition.image_linear_add {A : Finset (Fin d → ℝ)}
     rw [hcardeq, Finset.card_image_of_injective _ hinj]
     exact hcap
 
+/-- The matrix whose `j`-th column is the edge vector `w j.succ - w 0`
+of the simplex spanned by the vertices `w : Fin (d+1) → Fin d → ℝ`. -/
+private def edgeMat {d : ℕ} (w : Fin (d + 1) → Fin d → ℝ) :
+    Matrix (Fin d) (Fin d) ℝ :=
+  fun i j ↦ (w j.succ - w 0) i
+
+private lemma edgeMat_apply {d : ℕ} (w : Fin (d + 1) → Fin d → ℝ)
+    (i j : Fin d) : edgeMat w i j = (w j.succ - w 0) i := rfl
+
+/-- Crude entrywise bound on the determinant: if `|A i j| ≤ B` for all `i j`,
+then `|det A| ≤ d! · B^d` (Leibniz expansion into `d!` signed products). -/
+private lemma abs_det_le_factorial {d : ℕ} (A : Matrix (Fin d) (Fin d) ℝ) {B : ℝ}
+    (hA : ∀ i j, |A i j| ≤ B) :
+    |A.det| ≤ (Nat.factorial d : ℝ) * B ^ d := by
+  classical
+  rw [Matrix.det_apply']
+  calc |∑ σ : Equiv.Perm (Fin d), ((σ.sign : ℤ) : ℝ) * ∏ i, A (σ i) i|
+      ≤ ∑ σ : Equiv.Perm (Fin d),
+          |((σ.sign : ℤ) : ℝ) * ∏ i, A (σ i) i| :=
+        Finset.abs_sum_le_sum_abs _ Finset.univ
+    _ ≤ ∑ _σ : Equiv.Perm (Fin d), B ^ d := by
+        refine Finset.sum_le_sum fun σ _ ↦ ?_
+        have hsign : |((σ.sign : ℤ) : ℝ)| = 1 := by
+          rcases Int.units_eq_one_or σ.sign with h | h <;> simp [h]
+        rw [abs_mul, hsign, one_mul, Finset.abs_prod]
+        calc ∏ i, |A (σ i) i| ≤ ∏ _i : Fin d, B :=
+              Finset.prod_le_prod₀ (fun i _ ↦ abs_nonneg _) fun i _ ↦ hA _ _
+          _ = B ^ d := by
+              rw [Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+    _ = (Nat.factorial d : ℝ) * B ^ d := by
+        rw [Finset.sum_const, Finset.card_univ, Fintype.card_perm,
+          Fintype.card_fin, nsmul_eq_mul]
+
+/-- **Near-maximal inscribed simplex.**  If `K ⊆ [-1,1]^d` is convex of
+positive volume, there is a `(d+1)`-tuple `w` of points of `K` whose edge
+determinant is nonzero and nearly maximal: replacing any non-base vertex
+`w i.succ` by an arbitrary `x ∈ K` at most doubles the determinant.
+
+This is the only point where near-maximality is used: writing
+`x - w 0 = ∑ i, μ i • (w i.succ - w 0)`, Cramer's rule gives
+`|μ i| = |det (edgeMat w with column i ↦ x - w 0)| / |det (edgeMat w)| ≤ 2`. -/
+private lemma exists_nearmax_simplex {d : ℕ} {K : Set (Fin d → ℝ)}
+    (hKconv : Convex ℝ K)
+    (hKcube : K ⊆ Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1) 1)
+    (hKpos : (0 : ENNReal) < volume K) :
+    ∃ w : Fin (d + 1) → Fin d → ℝ, (∀ i, w i ∈ K) ∧
+      (0:ℝ) < |(edgeMat w).det| ∧
+      ∀ x ∈ K, ∀ i : Fin d,
+        |((edgeMat w).updateCol i (x - w 0)).det| ≤ 2 * |(edgeMat w).det| := by
+  classical
+  -- A convex set of positive volume has nonempty interior, since its frontier
+  -- is null.
+  obtain ⟨p, hp⟩ : (interior K).Nonempty := by
+    by_contra hne
+    rw [Set.not_nonempty_iff_eq_empty] at hne
+    have hsub : K ⊆ frontier K := by
+      intro x hx
+      show x ∈ closure K \ interior K
+      exact ⟨subset_closure hx, by rw [hne]; exact Set.notMem_empty x⟩
+    have h0 : volume K ≤ volume (frontier K) := measure_mono hsub
+    rw [hKconv.addHaar_frontier volume] at h0
+    exact absurd h0 (not_le_of_gt hKpos)
+  obtain ⟨r, hr, hball⟩ := Metric.mem_nhds_iff.mp (isOpen_interior.mem_nhds hp)
+  have hballK : Metric.ball p r ⊆ K := hball.trans interior_subset
+  set t : ℝ := r / 2 with htdef
+  have ht0 : 0 < t := half_pos hr
+  -- the vertices of a small inscribed simplex inside `ball p r ⊆ K`
+  set w₀ : Fin (d + 1) → Fin d → ℝ :=
+    Fin.cons p fun i : Fin d ↦ p + t • (Pi.single i (1 : ℝ) : Fin d → ℝ) with hw₀
+  have hw₀mem : ∀ i, w₀ i ∈ K := by
+    intro i
+    refine hballK ?_
+    rcases eq_or_ne i 0 with rfl | h0
+    · rw [hw₀, Fin.cons_zero]
+      exact Metric.mem_ball_self hr
+    · obtain ⟨j, rfl⟩ := Fin.exists_succ_eq_of_ne_zero h0
+      rw [hw₀, Fin.cons_succ, Metric.mem_ball, dist_eq_norm]
+      have hsub : p + t • Pi.single j (1 : ℝ) - p = t • Pi.single j (1 : ℝ) := by
+        abel
+      rw [hsub, norm_smul, Real.norm_of_nonneg ht0.le]
+      have hnorm' : ‖(Pi.single j (1 : ℝ) : Fin d → ℝ)‖ = ‖(1 : ℝ)‖ :=
+        Pi.norm_single _
+      have hnorm : ‖(Pi.single j (1 : ℝ) : Fin d → ℝ)‖ ≤ 1 := by
+        rw [hnorm']; norm_num
+      calc t * ‖(Pi.single j (1 : ℝ) : Fin d → ℝ)‖ ≤ t * 1 :=
+            mul_le_mul_of_nonneg_left hnorm ht0.le
+        _ = t := mul_one t
+        _ < r := half_lt_self hr
+  -- `edgeMat w₀` is the diagonal matrix `t·I`
+  have hMw₀ : edgeMat w₀ = Matrix.diagonal fun _ : Fin d ↦ t := by
+    have hsucc : ∀ j : Fin d,
+        w₀ j.succ - w₀ 0 = t • (Pi.single j (1 : ℝ) : Fin d → ℝ) := by
+      intro j
+      rw [hw₀, Fin.cons_succ, Fin.cons_zero]
+      abel
+    ext i j
+    rw [edgeMat_apply, hsucc, Pi.smul_apply, Pi.single_apply, smul_eq_mul,
+      Matrix.diagonal_apply]
+    split_ifs with h <;> simp [h]
+  have hgw₀ : |(edgeMat w₀).det| = t ^ d := by
+    rw [hMw₀, Matrix.det_diagonal, Finset.prod_const, Finset.card_univ,
+      Fintype.card_fin, abs_of_nonneg (pow_nonneg ht0.le _)]
+  -- determinants of edge matrices of tuples from `K` form a bounded set
+  set S : Set ℝ :=
+    (fun w ↦ |(edgeMat w).det|) '' {w | ∀ i, w i ∈ K} with hS
+  have hSne : S.Nonempty := ⟨_, by rw [hS]; exact ⟨w₀, hw₀mem, rfl⟩⟩
+  have hSbdd : BddAbove S := by
+    refine ⟨(Nat.factorial d : ℝ) * 2 ^ d, fun y hy ↦ ?_⟩
+    rw [hS] at hy
+    obtain ⟨w, hwK, rfl⟩ := hy
+    refine abs_det_le_factorial _ fun i j ↦ ?_
+    rw [edgeMat_apply, Pi.sub_apply]
+    have h1 : |w j.succ i| ≤ 1 :=
+      abs_le.mpr (Set.mem_Icc.mp (Set.mem_univ_pi.mp (hKcube (hwK _)) i))
+    have h2 : |w 0 i| ≤ 1 :=
+      abs_le.mpr (Set.mem_Icc.mp (Set.mem_univ_pi.mp (hKcube (hwK _)) i))
+    calc |w j.succ i - w 0 i| ≤ |w j.succ i| + |w 0 i| := abs_sub _ _
+      _ ≤ 1 + 1 := add_le_add h1 h2
+      _ = 2 := one_add_one_eq_two
+  set s : ℝ := sSup S with hsdef
+  have hmem₀ : |(edgeMat w₀).det| ∈ S := by rw [hS]; exact ⟨w₀, hw₀mem, rfl⟩
+  have hs : 0 < s :=
+    lt_of_lt_of_le (pow_pos ht0 d) (hgw₀ ▸ le_csSup hSbdd hmem₀)
+  -- a near-maximiser
+  obtain ⟨b, hbS, hb⟩ := exists_lt_of_lt_csSup hSne (half_lt_self hs)
+  rw [hS] at hbS
+  obtain ⟨w, hwK, rfl⟩ := hbS
+  refine ⟨w, hwK, by linarith, ?_⟩
+  have hdetw : (edgeMat w).det ≠ 0 :=
+    abs_pos.mp (by linarith : (0:ℝ) < |(edgeMat w).det|)
+  intro x hx i
+  set w' : Fin (d + 1) → Fin d → ℝ := Function.update w i.succ x with hw'
+  have hw'K : ∀ j, w' j ∈ K := by
+    intro j
+    rcases eq_or_ne j i.succ with rfl | h
+    · rw [hw', Function.update_self]; exact hx
+    · rw [hw', Function.update_of_ne h]; exact hwK j
+  have hMw' : edgeMat w' = (edgeMat w).updateCol i (x - w 0) := by
+    ext a b
+    rw [Matrix.updateCol_apply]
+    show (w' b.succ - w' 0) a =
+      if b = i then (x - w 0) a else (w b.succ - w 0) a
+    by_cases h : b = i
+    · subst h
+      rw [if_pos rfl]
+      show (w' b.succ - w' 0) a = (x - w 0) a
+      rw [hw', Function.update_self,
+        Function.update_of_ne (Ne.symm (Fin.succ_ne_zero b))]
+    · rw [if_neg h]
+      show (w' b.succ - w' 0) a = (w b.succ - w 0) a
+      rw [hw', Function.update_of_ne (fun h' ↦ h (Fin.succ_injective _ h')),
+        Function.update_of_ne (Ne.symm (Fin.succ_ne_zero i))]
+  have hle : |(edgeMat w').det| ≤ s := by
+    refine le_csSup hSbdd ?_
+    rw [hS]
+    exact ⟨w', hw'K, rfl⟩
+  rw [hMw'] at hle
+  linarith
+
 /-- **John-type covering (weak form).**  Every convex `K ⊆ [-1,1]^d` of
 positive volume is contained in an affine image `{L y + c : y ∈ [-1,1]^d}` of
 the cube whose volume is at most `C·vol K`, where `C` depends only on `d`.
@@ -2960,7 +3119,13 @@ Standard proof: take a maximum-volume inscribed simplex `S ⊆ K` (a
 near-maximiser suffices if `K` is not closed); then `K` lies in the `-d`-fold
 homothetic copy of `S` about one vertex, which is a parallelepiped image of
 the cube of volume `2^d·d!·d^d·vol S ≤ C·vol K`.  Alternatively one may
-invoke John's theorem on the maximal-volume inscribed ellipsoid. -/
+invoke John's theorem on the maximal-volume inscribed ellipsoid.
+
+Here we implement the simplex argument with `C = 4^d · d^d`: a near-maximal
+inscribed simplex `w` (`exists_nearmax_simplex`) gives, via Cramer's rule,
+barycentric coordinates `μ` with `|μ i| ≤ 2` for every `x ∈ K`, so that
+`K ⊆ w 0 + (2·edgeMat w) '' [-1,1]^d`; the volume bound follows from
+`vol K ≥ vol (w 0 + (edgeMat w) '' [0,1/d]^d) = |det| · d^{-d}`. -/
 private theorem exists_affine_cover_cube (d : ℕ) :
     ∃ C : ℝ, 0 < C ∧ 1 ≤ C ∧ ∀ K : Set (Fin d → ℝ), Convex ℝ K →
       K ⊆ (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1) 1) →
@@ -2970,7 +3135,381 @@ private theorem exists_affine_cover_cube (d : ℕ) :
             (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1) 1) ∧
         ENNReal.ofReal |LinearMap.det (L : (Fin d → ℝ) →ₗ[ℝ] (Fin d → ℝ))| *
             volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1)
-          ≤ ENNReal.ofReal C * volume K := sorry
+          ≤ ENNReal.ofReal C * volume K := by
+  classical
+  refine ⟨4 ^ d * (d : ℝ) ^ d, ?_, ?_, ?_⟩
+  · rcases eq_or_ne d 0 with rfl | hd
+    · norm_num
+    · exact mul_pos (pow_pos (by norm_num : (0 : ℝ) < 4) _)
+        (pow_pos (by exact_mod_cast Nat.pos_of_ne_zero hd : (0 : ℝ) < d) _)
+  · rcases eq_or_ne d 0 with rfl | hd
+    · norm_num
+    · have hd' : (1 : ℝ) ≤ d := by exact_mod_cast Nat.one_le_iff_ne_zero.mpr hd
+      exact one_le_mul_of_one_le_of_one_le
+        (one_le_pow₀ (by norm_num : (1 : ℝ) ≤ 4)) (one_le_pow₀ hd')
+  intro K hKconv hKcube hKpos
+  obtain ⟨w, hwK, hgw, hbound⟩ :=
+    exists_nearmax_simplex hKconv hKcube hKpos
+  have hdetw : (edgeMat w).det ≠ 0 := abs_pos.mp hgw
+  have hAunit : IsUnit ((2 : ℝ) • edgeMat w).det := by
+    rw [Matrix.det_smul, Fintype.card_fin]
+    exact isUnit_iff_ne_zero.mpr
+      (mul_ne_zero (pow_ne_zero _ (by norm_num : (2 : ℝ) ≠ 0)) hdetw)
+  set L : (Fin d → ℝ) ≃ₗ[ℝ] (Fin d → ℝ) :=
+    ((2 : ℝ) • edgeMat w).toLinearEquiv'
+      (Matrix.invertibleOfIsUnitDet _ hAunit) with hL
+  refine ⟨L, w 0, ?_, ?_⟩
+  · -- covering: every `x ∈ K` is `w 0 + (edgeMat w) *ᵥ μ` with `|μ i| ≤ 2`
+    intro x hx
+    set μ : Fin d → ℝ :=
+      (edgeMat w).det⁻¹ • Matrix.cramer (edgeMat w) (x - w 0) with hμ
+    have hμi : ∀ i : Fin d, |μ i| ≤ 2 := by
+      intro i
+      have hpos : (0 : ℝ) < |(edgeMat w).det| := abs_pos.mpr hdetw
+      have heq : μ i = (edgeMat w).det⁻¹ *
+          ((edgeMat w).updateCol i (x - w 0)).det := by
+        rw [hμ, Pi.smul_apply, smul_eq_mul, Matrix.cramer_apply]
+      rw [heq, abs_mul, abs_inv]
+      calc |(edgeMat w).det|⁻¹ * |((edgeMat w).updateCol i (x - w 0)).det|
+          ≤ |(edgeMat w).det|⁻¹ * (2 * |(edgeMat w).det|) :=
+            mul_le_mul_of_nonneg_left (hbound x hx i) (inv_nonneg.mpr (abs_nonneg _))
+        _ = 2 := by
+            rw [mul_comm (2 : ℝ) |(edgeMat w).det|, ← mul_assoc,
+              inv_mul_cancel₀ (ne_of_gt hpos), one_mul]
+    refine ⟨(1 / 2 : ℝ) • μ, ?_, ?_⟩
+    · rw [Set.mem_univ_pi]
+      intro i
+      refine Set.mem_Icc.mpr (abs_le.mp ?_)
+      rw [Pi.smul_apply, smul_eq_mul, abs_mul,
+        abs_of_pos (by norm_num : (0 : ℝ) < 1 / 2)]
+      linarith [hμi i]
+    · show L ((1 / 2 : ℝ) • μ) + w 0 = x
+      have hLy : L ((1 / 2 : ℝ) • μ) = x - w 0 := by
+        have e1 : L ((1 / 2 : ℝ) • μ) =
+            Matrix.mulVec ((2 : ℝ) • edgeMat w) ((1 / 2 : ℝ) • μ) := rfl
+        have hstep : ∀ v : Fin d → ℝ, (1 / 2 : ℝ) • ((2 : ℝ) • v) = v := by
+          intro v
+          funext i
+          simp only [Pi.smul_apply, smul_eq_mul]
+          rw [← mul_assoc, show (1 / 2 : ℝ) * 2 = 1 by norm_num, one_mul]
+        rw [e1, Matrix.mulVec_smul, Matrix.smul_mulVec, hstep, hμ,
+          Matrix.mulVec_smul, Matrix.mulVec_cramer]
+        funext i
+        simp only [Pi.smul_apply, smul_eq_mul]
+        rw [← mul_assoc, inv_mul_cancel₀ hdetw, one_mul]
+      rw [hLy]
+      exact sub_add_cancel _ _
+  · -- volume bound
+    have hdetL : LinearMap.det (L : (Fin d → ℝ) →ₗ[ℝ] (Fin d → ℝ)) =
+        2 ^ d * (edgeMat w).det := by
+      have hco : (L : (Fin d → ℝ) →ₗ[ℝ] (Fin d → ℝ)) =
+          Matrix.toLin' ((2 : ℝ) • edgeMat w) :=
+        Matrix.toLinearEquiv'_apply _ _
+      rw [hco, LinearMap.det_toLin', Matrix.det_smul, Fintype.card_fin]
+    have hvolcube : volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1) =
+        ENNReal.ofReal (2 ^ d) := by
+      rw [Set.pi_univ_Icc, Real.volume_Icc_pi]
+      trans ∏ _i : Fin d, ENNReal.ofReal (2 : ℝ)
+      · exact Finset.prod_congr rfl fun i _ ↦ by
+          show ENNReal.ofReal ((1 : ℝ) - -1) = ENNReal.ofReal 2
+          rw [show ((1 : ℝ) - -1) = 2 by norm_num]
+      · rw [← ENNReal.ofReal_prod_of_nonneg fun i _ ↦ by norm_num,
+          Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+    -- the small cube `[0, 1/d]^d` sits inside the simplex `conv w ⊆ K`
+    set smallcube : Set (Fin d → ℝ) :=
+      Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (0 : ℝ) (d : ℝ)⁻¹ with hsmall
+    have hvolsmall : volume smallcube = ENNReal.ofReal ((d : ℝ)⁻¹ ^ d) := by
+      rw [hsmall, Set.pi_univ_Icc, Real.volume_Icc_pi]
+      trans ∏ _i : Fin d, ENNReal.ofReal (d : ℝ)⁻¹
+      · exact Finset.prod_congr rfl fun i _ ↦ by
+          show ENNReal.ofReal ((d : ℝ)⁻¹ - 0) = ENNReal.ofReal (d : ℝ)⁻¹
+          rw [sub_zero]
+      · rw [← ENNReal.ofReal_prod_of_nonneg fun i _ ↦ by positivity,
+          Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+    have hAunit' : IsUnit (edgeMat w).det := isUnit_iff_ne_zero.mpr hdetw
+    set LA : (Fin d → ℝ) ≃ₗ[ℝ] (Fin d → ℝ) :=
+      (edgeMat w).toLinearEquiv' (Matrix.invertibleOfIsUnitDet _ hAunit') with hLA
+    have hTK : (fun μ ↦ LA μ + w 0) '' smallcube ⊆ K := by
+      rintro z ⟨μ, hμ, rfl⟩
+      have hμI : ∀ i, μ i ∈ Set.Icc 0 (d : ℝ)⁻¹ := Set.mem_univ_pi.mp hμ
+      have hσle : (∑ i : Fin d, μ i) ≤ 1 := by
+        calc ∑ i : Fin d, μ i ≤ ∑ _i : Fin d, (d : ℝ)⁻¹ :=
+              Finset.sum_le_sum fun i _ ↦ (hμI i).2
+          _ = (d : ℝ) * (d : ℝ)⁻¹ := by
+              rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+                nsmul_eq_mul]
+          _ ≤ 1 := by
+              rcases eq_or_ne d 0 with rfl | hd
+              · simp
+              · rw [mul_inv_cancel₀ (by exact_mod_cast hd : (d : ℝ) ≠ 0)]
+      set ν : Fin (d + 1) → ℝ :=
+        Fin.cons (1 - ∑ i : Fin d, μ i) μ with hν
+      have hsumν : ∑ i : Fin (d + 1), ν i • w i =
+          w 0 + ∑ j : Fin d, μ j • (w j.succ - w 0) := by
+        rw [Fin.sum_univ_succ]
+        simp only [hν, Fin.cons_zero, Fin.cons_succ]
+        have e : (∑ j : Fin d, μ j • (w j.succ - w 0)) =
+            (∑ j : Fin d, μ j • w j.succ) - (∑ j : Fin d, μ j) • w 0 := by
+          rw [Finset.sum_congr rfl fun j _ ↦ smul_sub _ _ _,
+            Finset.sum_sub_distrib, ← Finset.sum_smul]
+        rw [e, sub_smul, one_smul]
+        abel
+      have hzK : ∑ i : Fin (d + 1), ν i • w i ∈ K := by
+        refine hKconv.sum_mem (fun i _ ↦ ?_) ?_ (fun i _ ↦ hwK i)
+        · rcases eq_or_ne i 0 with rfl | h0
+          · rw [hν, Fin.cons_zero]
+            linarith
+          · obtain ⟨j, rfl⟩ := Fin.exists_succ_eq_of_ne_zero h0
+            rw [hν, Fin.cons_succ]
+            exact (hμI j).1
+        · rw [Fin.sum_univ_succ]
+          simp only [hν, Fin.cons_zero, Fin.cons_succ]
+          exact sub_add_cancel _ _
+      have hLAμ : LA μ = Matrix.mulVec (edgeMat w) μ := rfl
+      have e2 : LA μ + w 0 = w 0 + ∑ j : Fin d, μ j • (w j.succ - w 0) := by
+        rw [hLAμ, add_comm]
+        congr 1
+        funext i
+        rw [Matrix.mulVec_apply_eq_sum]
+        simp only [Finset.sum_apply, Pi.smul_apply, smul_eq_mul, Pi.sub_apply,
+          edgeMat_apply]
+        exact Finset.sum_congr rfl fun j _ ↦ mul_comm _ _
+      show LA μ + w 0 ∈ K
+      rw [e2, ← hsumν]
+      exact hzK
+    have hdetLA : LinearMap.det (LA : (Fin d → ℝ) →ₗ[ℝ] (Fin d → ℝ)) =
+        (edgeMat w).det := by
+      rw [hLA, Matrix.toLinearEquiv'_apply, LinearMap.det_toLin']
+    have htr : ∀ t : Set (Fin d → ℝ),
+        volume ((fun z : Fin d → ℝ ↦ z + w 0) '' t) = volume t := by
+      intro t
+      have hset : (fun z : Fin d → ℝ ↦ z + w 0) '' t =
+          (fun z ↦ -w 0 + z) ⁻¹' t := by
+        ext z
+        simp only [Set.mem_image, Set.mem_preimage]
+        constructor
+        · rintro ⟨y, hy, rfl⟩
+          rw [show -w 0 + (y + w 0) = y by abel]
+          exact hy
+        · intro hz
+          exact ⟨-w 0 + z, hz, by abel⟩
+      rw [hset]
+      exact measure_preimage_add _ _ _
+    have hcomp : (fun μ : Fin d → ℝ ↦ LA μ + w 0) =
+        (fun z ↦ z + w 0) ∘ (LA : (Fin d → ℝ) →ₗ[ℝ] (Fin d → ℝ)) :=
+      funext fun μ ↦ rfl
+    have hvolT : volume ((fun μ ↦ LA μ + w 0) '' smallcube) =
+        ENNReal.ofReal |(edgeMat w).det| * ENNReal.ofReal ((d : ℝ)⁻¹ ^ d) := by
+      rw [hcomp, Set.image_comp, htr, Measure.addHaar_image_linearMap, hdetLA,
+        hvolsmall]
+    have hvolK : ENNReal.ofReal (|(edgeMat w).det| * (d : ℝ)⁻¹ ^ d) ≤
+        volume K := by
+      rw [ENNReal.ofReal_mul (abs_nonneg _), ← hvolT]
+      exact measure_mono hTK
+    have e2 : (4 : ℝ) ^ d * (d : ℝ) ^ d *
+        (|(edgeMat w).det| * (d : ℝ)⁻¹ ^ d) = 4 ^ d * |(edgeMat w).det| := by
+      rcases eq_or_ne d 0 with rfl | hd
+      · simp
+      · have h : (d : ℝ) ^ d * (d : ℝ)⁻¹ ^ d = 1 := by
+          rw [← mul_pow, mul_inv_cancel₀ (by exact_mod_cast hd), one_pow]
+        calc (4 : ℝ) ^ d * (d : ℝ) ^ d * (|(edgeMat w).det| * (d : ℝ)⁻¹ ^ d)
+            = 4 ^ d * |(edgeMat w).det| * ((d : ℝ) ^ d * (d : ℝ)⁻¹ ^ d) := by
+              ring
+          _ = 4 ^ d * |(edgeMat w).det| := by rw [h, mul_one]
+    calc ENNReal.ofReal
+          |LinearMap.det (L : (Fin d → ℝ) →ₗ[ℝ] (Fin d → ℝ))| * volume
+            (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1)
+        = ENNReal.ofReal (4 ^ d * |(edgeMat w).det|) := by
+          rw [hdetL, abs_mul,
+            abs_of_pos (pow_pos (by norm_num : (0 : ℝ) < 2) _), hvolcube,
+            ← ENNReal.ofReal_mul (by positivity)]
+          congr 1
+          calc (2 : ℝ) ^ d * |(edgeMat w).det| * 2 ^ d
+              = |(edgeMat w).det| * (2 ^ d * 2 ^ d) := by ring
+            _ = |(edgeMat w).det| * (2 * 2) ^ d := by rw [← mul_pow]
+            _ = 4 ^ d * |(edgeMat w).det| := by
+                rw [show ((2 : ℝ) * 2) = 4 by norm_num]; ring
+      _ ≤ ENNReal.ofReal (4 ^ d * (d : ℝ) ^ d) * volume K := by
+          calc ENNReal.ofReal (4 ^ d * |(edgeMat w).det|)
+              = ENNReal.ofReal
+                  ((4 : ℝ) ^ d * (d : ℝ) ^ d *
+                    (|(edgeMat w).det| * (d : ℝ)⁻¹ ^ d)) := by rw [e2]
+            _ = ENNReal.ofReal (4 ^ d * (d : ℝ) ^ d) *
+                ENNReal.ofReal (|(edgeMat w).det| * (d : ℝ)⁻¹ ^ d) :=
+                ENNReal.ofReal_mul (by positivity)
+            _ ≤ ENNReal.ofReal (4 ^ d * (d : ℝ) ^ d) * volume K :=
+                mul_le_mul' le_rfl hvolK
+
+/-- **Box setup for the cubical kernel of Lemma 1.**  This is the conjunction
+of the outputs of `exists_dyadic_scale`, `exists_dyadic_box_scale` and
+`exists_mem_frontier_centeredBox`, repackaged as a single choice principle:
+at the dyadic scale `r = 2^{-k} ∈ (8δ^{1/d}, 16δ^{1/d}]` there is a family `I`
+of heavy dyadic `r`-boxes, each containing `~|A|/2^j` points of `A`, pairwise
+disjoint, covering `≥ 3|A|/(4J)` points (`J = d(k+2)+2`), together with a
+frontier point `x l` of `P = closure (conv (⋃ B_l))` inside the `4√d·r`-dilate
+of `B_l` about its centre. -/
+private lemma exists_heavy_frontier_pts {d : ℕ} (hd : 2 ≤ d) {δ : ℝ}
+    (hδ : 0 < δ) (hδs : δ ^ ((d : ℝ)⁻¹) ≤ 1 / 32)
+    {A : Finset (Fin d → ℝ)} (hAne : A.Nonempty)
+    (hAcube : ∀ a ∈ A, ∀ i : Fin d, a i ∈ Set.Icc (-1) 1)
+    (hcp : InDeltaConvexPosition A δ) :
+    ∃ k : ℕ, ∃ j : ℕ, ∃ I : Finset (Fin d → ℝ),
+      ∃ x : (Fin d → ℝ) → Fin d → ℝ,
+        8 * δ ^ ((d : ℝ)⁻¹) < ((2 : ℝ) ^ k)⁻¹ ∧
+        ((2 : ℝ) ^ k)⁻¹ ≤ 16 * δ ^ ((d : ℝ)⁻¹) ∧
+        δ < ((2 : ℝ) ^ (d * (k + 2) + 2))⁻¹ ∧
+        j < d * (k + 2) + 2 ∧
+        (∀ l ∈ I, ∃ z : Fin d → ℤ,
+          (∀ i, l i = (z i : ℝ) / 2 ^ k) ∧
+          (∀ i, l i ∈ Set.Icc (-1) 1) ∧
+          (A.card : ℝ) / 2 ^ (j + 1) <
+            ((A.filter fun a ↦ ∀ i, a i ∈ Set.Ico (l i)
+              (l i + ((2 : ℝ) ^ k)⁻¹)).card : ℝ) ∧
+          ((A.filter fun a ↦ ∀ i, a i ∈ Set.Ico (l i)
+            (l i + ((2 : ℝ) ^ k)⁻¹)).card : ℝ) ≤ (A.card : ℝ) / 2 ^ j) ∧
+        ((I : Set (Fin d → ℝ)).PairwiseDisjoint
+          fun l ↦ dyadicBox l ((2 : ℝ) ^ k)⁻¹) ∧
+        (3 / 4 * (A.card : ℝ) / (d * (k + 2) + 2)) ≤
+          (((I.biUnion fun l ↦ A.filter fun a ↦
+            ∀ i, a i ∈ Set.Ico (l i)
+              (l i + ((2 : ℝ) ^ k)⁻¹))).card : ℝ) ∧
+        I.card ≤ (3 * 2 ^ k) ^ d ∧
+        (∀ l ∈ I,
+          x l ∈ frontier (closure (convexHull ℝ
+            (⋃ l' ∈ I, dyadicBox l' ((2 : ℝ) ^ k)⁻¹))) ∧
+          x l ∈ centeredBox (fun i ↦ l i + ((2 : ℝ) ^ k)⁻¹ / 2)
+            (4 * Real.sqrt d * ((2 : ℝ) ^ k)⁻¹)) := by
+  classical
+  obtain ⟨k, hklow, hkupp, hkδ⟩ := exists_dyadic_scale hd hδ hδs
+  obtain ⟨j, hj, I, hI, hdj, hcover, hIcard, _⟩ :=
+    exists_dyadic_box_scale A hAne hAcube k
+  have hcardpos : (0 : ℝ) < A.card := by
+    exact_mod_cast Finset.card_pos.mpr hAne
+  have hJ : j + 1 ≤ d * (k + 2) + 2 := hj
+  -- Every box of `I` is *heavy*: it contains more than `δ|A|` points.
+  have hbig : ∀ l ∈ I, δ * A.card <
+      ((A.filter fun a ↦ ∀ i, a i ∈ Set.Ico (l i)
+        (l i + ((2 : ℝ) ^ k)⁻¹)).card : ℝ) := by
+    intro l hl
+    obtain ⟨z, _hz, _hzI, hlo, _⟩ := hI l hl
+    have hδj : δ < ((2 : ℝ) ^ (j + 1))⁻¹ := by
+      refine lt_of_lt_of_le hkδ ?_
+      rw [inv_le_inv₀ (pow_pos (by norm_num : (0 : ℝ) < 2) _)
+        (pow_pos (by norm_num : (0 : ℝ) < 2) _)]
+      exact pow_le_pow_right₀ (by norm_num) hJ
+    have hmul : δ * (A.card : ℝ) < (A.card : ℝ) * ((2 : ℝ) ^ (j + 1))⁻¹ := by
+      rw [mul_comm (A.card : ℝ)]
+      exact mul_lt_mul_of_pos_right hδj hcardpos
+    calc δ * A.card < (A.card : ℝ) * ((2 : ℝ) ^ (j + 1))⁻¹ := hmul
+      _ = (A.card : ℝ) / 2 ^ (j + 1) := by rw [div_eq_mul_inv]
+      _ < _ := hlo
+  have hr : (0 : ℝ) < ((2 : ℝ) ^ k)⁻¹ := by positivity
+  have hfr : ∀ l ∈ I, ∃ y : Fin d → ℝ,
+      y ∈ frontier (closure (convexHull ℝ
+        (⋃ l' ∈ I, dyadicBox l' ((2 : ℝ) ^ k)⁻¹))) ∧
+      y ∈ centeredBox (fun i ↦ l i + ((2 : ℝ) ^ k)⁻¹ / 2)
+        (4 * Real.sqrt d * ((2 : ℝ) ^ k)⁻¹) :=
+    fun l hl ↦ exists_mem_frontier_centeredBox (by omega : 1 ≤ d) hδ hcp
+      hr hl (fun l' hl' ↦ hbig l' hl')
+  choose x' hx' using hfr
+  refine ⟨k, j, I, fun l ↦ if h : l ∈ I then x' l h else 0,
+    hklow, hkupp, hkδ, hj, hI, hdj, hcover, hIcard, ?_⟩
+  intro l hl
+  simp only [dif_pos hl]
+  exact hx' l hl
+
+/-- **Width dichotomy** (a Steinhagen-type alternative) used in the proof of
+Lemma 1: a nonempty closed bounded convex set `P` either lies in a slab of
+width `≤ W`, or it contains a ball of radius `W / (2(d+1))`.
+
+Indeed, if some unit direction `v` has `sup_P (v·) − inf_P (v·) ≤ W`, the slab
+about the midpoint contains `P`; otherwise every direction has width `> W`,
+and the theorem that a convex body of minimal width `w` has inradius
+`≥ w / (d+1)` (Steinhagen's inequality) supplies the ball. -/
+private lemma convex_subset_slab_or_ball {d : ℕ} (hd : 1 ≤ d)
+    {P : Set (Fin d → ℝ)} (hPconv : Convex ℝ P) (hPcl : IsClosed P)
+    (hPbdd : Bornology.IsBounded P) (hPne : P.Nonempty)
+    {W : ℝ} (hW : 0 < W) :
+    (∃ v : Fin d → ℝ, l2norm v = 1 ∧ ∃ c : ℝ,
+      ∀ x ∈ P, |dot v x - c| ≤ W / 2) ∨
+    (∃ q : Fin d → ℝ,
+      Metric.ball q (W / (2 * ((d : ℝ) + 1))) ⊆ P) := sorry
+
+/-- **The thin case of the cubical kernel** (Case 1 of the paper's proof of
+Lemma 1): if `A ⊆ [-1,1]^d` has `≥ δ^{g·a}|A|` points in a slab
+`{x : |v·x − c| ≤ w/2}` whose width satisfies
+`w·(2√d)^{d-1} ≤ δ^g·2^d`, then `Ω' := slab ∩ cube` already gives the
+conclusion.  The volume estimate is `vol(slab ∩ cube) ≤ w·(2√d)^{d-1}`: a
+volume-preserving rotation sending `v` to the last coordinate maps the
+intersection into a cylinder of base `[-√d,√d]^{d-1}` and height `w`. -/
+private lemma density_increment_slab {d : ℕ} (hd : 2 ≤ d) {ε : ℝ}
+    (hε : 0 < ε) {δ : ℝ} (hδ : 0 < δ) (hδ1 : δ ≤ 1 / 2)
+    {A : Finset (Fin d → ℝ)}
+    (hAcube : ∀ a ∈ A, ∀ i : Fin d, a i ∈ Set.Icc (-1) 1)
+    {v : Fin d → ℝ} (hv : l2norm v = 1) {c w : ℝ}
+    (hwvol : w * (2 * Real.sqrt (d : ℝ)) ^ (d - 1) ≤
+      δ ^ (min (ε / 5 + 1 / 8) (1 / 4)) * 2 ^ d)
+    (hcount :
+      (δ ^ (min (ε / 5 + 1 / 8) (1 / 4))) ^ ((d - 1 : ℝ) / (d + 1) + ε) *
+        (A.card : ℝ) ≤
+        ((A.filter fun a ↦ |dot v a - c| ≤ w / 2).card : ℝ)) :
+    ∃ η : ℝ, δ ≤ η ∧ η ≤ δ ^ (min (ε / 5 + 1 / 8) (1 / 4)) ∧
+      ∃ Ω' : Set (Fin d → ℝ), Convex ℝ Ω' ∧
+        volume Ω' ≤ ENNReal.ofReal η *
+          volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1) ∧
+        η ^ ((d - 1 : ℝ) / (d + 1) + ε) * (A.card : ℝ) ≤
+          ((A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω').card : ℝ) := sorry
+
+/-- **The cap case of the cubical kernel** (Case 2 of the paper's proof of
+Lemma 1).  When the convex hull `P` of the heavy dyadic boxes contains a ball
+of radius `ρ = δ^g·2^d/(2(d+1)(2√d)^{d-1})`, `exists_cap_direction` selects a
+direction `v` and `≳ u^{d-1}|I|` frontier points whose transverse component is
+`≤ u`; after rotating `v` to the last coordinate, the upper envelope
+`upperEnv P` is concave and `convex_linear_approx` (Lemma 2) yields a
+graph-slab `Ω'` of volume `≲ δ^g·2^d` containing
+`η^{(d-1)/(d+1)+ε}|A|` points of `A`. -/
+private lemma density_increment_cap {d : ℕ} (hd : 2 ≤ d) {ε : ℝ}
+    (hε : 0 < ε) {δ : ℝ} (hδ : 0 < δ) (hδ1 : δ ≤ 1 / 2)
+    (hδs : δ ^ ((d : ℝ)⁻¹) ≤ 1 / 32)
+    {A : Finset (Fin d → ℝ)} (hAne : A.Nonempty)
+    (hAcube : ∀ a ∈ A, ∀ i : Fin d, a i ∈ Set.Icc (-1) 1)
+    (hcp : InDeltaConvexPosition A δ)
+    {k j : ℕ} {I : Finset (Fin d → ℝ)} {x : (Fin d → ℝ) → Fin d → ℝ}
+    (hklow : 8 * δ ^ ((d : ℝ)⁻¹) < ((2 : ℝ) ^ k)⁻¹)
+    (hkupp : ((2 : ℝ) ^ k)⁻¹ ≤ 16 * δ ^ ((d : ℝ)⁻¹))
+    (hkδ : δ < ((2 : ℝ) ^ (d * (k + 2) + 2))⁻¹)
+    (hj : j < d * (k + 2) + 2)
+    (hI : ∀ l ∈ I, ∃ z : Fin d → ℤ,
+      (∀ i, l i = (z i : ℝ) / 2 ^ k) ∧
+      (∀ i, l i ∈ Set.Icc (-1) 1) ∧
+      (A.card : ℝ) / 2 ^ (j + 1) <
+        ((A.filter fun a ↦ ∀ i, a i ∈ Set.Ico (l i)
+          (l i + ((2 : ℝ) ^ k)⁻¹)).card : ℝ) ∧
+      ((A.filter fun a ↦ ∀ i, a i ∈ Set.Ico (l i)
+        (l i + ((2 : ℝ) ^ k)⁻¹)).card : ℝ) ≤ (A.card : ℝ) / 2 ^ j)
+    (hdj : (I : Set (Fin d → ℝ)).PairwiseDisjoint
+      fun l ↦ dyadicBox l ((2 : ℝ) ^ k)⁻¹)
+    (hcover : (3 / 4 * (A.card : ℝ) / (d * (k + 2) + 2)) ≤
+      (((I.biUnion fun l ↦ A.filter fun a ↦
+        ∀ i, a i ∈ Set.Ico (l i)
+          (l i + ((2 : ℝ) ^ k)⁻¹))).card : ℝ))
+    (hIcard : I.card ≤ (3 * 2 ^ k) ^ d)
+    (hx : ∀ l ∈ I,
+      x l ∈ frontier (closure (convexHull ℝ
+        (⋃ l' ∈ I, dyadicBox l' ((2 : ℝ) ^ k)⁻¹))) ∧
+      x l ∈ centeredBox (fun i ↦ l i + ((2 : ℝ) ^ k)⁻¹ / 2)
+        (4 * Real.sqrt d * ((2 : ℝ) ^ k)⁻¹))
+    {q : Fin d → ℝ}
+    (hball : Metric.ball q
+      (δ ^ (min (ε / 5 + 1 / 8) (1 / 4)) * 2 ^ d /
+        (2 * ((d : ℝ) + 1) * (2 * Real.sqrt (d : ℝ)) ^ (d - 1))) ⊆
+      closure (convexHull ℝ (⋃ l ∈ I, dyadicBox l ((2 : ℝ) ^ k)⁻¹))) :
+    ∃ η : ℝ, δ ≤ η ∧ η ≤ δ ^ (min (ε / 5 + 1 / 8) (1 / 4)) ∧
+      ∃ Ω' : Set (Fin d → ℝ), Convex ℝ Ω' ∧
+        volume Ω' ≤ ENNReal.ofReal η *
+          volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1) ∧
+        η ^ ((d - 1 : ℝ) / (d + 1) + ε) * (A.card : ℝ) ≤
+          ((A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω').card : ℝ) := sorry
 
 /-- **The cubical kernel of Lemma 1.**  This is the geometric heart of the
 argument, specialised to `Ω = [-1,1]^d` (so that `volume Ω = 2^d`): for all
@@ -3008,7 +3547,279 @@ private theorem density_increment_cube (d : ℕ) (hd : 2 ≤ d) {ε : ℝ}
             volume Ω' ≤ ENNReal.ofReal η *
               volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1) ∧
             η ^ ((d - 1 : ℝ) / (d + 1) + ε) * A.card ≤
-              ((A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω').card : ℝ) := sorry
+              ((A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω').card : ℝ) := by
+  classical
+  -- `g` is the exponent in the upper bound on `η`, `a` the density exponent,
+  -- and `t = g·a/2` a half-exponent used in the `δ₀`-smallness bookkeeping.
+  set g : ℝ := min (ε / 5 + 1 / 8) (1 / 4) with hgdef
+  set a : ℝ := ((d : ℝ) - 1) / ((d : ℝ) + 1) + ε with hadef
+  have hd2 : (2 : ℝ) ≤ d := by exact_mod_cast hd
+  have hdpos : (0 : ℝ) < d := by exact_mod_cast (by omega : 0 < d)
+  have hgpos : 0 < g := lt_min (by positivity) (by norm_num)
+  have hg1 : g ≤ 1 := le_trans (min_le_right _ _) (by norm_num)
+  have hapos : 0 < a := by
+    have h1 : (0 : ℝ) ≤ ((d : ℝ) - 1) / ((d : ℝ) + 1) :=
+      div_nonneg (by linarith) (by linarith)
+    rw [hadef]; linarith
+  have hga : 0 < g * a := mul_pos hgpos hapos
+  set t : ℝ := g * a / 2 with htdef
+  have ht : 0 < t := by positivity
+  have htga : t ≤ g * a := by rw [htdef]; linarith [hga]
+  have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  set D : ℝ := (t * Real.log 2)⁻¹ + 2 * (d : ℝ) + 2 with hDdef
+  have hD : 0 < D := by
+    rw [hDdef]
+    have h1 : (0 : ℝ) < (t * Real.log 2)⁻¹ := inv_pos.mpr (mul_pos ht hlog2)
+    linarith
+  set R : ℝ := 3 / (4 * D) with hRdef
+  have hR : 0 < R := by rw [hRdef]; positivity
+  -- `δ₀ = min (1/2) (min (32^{-d}) (R^{1/t}))`.
+  refine ⟨min (1 / 2) (min ((32 : ℝ) ^ (-(d : ℝ))) (R ^ t⁻¹)),
+    lt_min (by norm_num)
+      (lt_min (Real.rpow_pos_of_pos (by norm_num) _)
+        (Real.rpow_pos_of_pos hR _)), ?_⟩
+  intro δ hδ hδlt
+  have hδ1 : δ ≤ 1 / 2 := le_of_lt (lt_of_lt_of_le hδlt (min_le_left _ _))
+  have hδle1 : δ ≤ 1 := le_trans hδ1 (by norm_num)
+  have hδ32 : δ ≤ (32 : ℝ) ^ (-(d : ℝ)) := le_of_lt
+    (lt_of_lt_of_le hδlt (le_trans (min_le_right _ _) (min_le_left _ _)))
+  have hδR : δ ≤ R ^ t⁻¹ := le_of_lt
+    (lt_of_lt_of_le hδlt (le_trans (min_le_right _ _) (min_le_right _ _)))
+  -- `δ^{1/d} ≤ 1/32`, needed by `exists_dyadic_scale`.
+  have hδs : δ ^ ((d : ℝ)⁻¹) ≤ 1 / 32 := by
+    calc δ ^ ((d : ℝ)⁻¹)
+        ≤ ((32 : ℝ) ^ (-(d : ℝ))) ^ ((d : ℝ)⁻¹) :=
+          Real.rpow_le_rpow hδ.le hδ32 (by positivity)
+      _ = (32 : ℝ) ^ (-(d : ℝ) * (d : ℝ)⁻¹) := by
+          rw [← Real.rpow_mul (by norm_num : (0 : ℝ) ≤ 32)]
+      _ = (32 : ℝ)⁻¹ := by
+          rw [neg_mul, mul_inv_cancel₀ hdpos.ne', Real.rpow_neg_one]
+      _ = 1 / 32 := by rw [one_div]
+  -- `δ^t ≤ R`.
+  have hδt : δ ^ t ≤ R := by
+    calc δ ^ t ≤ (R ^ t⁻¹) ^ t :=
+          Real.rpow_le_rpow hδ.le hδR ht.le
+      _ = R ^ (t⁻¹ * t) := by rw [← Real.rpow_mul hR.le]
+      _ = R := by rw [inv_mul_cancel₀ ht.ne', Real.rpow_one]
+  -- `log₂(1/δ) ≤ δ^{-t}/(t·log 2)`: from `log(x^t) ≤ x^t − 1` at `x = 1/δ`.
+  have hlogbound : Real.logb 2 δ⁻¹ ≤ δ ^ (-t) / (t * Real.log 2) := by
+    have hδinv : (0 : ℝ) < δ⁻¹ := by positivity
+    have h1 : Real.log (δ⁻¹ ^ t) ≤ δ⁻¹ ^ t - 1 :=
+      Real.log_le_sub_one_of_pos (Real.rpow_pos_of_pos hδinv _)
+    rw [Real.log_rpow hδinv] at h1
+    have h2 : Real.log δ⁻¹ ≤ δ⁻¹ ^ t / t := by
+      rw [le_div_iff₀ ht]
+      linarith [h1]
+    have h3 : δ⁻¹ ^ t = δ ^ (-t) := by
+      rw [← Real.rpow_neg_one δ, ← Real.rpow_mul hδ.le, neg_one_mul]
+    rw [h3] at h2
+    show Real.log δ⁻¹ / Real.log 2 ≤ δ ^ (-t) / (t * Real.log 2)
+    rw [div_le_iff₀ hlog2]
+    have h4 : δ ^ (-t) / (t * Real.log 2) * Real.log 2 = δ ^ (-t) / t := by
+      rw [div_mul_eq_mul_div, mul_div_mul_right _ _ hlog2.ne']
+    rw [h4]
+    exact h2
+  -- The key smallness consequence:
+  -- `δ^{g·a}·(4/3)·(log₂(1/δ) + 2d + 2) ≤ 1`.
+  have hC3 : δ ^ (g * a) * (4 / 3) *
+      (Real.logb 2 δ⁻¹ + 2 * (d : ℝ) + 2) ≤ 1 := by
+    have hnn : (0 : ℝ) ≤ δ ^ (g * a) * (4 / 3) := by positivity
+    have hga2 : g * a = t + t := by rw [htdef]; ring
+    have hδinv' : δ ^ (g * a) * δ ^ (-t) = δ ^ t := by
+      rw [hga2, Real.rpow_add hδ t t]
+      rw [show δ ^ t * δ ^ t * δ ^ (-t) = δ ^ t * (δ ^ t * δ ^ (-t)) by ring]
+      rw [← Real.rpow_add hδ t (-t), add_neg_cancel, Real.rpow_zero, mul_one]
+    have hsplit : δ ^ (g * a) * (Real.logb 2 δ⁻¹ + 2 * (d : ℝ) + 2) ≤
+        δ ^ t * D := by
+      calc δ ^ (g * a) * (Real.logb 2 δ⁻¹ + 2 * (d : ℝ) + 2)
+          ≤ δ ^ (g * a) * (δ ^ (-t) / (t * Real.log 2) + 2 * (d : ℝ) + 2) :=
+            mul_le_mul_of_nonneg_left (add_le_add_left
+              (add_le_add_left hlogbound _) 2) (Real.rpow_nonneg hδ.le _)
+        _ = δ ^ (g * a) * δ ^ (-t) / (t * Real.log 2) +
+              δ ^ (g * a) * (2 * (d : ℝ) + 2) := by ring
+        _ = δ ^ t / (t * Real.log 2) + δ ^ (g * a) * (2 * (d : ℝ) + 2) := by
+            rw [hδinv']
+        _ ≤ δ ^ t / (t * Real.log 2) + δ ^ t * (2 * (d : ℝ) + 2) := by
+            refine add_le_add_right ?_ _
+            exact mul_le_mul_of_nonneg_right
+              (Real.rpow_le_rpow_of_exponent_ge hδ hδle1 htga) (by positivity)
+        _ = δ ^ t * ((t * Real.log 2)⁻¹ + 2 * (d : ℝ) + 2) := by
+            rw [div_eq_mul_inv]
+            ring
+        _ = δ ^ t * D := by rw [hDdef]
+    calc δ ^ (g * a) * (4 / 3) * (Real.logb 2 δ⁻¹ + 2 * (d : ℝ) + 2)
+        = (4 / 3) * (δ ^ (g * a) * (Real.logb 2 δ⁻¹ + 2 * (d : ℝ) + 2)) := by ring
+      _ ≤ (4 / 3) * (δ ^ t * D) :=
+          mul_le_mul_of_nonneg_left hsplit (by norm_num)
+      _ ≤ (4 / 3) * (R * D) :=
+          mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_right hδt hD.le)
+            (by norm_num)
+      _ = 1 := by
+          rw [hRdef]
+          rw [show (3 / (4 * D)) * D = 3 / 4 by
+            rw [div_mul_eq_mul_div, mul_div_mul_right _ _ hD.ne']]
+          norm_num
+  -- The threshold `M := 1` suffices: the count bounds only involve `δ`.
+  refine ⟨1, fun A hAcube hcp hn ↦ ?_⟩
+  have hAne : A.Nonempty := Finset.card_pos.mp hn
+  obtain ⟨k, j, I, x, hklow, hkupp, hkδ, hj, hI, hdj, hcover, hIcard, hx⟩ :=
+    exists_heavy_frontier_pts hd hδ hδs hAne hAcube hcp
+  have hrpos : (0 : ℝ) < ((2 : ℝ) ^ k)⁻¹ := by positivity
+  have hcardpos : (0 : ℝ) < A.card := by
+    exact_mod_cast Finset.card_pos.mpr hAne
+  have hJpos : (0 : ℝ) < d * (k + 2) + 2 := by
+    exact_mod_cast (by omega : 0 < d * (k + 2) + 2)
+  -- `I` is nonempty: otherwise the cover bound would force `0 < 3|A|/(4J) ≤ 0`.
+  have hIne : I.Nonempty := by
+    rw [Finset.nonempty_iff_ne_empty]
+    intro hempty
+    subst hempty
+    simp only [Finset.biUnion_empty, Finset.card_empty, Nat.cast_zero] at hcover
+    have : (0 : ℝ) < 3 / 4 * A.card / (d * (k + 2) + 2) :=
+      div_pos (mul_pos (by norm_num) hcardpos) hJpos
+    linarith
+  -- `P = closure (conv (⋃ B_l))` is closed, convex, bounded, nonempty.
+  have hPne : (closure (convexHull ℝ
+      (⋃ l ∈ I, dyadicBox l ((2 : ℝ) ^ k)⁻¹))).Nonempty := by
+    obtain ⟨l₀, hl₀⟩ := hIne
+    refine ⟨fun i ↦ l₀ i + ((2 : ℝ) ^ k)⁻¹ / 2,
+      subset_closure (subset_convexHull ℝ _ ?_)⟩
+    exact Set.mem_iUnion₂.mpr ⟨l₀, hl₀, Set.mem_univ_pi.mpr fun i ↦
+      Set.mem_Ico.mpr ⟨by linarith [hrpos], by linarith [hrpos]⟩⟩
+  have hPconv : Convex ℝ (closure (convexHull ℝ
+      (⋃ l ∈ I, dyadicBox l ((2 : ℝ) ^ k)⁻¹))) :=
+    (convex_convexHull ℝ _).closure
+  have hPcl : IsClosed (closure (convexHull ℝ
+      (⋃ l ∈ I, dyadicBox l ((2 : ℝ) ^ k)⁻¹))) := isClosed_closure
+  have hPbdd : Bornology.IsBounded (closure (convexHull ℝ
+      (⋃ l ∈ I, dyadicBox l ((2 : ℝ) ^ k)⁻¹))) := by
+    have hr1 : ((2 : ℝ) ^ k)⁻¹ ≤ 1 :=
+      inv_le_one_of_one_le₀ (one_le_pow₀ (by norm_num : (1 : ℝ) ≤ 2))
+    have hU : (⋃ l ∈ I, dyadicBox l ((2 : ℝ) ^ k)⁻¹) ⊆
+        Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-2 : ℝ) 2 := by
+      intro y hy'
+      obtain ⟨l, hl, hy⟩ := Set.mem_iUnion₂.mp hy'
+      rw [Set.mem_univ_pi]
+      intro i
+      obtain ⟨z, _hz, hzI, _, _⟩ := hI l (Finset.mem_coe.mp hl)
+      rw [show dyadicBox l ((2 : ℝ) ^ k)⁻¹ =
+        Set.pi Set.univ fun j ↦ Set.Ico (l j) (l j + ((2 : ℝ) ^ k)⁻¹) from rfl,
+        Set.mem_univ_pi] at hy
+      obtain ⟨h1, h2⟩ := Set.mem_Ico.mp (hy i)
+      have hli := Set.mem_Icc.mp (hzI i)
+      rw [Set.mem_Icc]
+      constructor <;> linarith
+    have hbox : Bornology.IsBounded
+        (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-2 : ℝ) 2) :=
+      Bornology.IsBounded.pi fun _ ↦ Metric.isBounded_Icc _ _
+    apply hbox.subset
+    have hcl : closure (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-2 : ℝ) 2) ⊆
+        Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-2 : ℝ) 2 := by
+      rw [closure_pi_set]
+      exact Set.pi_mono fun i _ ↦ by rw [isClosed_Icc.closure_eq]
+    exact le_trans (closure_mono
+      (convexHull_min hU (convex_pi fun i _ ↦ convex_Icc _ _))) hcl
+  -- The width threshold `W = δ^g·2^d/(2√d)^{d-1}`.
+  set S : ℝ := (2 * Real.sqrt (d : ℝ)) ^ (d - 1) with hSdef
+  have hSpos : 0 < S := by rw [hSdef]; positivity
+  set W : ℝ := δ ^ g * 2 ^ d / S with hWdef
+  have hW : 0 < W := by rw [hWdef]; positivity
+  rcases convex_subset_slab_or_ball (by omega : 1 ≤ d) hPconv hPcl hPbdd hPne
+      hW with hthin | hthick
+  · -- **Case 1 (thin):** `P` lies in a slab of width `≤ W`.
+    obtain ⟨v, hv, c, hslab⟩ := hthin
+    -- `J = d(k+2)+2 ≤ log₂(1/δ) + 2d + 2`: from `2^k < δ^{-1/d}/8`.
+    have h2k : (2 : ℝ) ^ k < δ ^ (-(d : ℝ)⁻¹) / 8 := by
+      have h1 : (2 : ℝ) ^ k < (8 * δ ^ ((d : ℝ)⁻¹))⁻¹ :=
+        (lt_inv_comm₀ (by positivity : (0 : ℝ) < 8 * δ ^ ((d : ℝ)⁻¹))
+          (by positivity : (0 : ℝ) < (2 : ℝ) ^ k)).mp hklow
+      rwa [show (8 * δ ^ ((d : ℝ)⁻¹))⁻¹ = δ ^ (-(d : ℝ)⁻¹) / 8 by
+        rw [mul_inv_rev, ← Real.rpow_neg hδ.le]; ring] at h1
+    have hklog : (k : ℝ) < Real.logb 2 (δ ^ (-(d : ℝ)⁻¹) / 8) := by
+      have h := Real.logb_lt_logb (b := 2) (by norm_num)
+        (pow_pos (by norm_num : (0 : ℝ) < 2) _) h2k
+      rwa [Real.logb_pow, Real.logb_self_eq_one (by norm_num), mul_one] at h
+    have hlog8 : Real.logb 2 (8 : ℝ) = 3 := by
+      have : (8 : ℝ) = 2 ^ (3 : ℕ) := by norm_num
+      rw [this, Real.logb_pow, Real.logb_self_eq_one (by norm_num)]
+      norm_num
+    have hexp : Real.logb 2 (δ ^ (-(d : ℝ)⁻¹) / 8) =
+        (d : ℝ)⁻¹ * Real.logb 2 δ⁻¹ - 3 := by
+      rw [Real.logb_div (by positivity : (δ ^ (-(d : ℝ)⁻¹) : ℝ) ≠ 0)
+        (by norm_num : (8 : ℝ) ≠ 0),
+        Real.logb_rpow_eq_mul_logb_of_pos hδ, Real.logb_inv, hlog8]
+      ring
+    rw [hexp] at hklog
+    -- `dk < log₂(1/δ) − 3d`.
+    have hdk : (d : ℝ) * (k : ℝ) <
+        Real.logb 2 δ⁻¹ - 3 * (d : ℝ) := by
+      have hdk := mul_lt_mul_of_pos_left hklog hdpos
+      rw [mul_sub, ← mul_assoc, mul_inv_cancel₀ hdpos.ne', one_mul] at hdk
+      linarith [hdk]
+    -- `J < log₂(1/δ) + 2d + 2`.
+    have hJbound : (d : ℝ) * (k + 2) + 2 <
+        Real.logb 2 δ⁻¹ + 2 * (d : ℝ) + 2 := by
+      push_cast
+      linarith [hdk]
+    -- `δ^{g·a}·|A| ≤ 3|A|/(4J)`.
+    have hgacount : δ ^ (g * a) * (A.card : ℝ) ≤
+        3 / 4 * (A.card : ℝ) / (d * (k + 2) + 2) := by
+      have hnn : (0 : ℝ) ≤ δ ^ (g * a) * (4 / 3) := by positivity
+      have hle' : (4 / 3) * (δ ^ (g * a) * (d * (k + 2) + 2)) ≤ 1 := by
+        have hle := le_trans (mul_le_mul_of_nonneg_left hJbound.le hnn) hC3
+        rwa [show δ ^ (g * a) * (4 / 3) * (d * (k + 2) + 2) =
+          (4 / 3) * (δ ^ (g * a) * (d * (k + 2) + 2)) by ring] at hle
+      have h2 : δ ^ (g * a) * (d * (k + 2) + 2) ≤ 3 / 4 := by
+        calc δ ^ (g * a) * (d * (k + 2) + 2)
+            = (3 / 4) * ((4 / 3) * (δ ^ (g * a) * (d * (k + 2) + 2))) := by ring
+          _ ≤ (3 / 4) * 1 :=
+              mul_le_mul_of_nonneg_left hle' (by norm_num)
+          _ = 3 / 4 := by ring
+      rw [le_div_iff₀ hJpos]
+      rw [show δ ^ (g * a) * (A.card : ℝ) * (d * (k + 2) + 2) =
+        δ ^ (g * a) * (d * (k + 2) + 2) * A.card by ring]
+      exact mul_le_mul_of_nonneg_right h2 hcardpos.le
+    -- The covered points of `A` lie in the slab.
+    have hsub : (I.biUnion fun l ↦ A.filter fun a ↦
+        ∀ i, a i ∈ Set.Ico (l i) (l i + ((2 : ℝ) ^ k)⁻¹)) ⊆
+        A.filter fun a ↦ |dot v a - c| ≤ W / 2 := by
+      intro a ha
+      rw [Finset.mem_biUnion] at ha
+      obtain ⟨l, hl, ha'⟩ := ha
+      rw [Finset.mem_filter] at ha' ⊢
+      obtain ⟨haA, habox⟩ := ha'
+      exact ⟨haA, hslab _ (subset_closure (subset_convexHull ℝ _
+        (Set.mem_iUnion₂.mpr ⟨l, hl, Set.mem_univ_pi.mpr habox⟩)))⟩
+    refine density_increment_slab hd hε hδ hδ1 hAcube hv
+      (v := v) (c := c) (w := W) ?_ ?_
+    · -- `W·(2√d)^{d-1} = δ^g·2^d`.
+      calc W * (2 * Real.sqrt (d : ℝ)) ^ (d - 1) = W * S := by rw [hSdef]
+        _ = δ ^ g * 2 ^ d := by rw [hWdef, div_mul_cancel₀ _ hSpos.ne']
+        _ = δ ^ (min (ε / 5 + 1 / 8) (1 / 4)) * 2 ^ d := by rw [hgdef]
+        _ ≤ δ ^ (min (ε / 5 + 1 / 8) (1 / 4)) * 2 ^ d := le_rfl
+    · -- `(δ^g)^a·|A| ≤ |A ∩ slab|`.
+      have e : (δ ^ (min (ε / 5 + 1 / 8) (1 / 4))) ^ ((d - 1 : ℝ) / (d + 1) + ε) =
+          δ ^ (g * a) := by
+        rw [← hgdef, ← hadef, ← Real.rpow_mul hδ.le]
+      rw [e]
+      calc δ ^ (g * a) * (A.card : ℝ) ≤
+            3 / 4 * (A.card : ℝ) / (d * (k + 2) + 2) := hgacount
+        _ ≤ (((I.biUnion fun l ↦ A.filter fun a ↦
+            ∀ i, a i ∈ Set.Ico (l i) (l i + ((2 : ℝ) ^ k)⁻¹))).card : ℝ) :=
+            hcover
+        _ ≤ ((A.filter fun a ↦ |dot v a - c| ≤ W / 2).card : ℝ) := by
+            exact_mod_cast Finset.card_le_card hsub
+  · -- **Case 2 (fat):** `P` contains a ball of radius `W/(2(d+1))`.
+    obtain ⟨q, hball⟩ := hthick
+    have e : W / (2 * ((d : ℝ) + 1)) =
+        δ ^ (min (ε / 5 + 1 / 8) (1 / 4)) * 2 ^ d /
+          (2 * ((d : ℝ) + 1) * (2 * Real.sqrt (d : ℝ)) ^ (d - 1)) := by
+      rw [hWdef, hSdef, hgdef, div_div]
+      congr 1
+      ring
+    rw [e] at hball
+    exact density_increment_cap hd hε hδ hδ1 hδs hAne hAcube hcp
+      hklow hkupp hkδ hj hI hdj hcover hIcard hx hball
 
 /-- **The boxed case** of `density_increment_core`: `A ⊆ [−1,1]^d`.  The
 proof reduces to the cubical kernel `density_increment_cube`: a John-type

@@ -329,6 +329,7 @@ def StepPropB (ζ₀ : ℝ) (ι q κ : ℝ) (θ : ℝ → ℝ) (N : ℕ) : Prop 
         (d' ≠ d → ζ + ι ≤ ζ') ∧
         (d' = d → (B'.card : ℝ) ≤ ρ ^ κ * (B.card : ℝ))
 
+set_option maxHeartbeats 800000 in
 /-- **Finite-iteration bookkeeping**: iterating the §4 step
 `StepPropB` gives Theorem 2.
 
@@ -454,6 +455,10 @@ theorem nonaveraging_box_bound_of_step (d : ℕ) (hd : 1 ≤ d) {ζ : ℝ}
         apply mul_le_mul_of_nonneg_left _ h1q; exact hDc
       have hDr : 4 * ((Dj : ℝ) + 1) / κ ≤ 4 * ((U : ℝ) + 1) / κ :=
         (div_le_div_iff_of_pos_right hκ).mpr (by linarith)
+      have e1 : 1 + (q - 1) * (Dj : ℝ) + -(4 * ((Dj : ℝ) + 1)) / κ
+          = 1 - ((1 - q) * (Dj : ℝ) + 4 * ((Dj : ℝ) + 1) / κ) := by
+        ring
+      rw [e1]
       linarith [hnum]
     have hNsq : (N : ℝ) = ((N : ℝ) ^ 2) ^ (1 / 2 : ℝ) := by
       rw [← Real.rpow_natCast (N : ℝ) 2, ← Real.rpow_mul hN0]
@@ -510,7 +515,11 @@ theorem nonaveraging_box_bound_of_step (d : ℕ) (hd : 1 ≤ d) {ζ : ℝ}
       · simp
       · simp
       · exact le_refl _
-      · exact hN1r.trans (by nlinarith [hNa])
+      · calc (N : ℝ) = (N : ℝ) * 1 := (mul_one _).symm
+          _ ≤ (N : ℝ) * (N : ℝ) :=
+              mul_le_mul_of_nonneg_left hN1r hN0
+          _ = (N : ℝ) ^ 2 := (pow_two _).symm
+          _ ≤ (A.card : ℝ) := hNa
       · -- `|A|^{1+(q−1)·0}·1 = |A|`
         simp [Real.rpow_one]
       · norm_num
@@ -646,17 +655,21 @@ theorem nonaveraging_box_bound_of_step (d : ℕ) (hd : 1 ≤ d) {ζ : ℝ}
               ring
             rw [e]; linarith
           · -- `N ≤ |A'|` via `size_lb` at `Dj+1 ≤ U`
-            apply size_lb (Nat.succ_le_of_lt hDjU) hsub' _ hP0 _
+            apply size_lb (Dj := Dj + 1)
+              (Nat.succ_le_of_lt hDjU : Dj + 1 ≤ U) hsub' _ hP0 _
             · -- `|A|^{1+(q−1)(Dj+1)}·Pj ≤ |A_j|^q ≤ |A'|`
               have hPq : Pj ≤ Pj ^ q := by
-                rw [← Real.rpow_one Pj]
+                conv_lhs => rw [← Real.rpow_one Pj]
                 exact Real.rpow_le_rpow_of_exponent_ge hP0 hP1 hq1
               have hexp : 1 + (q - 1) * ((Dj : ℝ) + 1)
                   ≤ q * (1 + (q - 1) * (Dj : ℝ)) := by
-                nlinarith [mul_nonneg (sq_nonneg (q - 1))
+                nlinarith only [mul_nonneg (sq_nonneg (q - 1))
                   (Nat.cast_nonneg Dj : (0:ℝ) ≤ (Dj:ℝ))]
-              calc (A.card : ℝ) ^ (1 + (q - 1) * ((Dj : ℝ) + 1)) * Pj
-                  ≤ (A.card : ℝ)
+              calc (A.card : ℝ) ^ (1 + (q - 1) * ((Dj + 1 : ℕ) : ℝ)) * Pj
+                  = (A.card : ℝ)
+                      ^ (1 + (q - 1) * ((Dj : ℝ) + 1)) * Pj := by
+                    rw [hcastD]
+                _ ≤ (A.card : ℝ)
                       ^ (q * (1 + (q - 1) * (Dj : ℝ))) * Pj :=
                     mul_le_mul_of_nonneg_right
                       (Real.rpow_le_rpow_of_exponent_le ha1 hexp) hP0.le
@@ -688,11 +701,11 @@ theorem nonaveraging_box_bound_of_step (d : ℕ) (hd : 1 ≤ d) {ζ : ℝ}
                 _ ≤ Pj ^ κ := hPowj
           · -- `|A|^{1+(q−1)(Dj+1)}·Pj ≤ |A'|` (same as above)
             have hPq : Pj ≤ Pj ^ q := by
-              rw [← Real.rpow_one Pj]
+              conv_lhs => rw [← Real.rpow_one Pj]
               exact Real.rpow_le_rpow_of_exponent_ge hP0 hP1 hq1
             have hexp : 1 + (q - 1) * ((Dj : ℝ) + 1)
                 ≤ q * (1 + (q - 1) * (Dj : ℝ)) := by
-              nlinarith [mul_nonneg (sq_nonneg (q - 1))
+              nlinarith only [mul_nonneg (sq_nonneg (q - 1))
                 (Nat.cast_nonneg Dj : (0:ℝ) ≤ (Dj:ℝ))]
             calc (A.card : ℝ) ^ (1 + (q - 1) * ((Dj + 1 : ℕ) : ℝ)) * Pj
                 = (A.card : ℝ) ^ (1 + (q - 1) * ((Dj : ℝ) + 1)) * Pj := by
@@ -887,6 +900,7 @@ theorem step_up_bookkeeping {d n dt : ℕ} {A : Finset (Fin d → ℤ)}
     intro heq
     omega
 
+set_option maxHeartbeats 800000 in
 /-- **Residual §4 leaf, bookkeeping form.**  As `Thm2.residual_step`
 (produce the step conclusion in every case where the clean up-move is
 unavailable: `d̃ < d`, `d̃ = d`, or `d̃ > d` with `α_{d̃} + ζ + ι ≥ 1`),
@@ -1021,7 +1035,7 @@ theorem residual_step_bookkeeping
     (Thm2.αd_quarter_le hd).trans (by linarith)
   have he0 : (0 : ℝ) < αd d + ζ := by linarith
   have hba : (B.card : ℝ) ≤ (A.card : ℝ) ^ (αd d + ζ)⁻¹ :=
-    (Thm2.card_lt_rpow_of_rpow_lt he0 (by omega) hcexd).le
+    (Thm2.card_lt_rpow_of_rpow_lt he0 (by exact_mod_cast ha0) hcexd).le
   have hinv4 : (αd d + ζ)⁻¹ ≤ 4 := by
     calc (αd d + ζ)⁻¹ ≤ (1 / 4 : ℝ)⁻¹ := inv_anti₀ (by norm_num) he4
       _ = 4 := by norm_num
@@ -1062,7 +1076,6 @@ theorem residual_step_bookkeeping
           = (At.card : ℝ) / 2 := by
         have hne : (A.card : ℝ) ≠ 0 := ha0.ne'
         field_simp
-        ring
       rw [hρmul]
       exact hAh
     · exact div_pos
@@ -1118,7 +1131,7 @@ theorem residual_step_bookkeeping
     -- `ρ̃ = |Ã|/|A|` vs `|A|^{-σ}`.  `σ` carries a third component
     -- (absent from `residual_step`) so `a^{σK/2} ≥ C·2^κ`, upgrading
     -- `|P̃| ≤ C·ρ̃^K·|B|` to the diagonal bound `≤ (ρ̃/2)^κ·|B|`.
-    subst hdt
+    subst dt
     set σ : ℝ := max (incr / 2)
       (max (20 * Real.log (2 * C * C) / (K * Real.log (A.card : ℝ)))
         (2 * (Real.log C + κ * Real.log 2) /
@@ -1146,7 +1159,6 @@ theorem residual_step_bookkeeping
         have h1 : 1 + K / 5 ≤ K * (αd d + (ζ + incr)) := by
           have e1 : 1 + K / 5 = K * (1 / K + 1 / 5) := by
             field_simp
-            ring
           rw [e1]
           apply mul_le_mul_of_nonneg_left _ hKpos.le
           have h2 : (1 : ℝ) / K ≤ 1 / 100 :=
@@ -1158,7 +1170,6 @@ theorem residual_step_bookkeeping
         have e1 : (αd d + (ζ + incr)) * (αd d + ζ)⁻¹
             = (αd d + ζ) * (αd d + ζ)⁻¹ + incr * (αd d + ζ)⁻¹ := by ring
         rw [e1, mul_inv_cancel₀ he0.ne']
-        exact le_rfl
       have htt : incr * (αd d + ζ)⁻¹ ≤ σ * K / 10 := by
         have h2 : incr * 4 ≤ incr * K / 20 := by
           have e1 : incr * K / 20 = incr * (K / 20) := by ring
@@ -1167,10 +1178,10 @@ theorem residual_step_bookkeeping
           linarith [hK]
         have h3 : incr * K / 20 ≤ σ * K / 10 := by
           have e1 : incr * K / 20 = (incr / 2) * (K / 10) := by ring
-          rw [e1]
-          apply mul_le_mul_of_nonneg_right _ (by linarith [hK] :
-            (0 : ℝ) ≤ K / 10)
-          exact le_max_left _ _
+          have e2 : σ * K / 10 = σ * (K / 10) := by ring
+          rw [e1, e2]
+          exact mul_le_mul_of_nonneg_right (le_max_left _ _)
+            (by linarith [hK] : (0 : ℝ) ≤ K / 10)
         calc incr * (αd d + ζ)⁻¹ ≤ incr * 4 :=
             mul_le_mul_of_nonneg_left hinv4 hincr.le
           _ ≤ incr * K / 20 := h2
@@ -1376,22 +1387,22 @@ theorem residual_step_bookkeeping
       have h2 : C * C ≤ ((A.card : ℝ) ^ (ε / 4) / 2) *
           ((A.card : ℝ) ^ (ε / 4) / 2) := by
         apply mul_le_mul h1 h1
-          (by positivity : (0 : ℝ) ≤ (A.card : ℝ) ^ (ε / 4) / 2)
           (by linarith [hC] : (0 : ℝ) ≤ C)
+          (by positivity : (0 : ℝ) ≤ (A.card : ℝ) ^ (ε / 4) / 2)
       have h3 : ((A.card : ℝ) ^ (ε / 4) / 2) *
           ((A.card : ℝ) ^ (ε / 4) / 2)
           = (A.card : ℝ) ^ (ε / 2) / 4 := by
         have e1 : (A.card : ℝ) ^ (ε / 4) * (A.card : ℝ) ^ (ε / 4)
             = (A.card : ℝ) ^ (ε / 4 + ε / 4) :=
           (Real.rpow_add ha0 _ _).symm
-        rw [e1, show ε / 4 + ε / 4 = ε / 2 by ring]
-        ring
+        rw [div_mul_div_comm, e1, show ε / 4 + ε / 4 = ε / 2 by ring,
+          show (2 : ℝ) * 2 = 4 by norm_num]
       have h4 : 2 * C * C ≤ (A.card : ℝ) ^ (ε / 2) / 2 := by
         linarith [h2, h3]
       have h5 : (A.card : ℝ) ^ (ε / 2)
           ≤ (A.card : ℝ) ^ (3 * c₀ / 4 / 2) :=
         Real.rpow_le_rpow_of_exponent_le ha1.le (by linarith [hεc, hc₀])
-      linarith
+      linarith [Real.rpow_nonneg ha0.le (3 * c₀ / 4 / 2)]
     have hmain := Thm2.case_up_pow_hi (a := (A.card : ℝ))
       (b := (B.card : ℝ)) (p := (Wt.P.coeffBox.card : ℝ)) (C := C)
       (c := 3 * c₀ / 4) (ε := ε) (k := (dt : ℝ) - (d : ℝ))
@@ -1529,7 +1540,7 @@ theorem thm2_step_bookkeeping (ζ₀ : ℝ) (hζ₀ : 0 < ζ₀) :
           _ = 1 / 4 := by
               have h8Une : (8 : ℝ) * (U : ℝ) ≠ 0 :=
                 ne_of_gt (mul_pos (by norm_num) hUr0)
-              field_simp
+              rw [mul_one_div, div_mul_eq_mul_div, div_eq_iff h8Une]
               ring
       have hterm2 : 4 * ((U : ℝ) + 1) / κ = 1 / 4 := by
         rw [hκ_def]
@@ -1557,7 +1568,7 @@ theorem thm2_step_bookkeeping (ζ₀ : ℝ) (hζ₀ : 0 < ζ₀) :
           (lt_of_lt_of_le (by norm_num) (one_quarter_le_alphaExp hd))
           (hζ₀.trans_le hζ)
       have hba : (B.card : ℝ) ≤ (A.card : ℝ) ^ (alphaExp d + ζ)⁻¹ :=
-        (Thm2.card_lt_rpow_of_rpow_lt he (by omega) hcex).le
+        (Thm2.card_lt_rpow_of_rpow_lt he (by exact_mod_cast ha0) hcex).le
       -- `|B| ≤ |A|^4` for the Lemma-10 input (`(α_d+ζ)⁻¹ ≤ 4`).
       have hbox4 : (B.card : ℝ) ≤ (A.card : ℝ) ^ (4 : ℝ) := by
         have he4 : (1 / 4 : ℝ) ≤ alphaExp d + ζ :=
@@ -1610,7 +1621,9 @@ theorem thm2_step_bookkeeping (ζ₀ : ℝ) (hζ₀ : 0 < ζ₀) :
       -- `d ≤ ⌈2/ζ₀⌉₊`), and the ∀-form of the Observation-15 bound.
       have hg12 : g ≤ 1 / 12 := by rw [hg_def]; exact min_le_left _ _
       have hd0' : (0 : ℝ) < (d : ℝ) := by exact_mod_cast hd
-      have hDd : (d : ℝ) ≤ D := by exact_mod_cast hdD
+      have hDd : (d : ℝ) ≤ D := by
+        rw [hD_def]
+        exact_mod_cast hdD
       have hgap : ∀ {dt' : ℕ}, 1 ≤ dt' → dt' < d →
           g ≤ alphaExp d - alphaExp dt' := by
         intro dt' hdt1 hdt

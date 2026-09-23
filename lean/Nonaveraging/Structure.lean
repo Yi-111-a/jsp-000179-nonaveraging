@@ -2054,9 +2054,10 @@ subset sum `v ∈ Σ(X₁) ∩ Σ(X₂)` needed at the end of Theorem 4.  A
   nonzero);
 * `cov₁`, `cov₂` — the eq.-(15) covering: every `⟨Pᵢ⟩`-point within
   `r` of `T` is a subset sum of `Xᵢ` (via
-  `mem_subsetSumsL_of_zonotope_translate`, using the Lemma-14 fat box
-  `z̄ᵢ + ξ|A|B ⊆ 𝒵` and the `discrete_john_strong` absorption of the
-  Lemma-13 rounding error into `(kᵢ/2)Pᵢ`). -/
+  `mem_subsetSumsL_of_zonotope_translate'`, the `GAP.widthScale`
+  variant of `mem_subsetSumsL_of_zonotope_translate`, using the
+  Lemma-14 fat box `z̄ᵢ + ξ|A|B ⊆ 𝒵` and the `discrete_john_strong`
+  absorption of the Lemma-13 rounding error into `(kᵢ/2)Pᵢ`). -/
 structure SubSumCoveringPackage {d : ℕ} [NeZero d] {c₁ c₂ : ℝ}
     {X₁ X₂ : Finset (Fin d → ℤ)}
     (W₁ : SubSumWitness X₁ c₁ d) (W₂ : SubSumWitness X₂ c₂ d) where
@@ -2136,8 +2137,9 @@ paper's missing ingredients:
   exceeded by `T` in some coordinate;
 * `cov₁`, `cov₂` — **Lemma 14 / eq. (15)**: every `⟨Pᵢ⟩`-point within
   `r` of `T` is a subset sum of `Xᵢ` (via
-  `mem_subsetSumsL_of_zonotope_translate`; its absorption hypothesis is
-  the `discrete_john_strong` sandwich on `⟨Pᵢ⟩`).
+  `mem_subsetSumsL_of_zonotope_translate'`; its absorption hypothesis is
+  the `discrete_john_strong` sandwich on `⟨Pᵢ⟩`, stated under the
+  `GAP.widthScale` coefficient-width semantics of the paper's `kᵢPᵢ`).
 
 Given a seed, `SubSumCoveringSeed.toPackage` discharges the remaining
 package fields: `idxᵢ` is `gapLattice_index_ne_zero` and `covol_le` is
@@ -2222,7 +2224,11 @@ of the lattice refinement (`SubSumWitness.Ah_mem_gapLattice`), the
 Lemma-13 rounding of `Tz` into `⟨P₁⟩ ∩ ⟨P₂⟩`
 (`exists_lattice_intersection_rounding`), the choice of covering radii
 (`seed_radii`), and the eq.-(15) covering assembly
-(`fat_box_covering`, via `mem_subsetSumsL_of_zonotope_translate`). -/
+(`fat_box_covering`, via the `GAP.widthScale` variant
+`mem_subsetSumsL_of_zonotope_translate'` — the pointwise-dilation
+statement `mem_subsetSumsL_of_zonotope_translate` cannot be used, as
+its absorption hypothesis is a divisibility condition that fails
+already at `k = 2`, see `exists_mem_one_smul_notMem_two_smul`). -/
 
 namespace SubSumWitness
 
@@ -2489,28 +2495,129 @@ theorem seed_radii {d : ℕ} {C : Fin d → ℤ} {T : Fin d → ℤ} {i₀ : Fin
         (fun h ↦ absurd (Finset.mem_univ i₀) h), if_pos rfl]
     rw [hprod]
 
+/-- **Width-scaled covering lemma** (eq. (15) under the paper's `kP`
+semantics): if a translate of the covering progression `Q` is contained
+in the subset sums of `X' ⊆ X`, then every point `y` of the lattice `L`
+lying in the region `𝒵_{X∖X'} + q + H` is a subset sum of `X`.
+
+This is the `GAP.widthScale` analogue of
+`mem_subsetSumsL_of_zonotope_translate`, generalized over the covering
+progression `Q` (instantiated with `W.P.widthScale W.k` in
+`fat_box_covering`), the "half progression" finset `H` (instantiated
+with `insert 0 (W.P.widthScale (W.k / 2)).toFinset`), and the ambient
+lattice `L` (instantiated with `gapLattice W.P`).
+
+The generalization is forced by the `SubSumWitness` pointwise-dilation
+convention: the paper's `kP` is the coefficient-width-scaled
+progression `P.widthScale k` — under which the absorption
+`r + (k/2)P ⊆ kP` is a coefficient-range computation — not the
+pointwise dilate `k • P`, for which the same statement is a
+divisibility condition that already fails at `k = 2`
+(`GAP.exists_mem_one_smul_notMem_two_smul`). -/
+theorem mem_subsetSumsL_of_zonotope_translate'
+    {X X' : Finset (Fin ℓ → ℤ)} (hX' : X' ⊆ X)
+    {L : Submodule ℤ (Fin ℓ → ℤ)} {d : ℕ} {Q : GAP ℓ d}
+    {q : Fin ℓ → ℤ} (hq : q ∈ L) (hXspan : ∀ a ∈ X, a ∈ L)
+    (htr : (Q.translate q).toFinset ⊆ GAP.subsetSumsL X')
+    {wX : Fin ℓ → ℝ} (hwX0 : ∀ i, 0 ≤ wX i)
+    (hwX : ∀ a ∈ X \ X', ∀ i, |(a i : ℝ)| ≤ wX i)
+    {H : Finset (Fin ℓ → ℤ)} (hHspan : ∀ t ∈ H, t ∈ L)
+    (habs : ∀ r : Fin ℓ → ℤ, r ∈ L →
+        (∀ i, |(r i : ℝ)| ≤ (ℓ : ℝ) * wX i) →
+        ∀ t ∈ H, r + t ∈ Q.toFinset)
+    {y : Fin ℓ → ℤ} (hy : y ∈ L)
+    (hz : ∃ z : Fin ℓ → ℝ,
+        z ∈ zonotope ((X \ X').image fun x i ↦ (x i : ℝ)) ∧
+        ∃ t ∈ H, ∀ i, (y i : ℝ) = z i + (q i : ℝ) + (t i : ℝ)) :
+    y ∈ GAP.subsetSumsL X := by
+  classical
+  obtain ⟨z, hzZ, t, ht, hdecomp⟩ := hz
+  -- `z` is in fact the integer point `y − q − t`.
+  set zint : Fin ℓ → ℤ := y - q - t
+  have hz_eq : z = fun i ↦ (zint i : ℝ) := by
+    funext i
+    have h := hdecomp i
+    have hzi : (zint i : ℝ) = (y i : ℝ) - (q i : ℝ) - (t i : ℝ) := by
+      have hz0 : zint i = y i - q i - t i := rfl
+      rw [hz0]
+      push_cast
+      ring
+    rw [hzi]
+    linarith
+  rw [hz_eq] at hzZ
+  obtain ⟨S, hS, hclose⟩ := exists_subset_sum_sub_le_int hzZ hwX0 hwX
+  set s : Fin ℓ → ℤ := ∑ a ∈ S, a
+  set r : Fin ℓ → ℤ := zint - s
+  have htspan : t ∈ L := hHspan t ht
+  have hsspan : s ∈ L :=
+    Submodule.sum_mem _ fun a ha ↦
+      hXspan a (Finset.mem_sdiff.mp (hS ha)).1
+  have hrspan : r ∈ L :=
+    Submodule.sub_mem _
+      (Submodule.sub_mem _ (Submodule.sub_mem _ hy hq) htspan) hsspan
+  have hrbound : ∀ i, |(r i : ℝ)| ≤ (ℓ : ℝ) * wX i := by
+    intro i
+    have hi := hclose i
+    have hrw : (r i : ℝ) = (zint i : ℝ) - (s i : ℝ) := by
+      have hr : r i = zint i - s i := rfl
+      rw [hr, Int.cast_sub]
+    rw [hrw, abs_sub_comm]
+    exact hi
+  have hrt : r + t ∈ Q.toFinset := habs r hrspan hrbound t ht
+  have hqmem : q + (r + t) ∈ (Q.translate q).toFinset := by
+    rw [GAP.mem_translate_iff]
+    have hsub' : q + (r + t) - q = r + t := by
+      ext i; simp [Pi.add_apply, Pi.sub_apply]
+    rw [hsub']
+    exact hrt
+  have hcov : s + (q + (r + t)) ∈ GAP.subsetSumsL ((X \ X') ∪ X') :=
+    subsetSumsL_add Finset.sdiff_disjoint
+      (GAP.mem_subsetSumsL.mpr ⟨S, hS, rfl⟩) (htr hqmem)
+  rw [Finset.sdiff_union_of_subset hX'] at hcov
+  have key : s + (q + (r + t)) = y := by
+    ext i
+    have hr : r i = y i - q i - t i - s i := rfl
+    simp only [Pi.add_apply, hr]
+    ring
+  rwa [key] at hcov
+
 /-- **Lemma 14** (eq. (15) covering assembly): every `⟨P⟩`-point of the
 box `T + ∏ [−rᵢ, rᵢ]` is a subset sum of `X`.  This is
-`mem_subsetSumsL_of_zonotope_translate` instantiated at the structure
-witness `W` (`X' = W.A'`, `K = W.k`, `q = W.t`, `P = W.P`): the translate
-containment is `W.htranslate`, `q ∈ ⟨P⟩` is `W.t_mem_gapLattice`, and
-`P` is homogeneous (`SubSumWitness.homogeneous`).  The three hypotheses
-`hXspan` (`X ⊆ ⟨P⟩`, the `Ā ⊆ P` refinement), `habs` (the
-`discrete_john_strong` absorption of a small `⟨P⟩`-point into `kP` over
-`(k/2)P`) and `hfat` (the fat box `z̄ + ξ|A|B ⊆ 𝒵_{X∖A'}` covering the
-region `T + box(r) − q − (k/2)P`) are the genuine Lemma-14 inputs. -/
+`mem_subsetSumsL_of_zonotope_translate'` instantiated at the structure
+witness `W` (`X' = W.A'`, `Q = W.P.widthScale W.k`, `q = W.t`,
+`H = insert 0 (W.P.widthScale (W.k/2)).toFinset`, `L = ⟨P⟩`).
+
+The covering progression is the *width-scaled* `P.widthScale k` — the
+paper's `kP` — rather than the pointwise dilate `k • P` stored in
+`SubSumWitness.htranslate`.  Accordingly the inputs are: `hXspan`
+(`X ⊆ ⟨P⟩`, the `Ā ⊆ P` refinement), `hcont` (the width-scaled
+translate containment `q + kP ⊆ Σ(A')`, the faithful form of
+`SubSumWitness.htranslate` — it coincides with `W.htranslate` at
+`k = 1`, where `1 • P = P = P.widthScale 1`, and is a genuine extra
+input for `k ≥ 2` since `k • P` and `P.widthScale k` are then
+incomparable), `habs` (the `discrete_john_strong` absorption
+`r + (k/2)P ⊆ kP` of a small `⟨P⟩`-point) and `hfat` (the fat box
+`z̄ + ξ|A|B ⊆ 𝒵_{X∖A'}` covering the region `T + box(r) − q − (k/2)P`).
+The `insert 0` adjoins the zero point to the half progression: at
+`k = 1` the `widthScale (k/2) = widthScale 0` coefficient box is empty,
+and the `t = 0` case is precisely the degenerate content of the paper's
+argument. -/
 theorem fat_box_covering {d : ℕ} {c : ℝ} {X : Finset (Fin d → ℤ)}
     (W : SubSumWitness X c d) {wX : Fin d → ℝ}
     (hwX0 : ∀ i, 0 ≤ wX i)
     (hwX : ∀ a ∈ X \ W.A', ∀ i, |(a i : ℝ)| ≤ wX i)
     (hXspan : ∀ a ∈ X, a ∈ gapLattice W.P)
+    (hcont : ((W.P.widthScale W.k).translate W.t).toFinset ⊆
+        GAP.subsetSumsL W.A')
     (habs : ∀ s : Fin d → ℤ, s ∈ gapLattice W.P →
         (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * wX i) →
-        ∀ t ∈ (((W.k : ℤ) / 2) • W.P).toFinset,
-          s + t ∈ ((W.k : ℤ) • W.P).toFinset)
+        ∀ t ∈ insert (0 : Fin d → ℤ)
+            (W.P.widthScale (W.k / 2)).toFinset,
+          s + t ∈ (W.P.widthScale W.k).toFinset)
     {T : Fin d → ℤ} {r : Fin d → ℝ}
     (hfat : ∀ y : Fin d → ℤ, (∀ i, |((y - T) i : ℝ)| ≤ r i) →
-        ∃ t ∈ (((W.k : ℤ) / 2) • W.P).toFinset,
+        ∃ t ∈ insert (0 : Fin d → ℤ)
+            (W.P.widthScale (W.k / 2)).toFinset,
           (fun i ↦ (y i : ℝ) - (W.t i : ℝ) - (t i : ℝ)) ∈
             zonotope ((X \ W.A').image fun x i ↦ (x i : ℝ))) :
     ∀ y : Fin d → ℤ, y ∈ gapLattice W.P →
@@ -2518,15 +2625,31 @@ theorem fat_box_covering {d : ℕ} {c : ℝ} {X : Finset (Fin d → ℤ)}
   classical
   intro y hy hbd
   obtain ⟨t, ht, hzt⟩ := hfat y hbd
-  apply mem_subsetSumsL_of_zonotope_translate (X' := W.A') (P := W.P)
-    (K := (W.k : ℤ)) (q := W.t) (wX := wX)
+  apply mem_subsetSumsL_of_zonotope_translate' (X' := W.A')
+    (L := gapLattice W.P) (Q := W.P.widthScale W.k) (q := W.t)
+    (wX := wX)
+    (H := insert (0 : Fin d → ℤ) (W.P.widthScale (W.k / 2)).toFinset)
   · exact W.hA'.trans W.hAh
-  · exact W.homogeneous
   · exact W.t_mem_gapLattice
   · exact hXspan
-  · exact W.htranslate
+  · exact hcont
   · exact hwX0
   · exact hwX
+  · -- `H ⊆ ⟨P⟩`: `0` trivially, and `u = P.eval n = base + Σ nⱼ·stepⱼ`
+    -- lies in `⟨P⟩` since `P` is homogeneous.
+    intro u hu
+    rcases Finset.mem_insert.mp hu with rfl | hu
+    · exact Submodule.zero_mem _
+    · obtain ⟨n, -, hn⟩ := Finset.mem_image.mp hu
+      rw [← hn, GAP.widthScale_eval]
+      have h₁ := W.P.eval_sub_base_mem_lattice n
+      obtain ⟨hc, hcbase⟩ := W.homogeneous
+      have hbase : W.P.base ∈ gapLattice W.P := by
+        rw [hcbase]
+        exact Submodule.sum_mem _ fun i _ ↦ Submodule.smul_mem _ _
+          (Submodule.subset_span (Set.mem_range_self i))
+      have h₂ := Submodule.add_mem _ h₁ hbase
+      rwa [sub_add_cancel] at h₂
   · exact habs
   · exact hy
   · exact ⟨fun i ↦ (y i : ℝ) - (W.t i : ℝ) - (t i : ℝ), hzt, t, ht,
@@ -2603,7 +2726,12 @@ coset) produces such a sandwich — the paper supplies it through the
 `Pᵢ ⊆` translate-of-`C·B` containment, which is not among the
 hypotheses here (no bound on `Pᵢ` at all is assumed).  (Per the caveat
 at `SubSumWitness.two_le_width`, minimality alone does not imply step
-independence in this formalization, so this remains an input.) -/
+independence in this formalization, so this remains an input.)
+
+Note also the strength of the quantification: the conclusion is claimed
+for *every* `c'`-witness `Wᵢ` of `Bᵢ ∓ a₀`, whereas the paper applies
+the minimal-dimension argument to the canonical witness
+`Pᵢ = P(Bᵢ ∓ a₀)` returned by Lemma 11's first half. -/
 theorem exists_lemma11_rank {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
@@ -2646,7 +2774,18 @@ the largeness is irreducibly a property of the specific eq.-(13) point
 (in the paper `z₁` carries `≈ μ|A|/2` of total weight; alternatively the
 nondegeneracy could come from a two-points variant of
 `exists_ne_zero_mem_inf_mem_box`), and the covering is the unformalized
-fat-box containment of Lemma 14. -/
+fat-box containment of Lemma 14.  As with the other residuals, the
+quantification is over all `c'`-witnesses `Wᵢ`, not only the paper's
+canonical `Pᵢ = P(Bᵢ ∓ a₀)`.
+
+The fat-box clauses quantify `t` over
+`insert 0 (Wᵢ.P.widthScale (Wᵢ.k/2)).toFinset`, the paper's
+`(kᵢ/2)Pᵢ` under the `GAP.widthScale` (coefficient-width) semantics —
+*not* the pointwise dilate `(kᵢ/2) • Wᵢ.P`, whose points carry
+`kᵢ/2`-divisible coefficients and cannot be absorbed into `kᵢPᵢ` (see
+`exists_lemma14_absorption`).  The adjoined `0` keeps the domain
+nonempty at `kᵢ = 1` (where `widthScale 0` has no coefficients), giving
+exactly the `t = 0` case `y − tᵢ ∈ 𝒵`. -/
 theorem exists_lemma13_14_data {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
@@ -2678,12 +2817,14 @@ theorem exists_lemma13_14_data {ℓ : ℕ} {c c' δ γ C' : ℝ} :
               (((d.factorial * ∏ j, (C j).natAbs) *
                 (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) + 1) →
           (∀ y : Fin d → ℤ, (∀ i, |((y - T) i : ℝ)| ≤ r i) →
-            ∃ t ∈ (((W₁.k : ℤ) / 2) • W₁.P).toFinset,
+            ∃ t ∈ insert (0 : Fin d → ℤ)
+                (W₁.P.widthScale (W₁.k / 2)).toFinset,
               (fun i ↦ (y i : ℝ) - (W₁.t i : ℝ) - (t i : ℝ)) ∈
                 zonotope (((B₁.image (· - a₀)) \ W₁.A').image
                   fun x i ↦ (x i : ℝ))) ∧
           (∀ y : Fin d → ℤ, (∀ i, |((y - T) i : ℝ)| ≤ r i) →
-            ∃ t ∈ (((W₂.k : ℤ) / 2) • W₂.P).toFinset,
+            ∃ t ∈ insert (0 : Fin d → ℤ)
+                (W₂.P.widthScale (W₂.k / 2)).toFinset,
               (fun i ↦ (y i : ℝ) - (W₂.t i : ℝ) - (t i : ℝ)) ∈
                 zonotope (((B₂.image (a₀ - ·)) \ W₂.A').image
                   fun x i ↦ (x i : ℝ)))) :=
@@ -2775,7 +2916,9 @@ Lemma 11/14: the minimal witness `Pᵢ` is chosen so that `Āᵢ ⊆ Pᵢ`, and
 Only the `∖ Wᵢ.Ah` part is a genuine input: elements of `Wᵢ.Ah` lie in
 `Wᵢ.P.toFinset` (`SubSumWitness.hsub`) and hence in `⟨Wᵢ.P⟩`
 (`SubSumWitness.Ah_mem_gapLattice`), so `exists_lemma14_lattice` below
-extends this to all of `Bᵢ ∓ a₀`. -/
+extends this to all of `Bᵢ ∓ a₀`.  As with the other residuals, the
+quantification is over all `c'`-witnesses `Wᵢ`, not only the paper's
+canonical `Pᵢ = P(Bᵢ ∓ a₀)` for which `Āᵢ ⊆ Pᵢ` is arranged. -/
 theorem exists_lemma14_lattice_core {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
@@ -2819,12 +2962,189 @@ theorem exists_lemma14_lattice {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     · exact W₂.Ah_mem_gapLattice ha'
     · exact h₂ a (Finset.mem_sdiff.mpr ⟨ha, ha'⟩)
 
+namespace GAP
+
+/-- The coefficientwise content of membership in a pointwise dilate
+`k • P`: when `P.step` is `ℤ`-linearly independent and the base is
+`P.base = ∑ hⱼ • stepⱼ` (homogeneity), a lattice point
+`x = ∑ cⱼ • stepⱼ` lies in `(k • P).toFinset` iff there is a coefficient
+tuple `n ∈ P.coeffs` with `cⱼ = k·(hⱼ + nⱼ)` for every `j` — i.e. each
+coefficient `cⱼ` is congruent to `k·hⱼ` modulo `k` (in particular `k`
+divides `cⱼ` when `hⱼ = 0`) with quotient `cⱼ/k − hⱼ` in the
+coefficient box `[0, widthⱼ)`.
+
+This isolates the exact arithmetic content of the Lemma-14 absorption
+step under the `SubSumWitness` pointwise-dilation convention
+(`GAP.toFinset_smul`): for `x = s + t` with `t = (k/2) • P.eval m` the
+condition reads `k ∣ cⱼ + (k/2)·(mⱼ − hⱼ)`, which a coordinatewise bound
+on `s` never supplies — see `exists_mem_one_smul_notMem_two_smul` for
+the resulting obstruction and `exists_lemma14_absorption` for the
+residual input.  In the paper `kP` at this step is the
+coefficient-width-scaled progression (our `GAP.widthScale`), for which
+the absorption `r + (k/2)P ⊆ kP` *is* a coefficient-range computation;
+under pointwise dilation it additionally asserts divisibility by `k`. -/
+theorem mem_smul_toFinset_iff_coeff {d : ℕ} {P : GAP ℓ d} {k : ℤ}
+    (hli : LinearIndependent ℤ P.step) {h : Fin d → ℤ}
+    (hbase : P.base = ∑ j, h j • P.step j) {x : Fin ℓ → ℤ}
+    {c : Fin d → ℤ} (hx : x = ∑ j, c j • P.step j) :
+    x ∈ (k • P).toFinset ↔
+      ∃ n ∈ P.coeffs, ∀ j, c j = k * (h j + (n j : ℤ)) := by
+  classical
+  have heval : ∀ n : Fin d → ℕ, (k • P).eval n =
+      ∑ j, (k * (h j + (n j : ℤ))) • P.step j := by
+    intro n
+    have h1 : (k • P).eval n = k • (P.base + ∑ j, (n j : ℤ) • P.step j) :=
+      eval_smul P k n
+    rw [h1, hbase, smul_add, Finset.smul_sum, Finset.smul_sum,
+      ← Finset.sum_add_distrib]
+    apply Finset.sum_congr rfl
+    intro j _
+    rw [smul_smul, smul_smul, ← add_smul]
+    congr 1
+    ring
+  rw [toFinset, Finset.mem_image]
+  constructor
+  · rintro ⟨n, hn, hnx⟩
+    refine ⟨n, hn, fun j ↦ ?_⟩
+    have hsum : (∑ j, (c j - k * (h j + (n j : ℤ))) • P.step j) = 0 := by
+      have e : (∑ j, (c j - k * (h j + (n j : ℤ))) • P.step j)
+          = (∑ j, c j • P.step j)
+            - ∑ j, (k * (h j + (n j : ℤ))) • P.step j := by
+        rw [← Finset.sum_sub_distrib]
+        exact Finset.sum_congr rfl fun j _ ↦ sub_smul _ _ _
+      rw [e, ← hx, ← hnx, heval, sub_self]
+    exact sub_eq_zero.mp (Fintype.linearIndependent_iff.mp hli _ hsum j)
+  · rintro ⟨n, hn, hcn⟩
+    refine ⟨n, hn, ?_⟩
+    rw [heval, hx]
+    exact Finset.sum_congr rfl fun j _ ↦ by rw [hcn j]
+
+/-- **The divisibility obstruction at `k = 2`.**  For a homogeneous `P`
+with `ℤ`-linearly independent steps, `(1 • P).toFinset ⊆
+(2 • P).toFinset` fails as soon as some width is `≥ 2`: `base ∈ 2 • P`
+forces every homogeneity coefficient `hⱼ` to be even, and then
+`base + stepⱼ ∉ 2 • P` since its `j`-th coefficient `1 − hⱼ` is odd
+(`mem_smul_toFinset_iff_coeff`).
+
+Consequently the `s = 0` case of the Lemma-14 absorption property
+(`∀ t ∈ ((k/2) • P).toFinset, s + t ∈ (k • P).toFinset`) already fails
+at `k = 2` for *every* minimal-dimension witness `P` with independent
+steps (`2 ≤ P.width j₀` from `SubSumWitness.two_le_width`, and `coeffs`
+nonempty since `0 ∈ P.toFinset`): the pointwise-dilation absorption is a
+divisibility statement, not a coefficient-range containment, so it
+cannot be discharged by a coordinate bound on `s`.  The residual input
+`exists_lemma14_absorption` is therefore stated with the
+coefficient-width scaling `GAP.widthScale` (the paper's `kP`
+semantics), where the absorption is the genuine computation of the
+paper's eq.-(15) proof. -/
+theorem exists_mem_one_smul_notMem_two_smul {d : ℕ} {P : GAP ℓ d}
+    (hli : LinearIndependent ℤ P.step) {h : Fin d → ℤ}
+    (hbase : P.base = ∑ j, h j • P.step j)
+    (hne : P.coeffs.Nonempty) {j₀ : Fin d} (hw : 2 ≤ P.width j₀) :
+    ∃ t ∈ ((1 : ℤ) • P).toFinset, t ∉ ((2 : ℤ) • P).toFinset := by
+  classical
+  have hwpos : ∀ j, 0 < P.width j := by
+    obtain ⟨m, hm⟩ := hne
+    exact fun j ↦ Nat.pos_of_ne_zero fun h0 ↦ by
+      have := coeff_mem_width hm j
+      omega
+  have h0c : (0 : Fin d → ℕ) ∈ P.coeffs :=
+    mem_coeffs.mpr fun j ↦ by simpa using hwpos j
+  have eval1_zero : ((1 : ℤ) • P).eval (0 : Fin d → ℕ) = P.base := by
+    show (1 : ℤ) • P.base +
+        ∑ i, (((0 : Fin d → ℕ) i : ℤ)) • (1 : ℤ) • P.step i = P.base
+    simp
+  by_cases hb2 : P.base ∈ ((2 : ℤ) • P).toFinset
+  · -- `base ∈ 2 • P` forces every `hⱼ` even; then `base + stepⱼ₀ ∉ 2•P`.
+    obtain ⟨n, -, hcn⟩ := (mem_smul_toFinset_iff_coeff hli hbase
+      (x := P.base) (c := h) hbase).mp hb2
+    have heven : ∀ j, Even (h j) :=
+      fun j ↦ ⟨h j + (n j : ℤ), by have := hcn j; omega⟩
+    have he₀c : Function.update (0 : Fin d → ℕ) j₀ 1 ∈ P.coeffs :=
+      mem_coeffs.mpr fun j ↦ by
+        by_cases hj : j = j₀
+        · subst hj
+          rw [Function.update_self]
+          omega
+        · rw [Function.update_of_ne hj]
+          simpa using hwpos j
+    have eval1_e : ((1 : ℤ) • P).eval
+        (Function.update (0 : Fin d → ℕ) j₀ 1) = P.base + P.step j₀ := by
+      show (1 : ℤ) • P.base + ∑ i,
+          ((Function.update (0 : Fin d → ℕ) j₀ 1 i : ℤ)) •
+            (1 : ℤ) • P.step i = P.base + P.step j₀
+      rw [Finset.sum_eq_single j₀]
+      · simp [Function.update_self]
+      · intro i _ hij
+        rw [Function.update_of_ne hij]
+        simp
+      · intro habs
+        exact absurd (Finset.mem_univ j₀) habs
+    refine ⟨P.base + P.step j₀,
+      Finset.mem_image.mpr ⟨_, he₀c, eval1_e⟩, ?_⟩
+    intro hmem
+    have hstepj : P.step j₀ =
+        ∑ j, ((Function.update (0 : Fin d → ℕ) j₀ 1 j : ℤ)) •
+          P.step j := by
+      rw [Finset.sum_eq_single j₀]
+      · simp [Function.update_self]
+      · intro i _ hij
+        rw [Function.update_of_ne hij]
+        simp
+      · intro habs
+        exact absurd (Finset.mem_univ j₀) habs
+    have hrep : P.base + P.step j₀ =
+        ∑ j, (h j +
+            (Function.update (0 : Fin d → ℕ) j₀ 1 j : ℤ)) • P.step j := by
+      rw [hbase, hstepj, ← Finset.sum_add_distrib]
+      exact Finset.sum_congr rfl fun j _ ↦ (add_smul _ _ _).symm
+    obtain ⟨n', -, hcn'⟩ :=
+      (mem_smul_toFinset_iff_coeff hli hbase hrep).mp hmem
+    have hj₀ := hcn' j₀
+    rw [Function.update_self] at hj₀
+    obtain ⟨u, hu⟩ := heven j₀
+    rw [hu] at hj₀
+    norm_num at hj₀
+    omega
+  · exact ⟨P.base, Finset.mem_image.mpr ⟨0, h0c, eval1_zero⟩, hb2⟩
+
+end GAP
+
 /-- **Residual input — Lemma 14, absorption.**  For `|A|` large, a
-lattice point `s ∈ ⟨Pᵢ⟩` coordinatewise bounded by `d·w` is absorbed:
-`s + t ∈ kᵢ·Pᵢ` for every `t ∈ (kᵢ/2)·Pᵢ`.  In the paper this is the
-`discrete_john_strong` sandwich on `⟨Pᵢ⟩` combined with
-`kᵢ ≈ s(A)` being large (the rounding error `r` of Lemma 13 satisfies
-`r + (kᵢ/2)Pᵢ ⊆ kᵢPᵢ` coefficientwise). -/
+lattice point `s ∈ ⟨Pᵢ⟩` coordinatewise bounded by `d·w` is absorbed by
+the width-scaled progression: `s + t ∈ kᵢPᵢ` for every `t ∈ (kᵢ/2)Pᵢ`,
+and the translated `kᵢPᵢ` lies in `Σ(A'ᵢ)` — where `kᵢPᵢ` is the
+coefficient-width-scaled `Wᵢ.P.widthScale Wᵢ.k` and `(kᵢ/2)Pᵢ` is
+`Wᵢ.P.widthScale (Wᵢ.k/2)` (the paper's `r + (cs/2)P ⊆ csP` and
+`qᵢ + csᵢPᵢ ⊆ Σ(A'ᵢ)` of eq. (15)).
+
+Under this `GAP.widthScale` semantics the absorption is the genuine
+coefficient-range computation of the paper: writing `s = ∑ cⱼ • stepⱼ`
+and `t = base + ∑ mⱼ • stepⱼ` with `0 ≤ mⱼ < (kᵢ/2)·wⱼ`, the conclusion
+needs `0 ≤ cⱼ + mⱼ < kᵢ·wⱼ` — a coefficient bound on `s` in the step
+basis, supplied in the paper by the `discrete_john_strong` sandwich on
+`⟨Pᵢ⟩` together with `sᵢ ≫ √(d|Aᵢ|)` (so that the rounding error
+`r ∈ √(d|A|)·P` lands inside the `(kᵢ/2)Pᵢ` coefficient range).  This
+replaces the earlier pointwise-dilation reading `kᵢ • Pᵢ`, under which
+the claim is a *divisibility* condition
+(`GAP.mem_smul_toFinset_iff_coeff`) that already fails at `kᵢ = 2`
+(`GAP.exists_mem_one_smul_notMem_two_smul`).
+
+Two bookkeeping conventions:
+
+* the `insert 0` keeps the half-progression domain nonempty at
+  `kᵢ = 1` — `widthScale 0` has no coefficients — reducing the
+  absorption there to `s ∈ Pᵢ.toFinset`, the `t = 0` case; for
+  `kᵢ ≥ 2` the zero point is already in `widthScale (kᵢ/2)` (via
+  `0 ∈ Pᵢ ⊆ Pᵢ.widthScale (kᵢ/2)`), so `insert 0` is redundant;
+* the second conjunct is the width-scaled translate containment
+  `tᵢ + kᵢPᵢ ⊆ Σ(A'ᵢ)`, the faithful form of the witness axiom
+  `SubSumWitness.htranslate` (which stores the pointwise `kᵢ • Pᵢ`).
+  The two coincide at `kᵢ = 1` (`1 • Q = Q = Q.widthScale 1`) — hence
+  for the canonical witness, whose `kᵢ` is `1` and whose `Pᵢ` is
+  already the widened progression — while for `kᵢ ≥ 2` it is a genuine
+  extra input, `kᵢ • Pᵢ` and `Pᵢ.widthScale kᵢ` being incomparable in
+  general. -/
 theorem exists_lemma14_absorption {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
@@ -2834,14 +3154,20 @@ theorem exists_lemma14_absorption {ℓ : ℕ} {c c' δ γ C' : ℝ} :
         (Tz : Fin d → ℝ),
       lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
         N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
-      (∀ s : Fin d → ℤ, s ∈ gapLattice W₁.P →
+      ((∀ s : Fin d → ℤ, s ∈ gapLattice W₁.P →
         (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
-        ∀ t ∈ (((W₁.k : ℤ) / 2) • W₁.P).toFinset,
-          s + t ∈ ((W₁.k : ℤ) • W₁.P).toFinset) ∧
-      (∀ s : Fin d → ℤ, s ∈ gapLattice W₂.P →
+        ∀ t ∈ insert (0 : Fin d → ℤ)
+            (W₁.P.widthScale (W₁.k / 2)).toFinset,
+          s + t ∈ (W₁.P.widthScale W₁.k).toFinset) ∧
+        ((W₁.P.widthScale W₁.k).translate W₁.t).toFinset ⊆
+          GAP.subsetSumsL W₁.A') ∧
+      ((∀ s : Fin d → ℤ, s ∈ gapLattice W₂.P →
         (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
-        ∀ t ∈ (((W₂.k : ℤ) / 2) • W₂.P).toFinset,
-          s + t ∈ ((W₂.k : ℤ) • W₂.P).toFinset) :=
+        ∀ t ∈ insert (0 : Fin d → ℤ)
+            (W₂.P.widthScale (W₂.k / 2)).toFinset,
+          s + t ∈ (W₂.P.widthScale W₂.k).toFinset) ∧
+        ((W₂.P.widthScale W₂.k).translate W₂.t).toFinset ⊆
+          GAP.subsetSumsL W₂.A') :=
   sorry
 
 /-- **Lemma 14 (eq. (15) covering)** — assembled from the residual
@@ -2850,12 +3176,15 @@ inputs above:
 * (`Āᵢ ⊆ Pᵢ` refinement) `exists_lemma14_lattice`: the shifted pieces
   `Bᵢ ∓ a₀` lie in the lattices `⟨Pᵢ⟩`;
 * (absorption) `exists_lemma14_absorption`: a lattice point
-  `s ∈ ⟨Pᵢ⟩` coordinatewise bounded by `d·w` is absorbed:
-  `s + t ∈ kᵢ·Pᵢ` for every `t ∈ (kᵢ/2)·Pᵢ`;
+  `s ∈ ⟨Pᵢ⟩` coordinatewise bounded by `d·w` is absorbed into the
+  width-scaled `kᵢPᵢ` (`Wᵢ.P.widthScale Wᵢ.k`) for every
+  `t ∈ insert 0 (Wᵢ.P.widthScale (Wᵢ.k/2)).toFinset`, and the
+  translated `kᵢPᵢ` lies in `Σ(A'ᵢ)`;
 * (shared-scale data) `exists_lemma13_14_data`: the Lemma-11 column
   bound `C` with its coordinate boxes, the `Tz`-largeness at
   `bound(C)`, and the fat-box covering of `T + ∏[−rᵢ, rᵢ]` for
-  `r ≤ bound(C) + 1` — `y − tᵢ − t ∈ 𝒵_{Xᵢ∖A'ᵢ}`.
+  `r ≤ bound(C) + 1` — `y − tᵢ − t ∈ 𝒵_{Xᵢ∖A'ᵢ}` for
+  `t ∈ insert 0 (Wᵢ.P.widthScale (Wᵢ.k/2)).toFinset`.
 
 The column bound `C` is returned existentially (with its boxes,
 largeness and covering) so that it can be shared with the covolume
@@ -2890,14 +3219,20 @@ theorem exists_lemma14_covering {ℓ : ℕ} {c c' δ γ C' : ℝ} :
       Tz ∈ zonotope ((B₂.image (a₀ - ·)).image intVec) →
       (∀ a ∈ B₁.image (· - a₀), a ∈ gapLattice W₁.P) ∧
       (∀ a ∈ B₂.image (a₀ - ·), a ∈ gapLattice W₂.P) ∧
-      (∀ s : Fin d → ℤ, s ∈ gapLattice W₁.P →
+      ((∀ s : Fin d → ℤ, s ∈ gapLattice W₁.P →
         (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
-        ∀ t ∈ (((W₁.k : ℤ) / 2) • W₁.P).toFinset,
-          s + t ∈ ((W₁.k : ℤ) • W₁.P).toFinset) ∧
-      (∀ s : Fin d → ℤ, s ∈ gapLattice W₂.P →
+        ∀ t ∈ insert (0 : Fin d → ℤ)
+            (W₁.P.widthScale (W₁.k / 2)).toFinset,
+          s + t ∈ (W₁.P.widthScale W₁.k).toFinset) ∧
+        ((W₁.P.widthScale W₁.k).translate W₁.t).toFinset ⊆
+          GAP.subsetSumsL W₁.A') ∧
+      ((∀ s : Fin d → ℤ, s ∈ gapLattice W₂.P →
         (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
-        ∀ t ∈ (((W₂.k : ℤ) / 2) • W₂.P).toFinset,
-          s + t ∈ ((W₂.k : ℤ) • W₂.P).toFinset) ∧
+        ∀ t ∈ insert (0 : Fin d → ℤ)
+            (W₂.P.widthScale (W₂.k / 2)).toFinset,
+          s + t ∈ (W₂.P.widthScale W₂.k).toFinset) ∧
+        ((W₂.P.widthScale W₂.k).translate W₂.t).toFinset ⊆
+          GAP.subsetSumsL W₂.A') ∧
       ∃ (C lo₁ hi₁ lo₂ hi₂ : Fin d → ℤ),
         (W₁.P.toFinset ⊆
           Fintype.piFinset fun i ↦ Finset.Icc (lo₁ i) (hi₁ i)) ∧
@@ -2918,12 +3253,14 @@ theorem exists_lemma14_covering {ℓ : ℕ} {c c' δ γ C' : ℝ} :
               (((d.factorial * ∏ j, (C j).natAbs) *
                 (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) + 1) →
           (∀ y : Fin d → ℤ, (∀ i, |((y - T) i : ℝ)| ≤ r i) →
-            ∃ t ∈ (((W₁.k : ℤ) / 2) • W₁.P).toFinset,
+            ∃ t ∈ insert (0 : Fin d → ℤ)
+                (W₁.P.widthScale (W₁.k / 2)).toFinset,
               (fun i ↦ (y i : ℝ) - (W₁.t i : ℝ) - (t i : ℝ)) ∈
                 zonotope (((B₁.image (· - a₀)) \ W₁.A').image
                   fun x i ↦ (x i : ℝ))) ∧
           (∀ y : Fin d → ℤ, (∀ i, |((y - T) i : ℝ)| ≤ r i) →
-            ∃ t ∈ (((W₂.k : ℤ) / 2) • W₂.P).toFinset,
+            ∃ t ∈ insert (0 : Fin d → ℤ)
+                (W₂.P.widthScale (W₂.k / 2)).toFinset,
               (fun i ↦ (y i : ℝ) - (W₂.t i : ℝ) - (t i : ℝ)) ∈
                 zonotope (((B₂.image (a₀ - ·)) \ W₂.A').image
                   fun x i ↦ (x i : ℝ)))) := by
@@ -2947,7 +3284,7 @@ theorem exists_lemma14_covering {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ⟨hNA, hIrred, hγlog, hδ, hδ1, hγ, hγ1, hδ4, hle₁, ha₀,
       hB₁e, hB₂e, hdisj, hcover, hδB₁, hδB₂, hb₁, hb₂, hdim₁, hdim₂,
       hP₁, hP₂, hTz₁, hTz₂⟩
-  obtain ⟨habs₁, habs₂⟩ := hN₂ A d W a₀ B₁ B₂ W₁ W₂ Tz
+  obtain ⟨⟨habs₁, hcont₁⟩, ⟨habs₂, hcont₂⟩⟩ := hN₂ A d W a₀ B₁ B₂ W₁ W₂ Tz
     ⟨hNA, hIrred, hγlog, hδ, hδ1, hγ, hγ1, hδ4, hle₂, ha₀,
       hB₁e, hB₂e, hdisj, hcover, hδB₁, hδB₂, hb₁, hb₂, hdim₁, hdim₂,
       hP₁, hP₂, hTz₁, hTz₂⟩
@@ -2956,7 +3293,7 @@ theorem exists_lemma14_covering {ℓ : ℕ} {c c' δ γ C' : ℝ} :
       ⟨hNA, hIrred, hγlog, hδ, hδ1, hγ, hγ1, hδ4, hle₃, ha₀,
         hB₁e, hB₂e, hdisj, hcover, hδB₁, hδB₂, hb₁, hb₂, hdim₁, hdim₂,
         hP₁, hP₂, hTz₁, hTz₂⟩
-  exact ⟨hlat₁, hlat₂, habs₁, habs₂,
+  exact ⟨hlat₁, hlat₂, ⟨habs₁, hcont₁⟩, ⟨habs₂, hcont₂⟩,
     C, lo₁, hi₁, lo₂, hi₂, hbox₁, hbox₂, hC₁, hC₂, hlarge, hfat⟩
 
 /-- **The Lemmas 11 (second half)–14 core** — the single remaining
@@ -2987,10 +3324,14 @@ This bundles exactly the three unformalized ingredients of §3.3:
   in the paper it is supplied by the `Āᵢ ⊆ Pᵢ` refinement).
   `T_big` is the largeness of `Tz`.
 * **Lemma 14 fat-box covering**: `covᵢ` is
-  `mem_subsetSumsL_of_zonotope_translate` applied with `X' = Wᵢ.A'`,
-  `K = Wᵢ.k`, `q = Wᵢ.t`; its absorption hypothesis `habs` uses the
-  `discrete_john_strong` sandwich on `⟨Pᵢ⟩`, and the zonotope
-  containment uses the fat box `z̄ᵢ + ξ|A|B ⊆ 𝒵_{Xᵢ ∖ A'ᵢ}`.
+  `mem_subsetSumsL_of_zonotope_translate'` (the `GAP.widthScale`
+  variant of `mem_subsetSumsL_of_zonotope_translate`, which is stated
+  for pointwise dilates) applied with `X' = Wᵢ.A'`,
+  `Q = Wᵢ.P.widthScale Wᵢ.k`, `q = Wᵢ.t` and
+  `H = insert 0 (Wᵢ.P.widthScale (Wᵢ.k/2)).toFinset`; its absorption
+  hypothesis `habs` uses the `discrete_john_strong` sandwich on
+  `⟨Pᵢ⟩`, and the zonotope containment uses the fat box
+  `z̄ᵢ + ξ|A|B ⊆ 𝒵_{Xᵢ ∖ A'ᵢ}`.
 
 The statement is deliberately conditional on the full §3.3 hypothesis
 list, with its own threshold `N₀`, so that it is *strictly* the missing
@@ -3038,8 +3379,8 @@ theorem exists_subSumCoveringSeed {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ⟨hNA, hIrred, hγlog, hδ, hδ1, hγ, hγ1, hδ4,
       (le_max_left N₁ N₂).trans hN, ha₀, hB₁e, hB₂e, hdisj, hcover,
       hδB₁, hδB₂, hb₁, hb₂, hdim₁, hdim₂, hP₁, hP₂, hTz₁, hTz₂⟩
-  obtain ⟨hX₁, hX₂, habs₁, habs₂, C, _lo₁, _hi₁, _lo₂, _hi₂,
-    hbox₁, hbox₂, hC₁, hC₂, hlarge, hfat⟩ :=
+  obtain ⟨hX₁, hX₂, ⟨habs₁, hcont₁⟩, ⟨habs₂, hcont₂⟩, C, _lo₁, _hi₁,
+    _lo₂, _hi₂, hbox₁, hbox₂, hC₁, hC₂, hlarge, hfat⟩ :=
     hN₂ A d W a₀ B₁ B₂ W₁ W₂ Tz hli₁ hli₂ hNA hIrred hγlog hδ hδ1 hγ
       hγ1 hδ4 ((le_max_right N₁ N₂).trans hN) ha₀ hB₁e hB₂e hdisj hcover
       hδB₁ hδB₂ hb₁ hb₂ hdim₁ hdim₂ hP₁ hP₂ hTz₁ hTz₂
@@ -3078,8 +3419,8 @@ theorem exists_subSumCoveringSeed {ℓ : ℕ} {c c' δ γ C' : ℝ} :
              (fun j ↦ W₂.two_le_width hdim₂ j) hC₂,
            T := T, T_mem₁ := hT₁, T_mem₂ := hT₂, r := r,
            r_nonneg := hrnn, T_big := hrbig, r_covol := hrcovol,
-           cov₁ := fat_box_covering W₁ hwX0 hwX₁ hX₁ habs₁ hfat₁,
-           cov₂ := fat_box_covering W₂ hwX0 hwX₂ hX₂ habs₂ hfat₂ }⟩
+           cov₁ := fat_box_covering W₁ hwX0 hwX₁ hX₁ hcont₁ habs₁ hfat₁,
+           cov₂ := fat_box_covering W₂ hwX0 hwX₂ hX₂ hcont₂ habs₂ hfat₂ }⟩
 
 /-- The covering package of Lemmas 11–14, obtained from the seed input
 `exists_subSumCoveringSeed` via `SubSumCoveringSeed.toPackage`. -/

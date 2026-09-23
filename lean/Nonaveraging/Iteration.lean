@@ -480,9 +480,9 @@ theorem case_up_pow_hi {a b p C c ε k e e' : ℝ}
       _ ≤ C ^ e' * (a ^ (-(1 - ε) * k)) ^ e' * (a ^ e⁻¹) ^ e' :=
         mul_le_mul_of_nonneg_left (Real.rpow_le_rpow hb hba he'.le)
           (mul_nonneg (Real.rpow_nonneg (by linarith) _)
-            (Real.rpow_nonneg ha0 _))
+            (Real.rpow_nonneg (Real.rpow_nonneg ha0 _) _))
       _ = C ^ e' * a ^ (-(1 - ε) * k * e') * a ^ (e⁻¹ * e') := by
-        rw [Real.rpow_mul ha0, Real.rpow_mul ha0]
+        rw [← Real.rpow_mul ha0, ← Real.rpow_mul ha0]
   have hcomb : a ^ (-(1 - ε) * k * e') * a ^ (e⁻¹ * e')
       = a ^ (e' * (e⁻¹ - (1 - ε) * k)) := by
     rw [← Real.rpow_add hapos]
@@ -800,7 +800,15 @@ theorem lemma10_data {ε K : ℝ} (hε : 0 < ε) (hε3 : ε < 1 / 3)
   have hTd : max (Nf d hdD) (max ⌈((1 / 8 : ℝ) ^ K) ^ (-3 : ℝ)⌉₊
       (max ⌈Real.exp (2 * (c₀ d hdD)⁻¹ / (1 - ε))⌉₊
         ⌈(2 * max (Cf d hdD) 1 : ℝ) ^ (4 / ε : ℝ)⌉₊)) ≤ A.card := by
-    have h1 := Finset.le_sup (Finset.mem_attach _ ⟨d, hmem⟩)
+    have h1 := Finset.le_sup (s := (Finset.range (D₀ + 1)).attach)
+      (f := fun x : {x // x ∈ Finset.range (D₀ + 1)} ↦
+        max (Nf x.1 (Nat.lt_succ_iff.mp (Finset.mem_range.mp x.2)))
+          (max ⌈((1 / 8 : ℝ) ^ K) ^ (-3 : ℝ)⌉₊
+            (max ⌈Real.exp (2 * (c₀ x.1 (Nat.lt_succ_iff.mp
+                (Finset.mem_range.mp x.2)))⁻¹ / (1 - ε))⌉₊
+              ⌈(2 * max (Cf x.1 (Nat.lt_succ_iff.mp
+                (Finset.mem_range.mp x.2))) 1 : ℝ) ^ (4 / ε : ℝ)⌉₊)))
+      (Finset.mem_attach _ ⟨d, hmem⟩)
     exact h1.trans (le_trans (le_max_right _ _) hN)
   have hNf : Nf d hdD ≤ A.card := (le_max_left _ _).trans hTd
   have hγ3N : ⌈((1 / 8 : ℝ) ^ K) ^ (-3 : ℝ)⌉₊ ≤ A.card :=
@@ -875,7 +883,8 @@ theorem lemma10_data {ε K : ℝ} (hε : 0 < ε) (hε3 : ε < 1 / 3)
           div_self (mul_ne_zero hε.ne' (by norm_num))]]
       exact Real.rpow_one _
     rw [← h2]
-    exact Real.rpow_le_rpow hCpos hC4 (by positivity : (0 : ℝ) ≤ ε / 4)
+    exact Real.rpow_le_rpow (Real.rpow_nonneg hCpos _) hC4
+      (by positivity : (0 : ℝ) ≤ ε / 4)
   -- assemble the bundle with `C := max (Cf d) 1`
   refine ⟨n, dt, At, c₀ d hdD, Wt, c' d hdD, 1 / 8, (1 / 8 : ℝ) ^ K,
     max (Cf d hdD) 1, hδ, by norm_num, hγ, le_refl _, hAγ, hder,
@@ -1078,6 +1087,7 @@ theorem residual_density_step
     StepConclusionD A B ζ incr q κ := by
   sorry
 
+set_option maxHeartbeats 800000 in
 /-- **Residual §4 leaf**: given the Lemma-10 bundle, produce the step
 conclusion in every case where the clean up-move bound is unavailable —
 `d̃ < d`, `d̃ = d`, or `d̃ > d` with `α_{d̃} + ζ + incr ≥ 1`.
@@ -1166,7 +1176,7 @@ theorem residual_step
   have he4 : (1 / 4 : ℝ) ≤ αd d + ζ := (αd_quarter_le hd).trans (by linarith)
   have he0 : (0 : ℝ) < αd d + ζ := by linarith
   have hba : (B.card : ℝ) ≤ (A.card : ℝ) ^ (αd d + ζ)⁻¹ :=
-    (card_lt_rpow_of_rpow_lt he0 (by omega) hcex).le
+    (card_lt_rpow_of_rpow_lt he0 (by exact_mod_cast ha0) hcex).le
   have hinv4 : (αd d + ζ)⁻¹ ≤ 4 := by
     calc (αd d + ζ)⁻¹ ≤ (1 / 4 : ℝ)⁻¹ := inv_anti₀ (by norm_num) he4
       _ = 4 := by norm_num
@@ -1200,7 +1210,6 @@ theorem residual_step
           = (At.card : ℝ) / 2 := by
         have hne : (A.card : ℝ) ≠ 0 := ha0.ne'
         field_simp
-        ring
       rw [hρmul]
       linarith [hAh]
     · exact div_pos
@@ -1247,7 +1256,7 @@ theorem residual_step
       hhalf)
   · -- **`d̃ = d`**: shrink vs. density-increment split on
     -- `ρ = |Ã|/|A|` vs `|A|^{-σ}`.
-    subst hdt
+    subst dt
     set σ : ℝ := max (incr / 2)
       (20 * Real.log (2 * C * C) / (K * Real.log (A.card : ℝ)))
       with hσdef
@@ -1270,7 +1279,6 @@ theorem residual_step
         have h1 : 1 + K / 5 ≤ K * (αd d + (ζ + incr)) := by
           have e1 : 1 + K / 5 = K * (1 / K + 1 / 5) := by
             field_simp
-            ring
           rw [e1]
           apply mul_le_mul_of_nonneg_left _ hKpos.le
           have h2 : (1 : ℝ) / K ≤ 1 / 100 :=
@@ -1282,7 +1290,6 @@ theorem residual_step
         have e1 : (αd d + (ζ + incr)) * (αd d + ζ)⁻¹
             = (αd d + ζ) * (αd d + ζ)⁻¹ + incr * (αd d + ζ)⁻¹ := by ring
         rw [e1, mul_inv_cancel₀ he0.ne']
-        exact le_rfl
       have htt : incr * (αd d + ζ)⁻¹ ≤ σ * K / 10 := by
         have h2 : incr * 4 ≤ incr * K / 20 := by
           have e1 : incr * K / 20 = incr * (K / 20) := by ring
@@ -1291,10 +1298,10 @@ theorem residual_step
           linarith [hK]
         have h3 : incr * K / 20 ≤ σ * K / 10 := by
           have e1 : incr * K / 20 = (incr / 2) * (K / 10) := by ring
-          rw [e1]
-          apply mul_le_mul_of_nonneg_right _ (by linarith [hK] :
-            (0 : ℝ) ≤ K / 10)
-          exact le_max_left _ _
+          have e2 : σ * K / 10 = σ * (K / 10) := by ring
+          rw [e1, e2]
+          exact mul_le_mul_of_nonneg_right (le_max_left _ _)
+            (by linarith [hK] : (0 : ℝ) ≤ K / 10)
         calc incr * (αd d + ζ)⁻¹ ≤ incr * 4 :=
             mul_le_mul_of_nonneg_left hinv4 hincr.le
           _ ≤ incr * K / 20 := h2
@@ -1407,19 +1414,19 @@ theorem residual_step
       have h2 : C * C ≤ ((A.card : ℝ) ^ (ε / 4) / 2) *
           ((A.card : ℝ) ^ (ε / 4) / 2) := by
         apply mul_le_mul h1 h1
-          (by positivity : (0 : ℝ) ≤ (A.card : ℝ) ^ (ε / 4) / 2)
           (by linarith [hC] : (0 : ℝ) ≤ C)
+          (by positivity : (0 : ℝ) ≤ (A.card : ℝ) ^ (ε / 4) / 2)
       have h3 : ((A.card : ℝ) ^ (ε / 4) / 2) * ((A.card : ℝ) ^ (ε / 4) / 2)
           = (A.card : ℝ) ^ (ε / 2) / 4 := by
         have e1 : (A.card : ℝ) ^ (ε / 4) * (A.card : ℝ) ^ (ε / 4)
             = (A.card : ℝ) ^ (ε / 4 + ε / 4) := (Real.rpow_add ha0 _ _).symm
-        rw [e1, show ε / 4 + ε / 4 = ε / 2 by ring]
-        ring
+        rw [div_mul_div_comm, e1, show ε / 4 + ε / 4 = ε / 2 by ring,
+          show (2 : ℝ) * 2 = 4 by norm_num]
       have h4 : 2 * C * C ≤ (A.card : ℝ) ^ (ε / 2) / 2 := by
         linarith [h2, h3]
       have h5 : (A.card : ℝ) ^ (ε / 2) ≤ (A.card : ℝ) ^ (3 * c₀ / 4 / 2) :=
         Real.rpow_le_rpow_of_exponent_le ha1.le (by linarith [hεc, hc₀])
-      linarith
+      linarith [Real.rpow_nonneg ha0.le (3 * c₀ / 4 / 2)]
     exact finish ((case_up_pow_hi (a := (A.card : ℝ)) (b := (B.card : ℝ))
       (p := (Wt.P.coeffBox.card : ℝ)) (C := C) (c := 3 * c₀ / 4) (ε := ε)
       (k := (dt : ℝ) - (d : ℝ)) (e := αd d + ζ) (e' := αd dt + (ζ + incr))
@@ -1571,7 +1578,9 @@ theorem thm2_step (ζ₀ : ℝ) (hζ₀ : 0 < ζ₀) :
       linarith
     have hg12 : g ≤ 1 / 12 := by rw [hg_def]; exact min_le_left _ _
     have hd0' : (0 : ℝ) < (d : ℝ) := by exact_mod_cast hd
-    have hDd : (d : ℝ) ≤ D := by exact_mod_cast hdD
+    have hDd : (d : ℝ) ≤ D := by
+      rw [hD_def]
+      exact_mod_cast hdD
     have hgap : ∀ {dt : ℕ}, 1 ≤ dt → dt < d → g ≤ αd d - αd dt := by
       intro dt hdt1 hdt
       have hsub' := αd_sub_gap hdt1 hdt
@@ -1586,7 +1595,8 @@ theorem thm2_step (ζ₀ : ℝ) (hζ₀ : 0 < ζ₀) :
       linarith [hsub', h2]
     have hloga4 : (4 : ℝ) ≤ Real.log (A.card : ℝ) := by
       have hε24 : ε ≤ 1 / 24 := by linarith [hεg, hg12]
-      have hlog2 : (0.693 : ℝ) < Real.log 2 := Real.log_two_gt_d9
+      have hlog2 : (0.693 : ℝ) < Real.log 2 :=
+        (by norm_num : (0.693 : ℝ) < 0.6931471803).trans Real.log_two_gt_d9
       have h1 : (4 : ℝ) ≤ Real.log 2 / ε := by
         rw [le_div_iff₀ hε]
         nlinarith [hε24]

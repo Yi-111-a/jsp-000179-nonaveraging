@@ -40,7 +40,7 @@ This file kills that escape and builds the honest scaffolding of Lemma 10
   `|P₁| < γ·|P|` (shrink) — the equation-(8) bookkeeping input.
 * **`irreduciblization_faithful`**: the faithful statement — `c₀`, `c'` are
   *universal constants* (quantified outside `∀ A`, as supplied by
-  `cfp_structure_cor`/`subSumDim_exists`), `d̃ ≤ D` is recorded, and `Wt`'s
+  `cfp_structure_cor`/`subSumDim_exists`), `dt ≤ D` is recorded, and `Wt`'s
   `hAhcard` field reads `|At| − c₀⁻¹·|At|/log|At| ≤ |Ât|` with `c₀`
   independent of `A`.  The proof is a gap: it needs Lemmas 6/8
   (`|P(A)| ≪_d |P|`, `|P|·s(A)^{−(d₁−d)}` bounds) plus the paper's
@@ -806,6 +806,39 @@ isolated into three named lemmas:
 * `iterates_to_irreducible` — the *bookkeeping* input (equations
   (8)–(10)): the measure-descent loop. -/
 
+/-- **The covolume bridge** — the single remaining mathematical input
+of Lemma 10 in this file (paper Lemmas 6 + 8, which in turn need the
+discrete John lemma 7 = `discrete_john_strong` and the Lemmas 11–14
+covolume machinery).  For a set `X' ⊆ ℤⁿ` contained in an interval box
+`B'`, *every* canonical `c'`-witness `W'` (i.e. a witness at the minimal
+subset-sum dimension `d' = SubSumDim X' c'`) obeys
+
+  `|P'| ≤ C · sMin^{−max(0, d'−n)} · |B'|`.
+
+In the paper: for `d' ≤ n` this is Lemma 8's `|P| ≪_d |B|`, proved via
+`x + csP ⊆ Σ(A') ⊆ sB''` where `B'' = P(v,N)` is the symmetric GAP that
+`discrete_john_strong` sandwiches around `H ∩ B` (`H = span P`,
+`dim H ≤ d'`), giving `(cs)^{d'}|P| ≲ |csP| ≤ |sB''| ≈ s^{dim H}|B''|
+≲ s^{d'}|B|`; for `d' > n` it is Lemma 6's `|P| ≪_d s^{−(d'−n)}|B|`,
+the same count read off the GAP `B'`.  The `s^{d'}` factor on the left
+is the *width*-scaled `csP` of CFP23; in the `SubSumWitness` encoding it
+is folded into `P` itself (witnesses produced by `uniform_cor5_of_family`
+have `P = Q.widthScale k`, `k_wit = 1`).
+
+*Faithfulness caveat.*  The implied constant is a genuine `C_n > 1`
+(Lemma 7's `c_d^{−dim H}` and the `|B''| ≲ |B|` factor), so the statement
+is honest only at `C ≥ C_n` with `sMin` a uniform lower bound on the
+`s(A_j)` of the iteration; with free `C`, `sMin` it inherits the
+degenerate-instantiation caveat documented at `lem68_move_bound`. -/
+theorem lem68_covolume {n : ℕ} {X' : Finset (Fin n → ℤ)}
+    {B' : GAP.Box n} {c' sMin C : ℝ}
+    (_hB : B'.IsInterval) (_hsub : X' ⊆ B'.toFinset)
+    (W' : SubSumWitness X' c' (SubSumDim X' c')) :
+    (W'.P.toFinset.card : ℝ) ≤
+      C * sMin ^ (-(max 0 ((SubSumDim X' c' : ℝ) - (n : ℝ)))) *
+        (B'.card : ℝ) := by
+  sorry
+
 /-- **Lemmas 6 + 8, move form** — the covolume input to Lemma 10.
 For a move `X' = A₁ − x` of a canonical witness (`A₁ ⊆ ϕ_P(Â)`,
 `|A₁| ≥ δ|X|`, `x ∈ ϕ_P(P)`), provided `X'` admits `c'`-witnesses at
@@ -821,7 +854,15 @@ Lemma 6's `|P'| ≪_d s(A₁)^{-(d'−d)}|P|`.  Both estimates need the
 discrete-John/covolume machinery (paper Lemmas 7, 11–14); the
 elementary bound currently available is the much weaker
 `SubSumWitness.card_P'_le_move_of_imageAh_sub_witness`
-(`|P'| ≤ (s'+1)^{2d}·3^d·|P|`). -/
+(`|P'| ≤ (s'+1)^{2d}·3^d·|P|`).
+
+The proof produces the canonical witness `W'` via `subSumDim_mem` and
+applies the covolume bridge `lem68_covolume` to the ambient box
+`B' = coeffBox P − x` — which is an interval box
+(`GAP.Box.coeffBox_translate_isInterval`) containing `X'`
+(`SubSumWitness.imageAh_sub_subset_coeffBox_translate`) and has
+`|B'| = ∏ᵢ wᵢ = |P|` exactly (`GAP.coeffBox_card` +
+`GAP.card_toFinset_of_proper` applied to `P`, proper since `kP` is). -/
 theorem lem68_move_bound {n : ℕ} {X : Finset (Fin n → ℤ)} {d : ℕ}
     {c' δ sMin C₆₈ : ℝ}
     (W : SubSumWitness X c' d) (hd : SubSumDim X c' = d)
@@ -835,16 +876,31 @@ theorem lem68_move_bound {n : ℕ} {X : Finset (Fin n → ℤ)} {d : ℕ}
         C₆₈ * sMin ^
             (-(max 0 ((SubSumDim (A₁.image (· - x)) c' : ℝ) - (d : ℝ))))
           * (W.P.toFinset.card : ℝ) := by
-  sorry
+  obtain ⟨W'⟩ := subSumDim_mem hwit
+  refine ⟨W', ?_⟩
+  -- `X' = A₁ − x ⊆ coeffBox P − x`, an interval box of cardinality `|P|`.
+  have hsub' : A₁.image (· - x) ⊆
+      (W.P.coeffBox.translate (-x)).toFinset :=
+    (Finset.image_subset_image hA₁).trans
+      (W.imageAh_sub_subset_coeffBox_translate x)
+  have hPcard : ((W.P.coeffBox.translate (-x)).card : ℝ)
+      = (W.P.toFinset.card : ℝ) := by
+    rw [GAP.Box.card_translate, GAP.coeffBox_card]
+    have hproper : W.P.Proper :=
+      (GAP.proper_smul_iff (by exact_mod_cast W.kpos.ne')).mp W.hproper
+    exact_mod_cast (GAP.card_toFinset_of_proper _ hproper).symm
+  rw [← hPcard]
+  exact lem68_covolume (GAP.Box.coeffBox_translate_isInterval _ _)
+    hsub' W'
 
 /-- **Lemmas-6/8 move bound, hypothesis form** — the `∀`-statement of
 `lem68_move_bound` with the constants `c' δ sMin C₆₈` fixed.  Passed to
 `iterates_to_irreducible`/`l10_descent` as `hmove`; the call site
 supplies `lem68_move_bound`. -/
 abbrev MoveBound68 (c' δ sMin C₆₈ : ℝ) : Prop :=
-  ∀ ⦃n : ℕ⦄ {X : Finset (Fin n → ℤ)} ⦃d : ℕ⦄
+  ∀ {n : ℕ} {X : Finset (Fin n → ℤ)} {d : ℕ}
     (W : SubSumWitness X c' d), SubSumDim X c' = d →
-    ∀ ⦃A₁ : Finset (Fin d → ℤ)⦄ ⦃x : Fin d → ℤ⦄,
+    ∀ {A₁ : Finset (Fin d → ℤ)} {x : Fin d → ℤ},
     A₁ ⊆ W.imageAh → x ∈ W.imageP →
       δ * (X.card : ℝ) ≤ (A₁.card : ℝ) →
       (∃ d', Nonempty (SubSumWitness (A₁.image (· - x)) c' d')) →
@@ -870,7 +926,8 @@ theorem DerivedFrom.trans {A : Finset (Fin ℓ → ℤ)} {δ : ℝ}
 theorem DerivedFrom.step_cases_of_derived {A : Finset (Fin ℓ → ℤ)}
     {δ γ c' : ℝ} {n : ℕ} {X : Finset (Fin n → ℤ)} {d : ℕ} {c : ℝ}
     (hder : DerivedFrom A δ X) (W : SubSumWitness X c d)
-    (hd : SubSumDim X c = d) (hnir : ¬ Irreducible W c' δ γ) :
+    (hd : SubSumDim X c = d) (hdpos : 1 ≤ d)
+    (hnir : ¬ Irreducible W c' δ γ) :
     ∃ (A' : Finset (Fin d → ℤ)) (x : Fin d → ℤ),
       A' ⊆ W.imageAh ∧ x ∈ W.imageP ∧
       (δ : ℝ) * (X.card : ℝ) ≤ (A'.card : ℝ) ∧
@@ -926,20 +983,49 @@ theorem irreducible_of_imageAh_small {n : ℕ} {X : Finset (Fin n → ℤ)}
     exact_mod_cast Finset.card_le_card hA'sub
   linarith
 
+/-- **Residual of `moved_set_is_lb`** — the `|B'| ≤ |X'|^{β'}` half of
+the `(d,β')`-set property of a move `X' = A₁ − x`, instantiated at the
+ambient interval box `B' = coeffBox P − x` (whose cardinality is
+`∏ᵢ wᵢ = |P|` exactly, `GAP.coeffBox_card` + `card_toFinset_of_proper`).
+
+Paper content: Lemma 8 applied to `X`'s `(n,β)`-box `B_X` gives
+`|P| ≪_d |B_X|` (the same `lem68_covolume` input), then
+`|P| ≲ |B_X| ≤ |X|^β ≲ δ^{−β}|X'|^β ≤ |X'|^{β'}` — the last step needs
+`β < β'` and `|X'|` large enough to absorb the `C·δ^{−β}` factor.
+*Faithfulness caveat*: `X`'s ambient `(n,β)`-box is the `(d,β')`-set
+invariant that `L10Stage` does not currently track (the crude
+`DerivedFrom.exists_interval_box` bound `2^{|A|} + |B_A|` is
+exponential), and `β'`, `δ` are free here, so this is honest only at the
+intended instantiation `β' = 3β`, `|X'|` large. -/
+theorem moved_set_card_residual {n d : ℕ} {X : Finset (Fin n → ℤ)}
+    {c' δ β' : ℝ} {A₁ : Finset (Fin d → ℤ)} {x : Fin d → ℤ}
+    (W : SubSumWitness X c' d) (_hA₁ : A₁ ⊆ W.imageAh)
+    (_hx : x ∈ W.imageP)
+    (_hcard : δ * (X.card : ℝ) ≤ (A₁.card : ℝ)) :
+    ((∏ i, W.P.width i : ℕ) : ℝ) ≤
+      ((A₁.image (· - x)).card : ℝ) ^ β' := by
+  sorry
+
 /-- **Lemma 8, `(d,β')`-set form** — a move `A₁ − x` of a canonical
 `c'`-witness is a `(d,β')`-set: it is contained in the interval box
 `coeffBox P − x` (membership is proved, see
 `SubSumWitness.imageAh_sub_subset_coeffBox_translate`) whose size `|P|`
 is `≪_d |A₁−x|^{β'}`.  *Faithful gap*: the bound
 `|P| ≪_d |B_X|` for the ambient box of `X` is the same
-discrete-John/covolume input as `lem68_move_bound`. -/
+discrete-John/covolume input as `lem68_move_bound`; what remains is
+`moved_set_card_residual` (`∏ᵢ wᵢ = |P| ≤ |X'|^{β'}`). -/
 theorem moved_set_is_lb {n d : ℕ} {X : Finset (Fin n → ℤ)}
     {c' δ β' : ℝ} {A₁ : Finset (Fin d → ℤ)} {x : Fin d → ℤ}
     (W : SubSumWitness X c' d) (hA₁ : A₁ ⊆ W.imageAh) (hx : x ∈ W.imageP)
     (hcard : δ * (X.card : ℝ) ≤ (A₁.card : ℝ)) :
     ∃ B' : GAP.Box d, B'.IsInterval ∧ A₁.image (· - x) ⊆ B'.toFinset ∧
       (B'.card : ℝ) ≤ ((A₁.image (· - x)).card : ℝ) ^ β' := by
-  sorry
+  refine ⟨W.P.coeffBox.translate (-x),
+    GAP.Box.coeffBox_translate_isInterval _ _, ?_, ?_⟩
+  · exact (Finset.image_subset_image hA₁).trans
+      (W.imageAh_sub_subset_coeffBox_translate x)
+  · rw [GAP.Box.card_translate, GAP.coeffBox_card]
+    exact_mod_cast moved_set_card_residual W hA₁ hx hcard
 
 /-- **Lemmas 6 + 8, initial-set form** — the `|P(A)|` bound at the start
 of the iteration, `|P₀| ≪ s(A)^{−max(0,d₀−ℓ)}·|B|` (Lemma 6 when
@@ -951,8 +1037,8 @@ theorem lem68_initial_bound {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
     (W : SubSumWitness A c' (SubSumDim A c')) :
     (W.P.toFinset.card : ℝ) ≤
       C₆₈ * sMin ^ (-(max 0 ((SubSumDim A c' : ℝ) - (ℓ : ℝ))))
-        * (B.card : ℝ) := by
-  sorry
+        * (B.card : ℝ) :=
+  lem68_covolume hBint hsub W
 
 /-- **Per-dimension Cor-5 family**: apply `cfp_structure` (at `η = 1/2`)
 in every ambient dimension `d` and collect the constants into functions
@@ -966,6 +1052,8 @@ theorem cfp_structure_family {β' : ℝ} (hβ' : 1 < β') :
         (B.card : ℝ) ≤ (A.card : ℝ) ^ β' →
         (A.card : ℝ) ^ ((1 : ℝ) / 2) ≤ (s : ℝ) →
         (s : ℝ) ≤ cf d * (A.card : ℝ) / Real.log (A.card : ℝ) →
+        16 * (cf d + 1) * (cf d / Real.log 2 + 1) ^ 2 *
+          (2 * (cf d / Real.log 2) + 1) ^ (2 * d) < (A.card : ℝ) →
         ∃ (Â : Finset (Fin d → ℤ)) (d' : ℕ) (P : GAP d d'),
           Â ⊆ A ∧
           (A.card : ℝ) - (cf d)⁻¹ * (s : ℝ) * Real.log (A.card : ℝ)
@@ -974,8 +1062,8 @@ theorem cfp_structure_family {β' : ℝ} (hβ' : 1 < β') :
           ∃ A' ⊆ Â, A'.card ≤ s ∧
             ∃ k : ℕ, 0 < k ∧ (k : ℝ) ≤ cf d * (s : ℝ) ∧
               ∃ t : Fin d → ℤ,
-                ((k • P).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
-                (k • P).Proper) := by
+                ((P.widthScale k).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
+                (P.widthScale k).Proper) := by
   classical
   choose cf df hcf using fun d : ℕ ↦
     cfp_structure d hβ' (by norm_num : (0 : ℝ) < 1 / 2)
@@ -1010,6 +1098,8 @@ theorem uniform_cor5_of_family {β' : ℝ} (hβ' : 1 < β')
         (B.card : ℝ) ≤ (A.card : ℝ) ^ β' →
         (A.card : ℝ) ^ ((1 : ℝ) / 2) ≤ (s : ℝ) →
         (s : ℝ) ≤ cf d * (A.card : ℝ) / Real.log (A.card : ℝ) →
+        16 * (cf d + 1) * (cf d / Real.log 2 + 1) ^ 2 *
+          (2 * (cf d / Real.log 2) + 1) ^ (2 * d) < (A.card : ℝ) →
         ∃ (Â : Finset (Fin d → ℤ)) (d' : ℕ) (P : GAP d d'),
           Â ⊆ A ∧
           (A.card : ℝ) - (cf d)⁻¹ * (s : ℝ) * Real.log (A.card : ℝ)
@@ -1018,8 +1108,8 @@ theorem uniform_cor5_of_family {β' : ℝ} (hβ' : 1 < β')
           ∃ A' ⊆ Â, A'.card ≤ s ∧
             ∃ k : ℕ, 0 < k ∧ (k : ℝ) ≤ cf d * (s : ℝ) ∧
               ∃ t : Fin d → ℤ,
-                ((k • P).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
-                (k • P).Proper)
+                ((P.widthScale k).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
+                (P.widthScale k).Proper)
     (D : ℕ) :
     ∃ (c' : ℝ) (C₀ : ℕ → ℝ), 0 < c' ∧
       ∀ ⦃d : ℕ⦄, d ≤ D → ∀ {X : Finset (Fin d → ℤ)} {B' : GAP.Box d},
@@ -1052,7 +1142,10 @@ theorem uniform_cor5_of_family {β' : ℝ} (hβ' : 1 < β')
   have hN : ∀ d ≤ D, ∃ N : ℝ, ∀ m : ℝ, N ≤ m →
       (16 : ℝ) ≤ m ∧ c' / (cf d) ^ 2 ≤ Real.log m ∧
         (Real.log m) ^ 2 ≤ 64 * m ^ ((1 : ℝ) / 8) ∧
-        max (64 : ℝ) (2 * cf d / c') ≤ m ^ ((1 : ℝ) / 8) := by
+        max (64 : ℝ) (2 * cf d / c') ≤ m ^ ((1 : ℝ) / 8) ∧
+        (Real.log m) ^ 2 ≤ c' * m ∧
+        16 * (cf d + 1) * (cf d / Real.log 2 + 1) ^ 2 *
+          (2 * (cf d / Real.log 2) + 1) ^ (2 * d) < m := by
     intro d _
     have ev16 : ∀ᶠ m : ℝ in Filter.atTop, (16 : ℝ) ≤ m :=
       Filter.eventually_ge_atTop 16
@@ -1061,14 +1154,25 @@ theorem uniform_cor5_of_family {β' : ℝ} (hβ' : 1 < β')
     have evpow : ∀ᶠ m : ℝ in Filter.atTop,
         max (64 : ℝ) (2 * cf d / c') ≤ m ^ ((1 : ℝ) / 8) :=
       (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 1 / 8)).eventually_ge_atTop _
-    exact Filter.eventually_atTop.mp (ev16.and (evlog.and (evLog.and evpow)))
+    have evcm : ∀ᶠ m : ℝ in Filter.atTop, (Real.log m) ^ 2 ≤ c' * m := by
+      filter_upwards
+        [(Real.isLittleO_pow_log_id_atTop (n := 2)).bound hc'pos,
+          Filter.eventually_gt_atTop (0 : ℝ)] with m hm hm0
+      rwa [id_eq, Real.norm_eq_abs, Real.norm_eq_abs,
+        abs_of_nonneg (sq_nonneg _), abs_of_pos hm0] at hm
+    have evbig : ∀ᶠ m : ℝ in Filter.atTop,
+        16 * (cf d + 1) * (cf d / Real.log 2 + 1) ^ 2 *
+          (2 * (cf d / Real.log 2) + 1) ^ (2 * d) < m :=
+      Filter.eventually_gt_atTop _
+    exact Filter.eventually_atTop.mp
+      (ev16.and (evlog.and (evLog.and (evpow.and (evcm.and evbig)))))
   refine ⟨c', (fun d ↦ if h : d ≤ D then Classical.choose (hN d h) else 0),
     hc'pos, ?_⟩
   intro d hd X B' hBi hsubX hBX hC₀
   set m : ℝ := (X.card : ℝ)
   have hCd : (fun d ↦ if h : d ≤ D then Classical.choose (hN d h) else 0) d =
       Classical.choose (hN d hd) := dif_pos hd
-  obtain ⟨h16, hlog, hlog8, hp8⟩ :=
+  obtain ⟨h16, hlog, hlog8, hp8, hlogcm, hbig⟩ :=
     Classical.choose_spec (hN d hd) m (hCd ▸ hC₀)
   have hmpos : (0 : ℝ) < m := by linarith
   have hm1 : (1 : ℝ) ≤ m := by linarith
@@ -1117,7 +1221,7 @@ theorem uniform_cor5_of_family {β' : ℝ} (hβ' : 1 < β')
         (mul_le_mul_of_nonneg_left hcf4 (Real.rpow_nonneg hmpos.le _)) hcc
     have h3 : (c' / cf d) * (m ^ ((1 : ℝ) / 2) * (2 * cf d / c')) =
         2 * m ^ ((1 : ℝ) / 2) := by
-      field_simp; ring
+      field_simp
     have h4 : (1 : ℝ) ≤ m ^ ((1 : ℝ) / 2) := Real.one_le_rpow hm1 (by norm_num)
     calc m ^ ((1 : ℝ) / 2) + 1 ≤ 2 * m ^ ((1 : ℝ) / 2) := by linarith
       _ = (c' / cf d) * (m ^ ((1 : ℝ) / 2) * (2 * cf d / c')) := h3.symm
@@ -1137,7 +1241,7 @@ theorem uniform_cor5_of_family {β' : ℝ} (hβ' : 1 < β')
       rw [hr, le_div_iff₀ hlogm]
       have e : (c' / cf d) * (m / (Real.log m) ^ 2) * Real.log m =
           (c' / (cf d) ^ 2 / Real.log m) * (cf d * m) := by
-        field_simp; ring
+        field_simp
       rw [e]
       -- `c'/cf_d²/log m ≤ 1`, i.e. `c'/cf_d² ≤ log m` (`hlog`).
       have h1 : c' / (cf d) ^ 2 / Real.log m ≤ 1 :=
@@ -1151,19 +1255,21 @@ theorem uniform_cor5_of_family {β' : ℝ} (hβ' : 1 < β')
     Finset.card_pos.mp (Nat.cast_pos.mp (by linarith : (0 : ℝ) < m))
   obtain ⟨Â, d', P, hÂsub, hÂcard, hd'le, hPsym, hsub0, A', hA'sub, hA'card,
     k, hkpos, hkle, t, htrans, hprop⟩ :=
-      hcfp d X B' s hXne hBi hsubX hBX hs_ge hs_le
+      hcfp d X B' s hXne hBi hsubX hBX hs_ge hs_le hbig
   have hcc2 : c' / (cf d) ^ 2 ≤ (c')⁻¹ := by
     rw [div_le_iff₀ (pow_pos (hcf d) 2), inv_mul_eq_div, le_div_iff₀ hc'pos]
     nlinarith [hc'le d hd, hcf d, hc'pos]
-  refine ⟨d', ?_, ⟨{ Ah := Â, A' := A', P := P, k := k, t := t,
-    cpos := hc'pos, kpos := hkpos, hk := ?_, hAh := hÂsub, hA' := hA'sub,
-    hA'card := ?_, hAhcard := ?_, hsub := hsub0, htranslate := htrans,
-    hproper := hprop }⟩⟩
+  -- The witness uses the coefficient-width scaling `P.widthScale k` returned
+  -- by `cfp_structure`, dilated pointwise by `k' = 1` (so `1 • P.widthScale k
+  -- = P.widthScale k` via `GAP.nsmul_eq_zsmul`/`GAP.one_smul'`).
+  refine ⟨d', ?_, ⟨⟨Â, A', P.widthScale k, 1, t, hc'pos, Nat.one_pos, ?_,
+    hÂsub, hA'sub, ?_, ?_,
+    hsub0.trans (GAP.toFinset_subset_widthScale _ hkpos), ?_, ?_⟩⟩⟩
   · have : (d' : ℝ) ≤ (⌈df d⌉₊ : ℝ) := le_trans hd'le (Nat.le_ceil _)
     exact_mod_cast this
-  · calc (k : ℝ) ≤ cf d * (s : ℝ) := hkle
-      _ ≤ cf d * r := mul_le_mul_of_nonneg_left hs1 (hcf d).le
-      _ = c' * (m / (Real.log m) ^ 2) := by rw [hr]; field_simp; ring
+  · -- `hk` at `k' = 1`: `1 ≤ c'·s(X)` follows from `log² m ≤ c'·m`.
+    rw [← mul_div_assoc]
+    exact_mod_cast (one_le_div hlog2).mpr hlogcm
   · calc (A'.card : ℝ) ≤ (s : ℝ) := by exact_mod_cast hA'card
       _ ≤ r := hs1
       _ ≤ m / (Real.log m) ^ 2 := by
@@ -1182,7 +1288,7 @@ theorem uniform_cor5_of_family {β' : ℝ} (hβ' : 1 < β')
               (mul_le_mul_of_nonneg_left hs1 (inv_nonneg.mpr (hcf d).le))
               hlogm.le
         _ = (c' / (cf d) ^ 2) * m / Real.log m := by
-            rw [hr]; field_simp; ring
+            rw [hr]; field_simp; try ring
         _ ≤ c'⁻¹ * m / Real.log m := by
             have hmL : (0 : ℝ) ≤ m / Real.log m :=
               div_nonneg hmpos.le hlogm.le
@@ -1191,6 +1297,10 @@ theorem uniform_cor5_of_family {β' : ℝ} (hβ' : 1 < β')
     calc m - c'⁻¹ * m / Real.log m
         ≤ m - (cf d)⁻¹ * (s : ℝ) * Real.log m := sub_le_sub_left hstep _
       _ ≤ (Â.card : ℝ) := hÂcard
+  · rw [GAP.nsmul_eq_zsmul, Nat.cast_one, GAP.one_smul']
+    exact htrans
+  · rw [GAP.nsmul_eq_zsmul, Nat.cast_one, GAP.one_smul']
+    exact hprop
 
 /-- **Uniform Cor-5 with bounded dimension** — a single `c'` that is a
 Cor-5 constant for every `(d,β')`-class with `d ≤ D`, with witnesses
@@ -1286,7 +1396,7 @@ theorem L10Stage.μ_lt {A : Finset (Fin ℓ → ℤ)} {δ ε γ : ℝ} {c' : ℝ
       have h3 := div_le_div_of_nonneg_right hdrop hη.le
       rwa [sub_div, div_self (ne_of_gt hη)] at h3
     have h4 : ((s.μ - 1 : ℕ) : ℝ) = (s.μ : ℝ) - 1 :=
-      Nat.cast_sub hμ
+      Nat.cast_pred hμ
     rw [h4]; linarith
   have hle2 : s'.μ ≤ s.μ - 1 := by
     unfold L10Stage.μ
@@ -1356,8 +1466,11 @@ theorem size_stop_absurd {A : Finset (Fin ℓ → ℤ)} {δ ε γ K : ℝ} {β :
       calc (A.card : ℝ) = 1 * (A.card : ℝ) := (one_mul _).symm
         _ ≤ δ ^ (nd + nu + ns) * (A.card : ℝ) :=
           mul_le_mul_of_nonneg_right hM hApos.le
-    have hle2 : (A.card : ℝ) ^ (1 - ε / 2) ≤ (A.card : ℝ) :=
-      Real.rpow_le_rpow_of_exponent_le hA1 (by linarith)
+    have hle2 : (A.card : ℝ) ^ (1 - ε / 2) ≤ (A.card : ℝ) := by
+      calc (A.card : ℝ) ^ (1 - ε / 2)
+          ≤ (A.card : ℝ) ^ (1 : ℝ) :=
+            Real.rpow_le_rpow_of_exponent_le hA1 (by linarith)
+        _ = (A.card : ℝ) := Real.rpow_one _
     linarith [hsize, hsmall, hle, hle2]
   have ht0 : (0 : ℝ) < t := by
     rw [ht]
@@ -1367,6 +1480,7 @@ theorem size_stop_absurd {A : Finset (Fin ℓ → ℤ)} {δ ε γ K : ℝ} {β :
     by_contra h2
     push_neg at h2
     have hA1n : 1 ≤ A.card := by exact_mod_cast hA1
+    have hlt : A.card < 2 := by exact_mod_cast h2
     have hAeq : A.card = 1 := by omega
     have hAeqr : (A.card : ℝ) = 1 := by exact_mod_cast hAeq
     rw [hAeqr, Real.one_rpow] at hsmall
@@ -1443,8 +1557,8 @@ theorem size_stop_absurd {A : Finset (Fin ℓ → ℤ)} {δ ε γ K : ℝ} {β :
     have hnsγ : (ns : ℝ) * Real.log γ ≤ -((ns : ℝ) * K * t) := by
       have hKδ : K * Real.log δ = -(K * t) := by rw [hlogδ]; ring
       have h1 : Real.log γ ≤ -(K * t) := by linarith [hlogγ]
-      have h2 := mul_le_mul_of_nonneg_left h1 (Nat.cast_nonneg _)
-      calc (ns : ℝ) * Real.log γ ≤ (ns : ℝ) * (-(K * t)) := h2
+      calc (ns : ℝ) * Real.log γ ≤ (ns : ℝ) * (-(K * t)) :=
+            mul_le_mul_of_nonneg_left h1 (Nat.cast_nonneg ns)
         _ = -((ns : ℝ) * K * t) := by ring
     linarith [hprod, hUlog, hnsγ, hlogP0]
   -- Taking logs in `δ^{nd+nu+ns}·|A| < |A|^{1-ε/2}`:
@@ -1457,7 +1571,7 @@ theorem size_stop_absurd {A : Finset (Fin ℓ → ℤ)} {δ ε γ K : ℝ} {β :
       Real.rpow_add hApos, Real.rpow_one]
   have hδpow : δ ^ (nd + nu + ns) < (A.card : ℝ) ^ (-(ε / 2)) := by
     rw [hsplit, mul_comm (A.card : ℝ) _] at hsz
-    exact (mul_lt_mul_iff_right₀ hApos).mp hsz
+    exact (mul_lt_mul_iff_left₀ hApos).mp hsz
   have htM : (ε / 2) * L < ((nd : ℝ) + (nu : ℝ) + (ns : ℝ)) * t := by
     have hposδ : (0 : ℝ) < δ ^ (nd + nu + ns) := pow_pos hδ _
     have h' := Real.log_lt_log hposδ hδpow
@@ -1497,15 +1611,15 @@ theorem size_stop_absurd {A : Finset (Fin ℓ → ℤ)} {δ ε γ K : ℝ} {β :
 at the terminal stage the accumulated multiplier
 `C₆₈^{nd+nu}·γ^{ns}·sMin^{−sd}` composed with
 `|P₀| ≤ C₆₈·sMin^{−max(0,dinit−ℓ)}·|B|` gives the three bounds —
-`|P̃| ≲ |A|^{−(1−ε)(d̃−ℓ)}·|B|` for `d̃ > ℓ` (each net dimension increase
+`|P̃| ≲ |A|^{−(1−ε)(dt−ℓ)}·|B|` for `dt > ℓ` (each net dimension increase
 costs a factor `sMin^{-1}` paid for by the `|A|^{−(1−ε)}` shrink),
-`|P̃| ≲ (|Ã|/|A|)^K·|B|` for `d̃ = ℓ` (all moves were shrink-moves), and
-`|P̃| ≲ |B|` for `d̃ < ℓ`.
+`|P̃| ≲ (|Ã|/|A|)^K·|B|` for `dt = ℓ` (all moves were shrink-moves), and
+`|P̃| ≲ |B|` for `dt < ℓ`.
 
 **Status note (round 6).**  Not derivable from the recorded invariants:
 `C₆₈^{nd+nu}` is uncontrolled (no `C₆₈² < sMin` here), `sMin^{-sd}` cannot
-deliver `|A|^{-(1-ε)(d̃-ℓ)}` since `sMin` is a constant rather than
-`≈ |A|^{1-ε}`, and the `d̃ = ℓ` bound needs `δ^{ns} ≤ |X̃|/|A|` while
+deliver `|A|^{-(1-ε)(dt-ℓ)}` since `sMin` is a constant rather than
+`≈ |A|^{1-ε}`, and the `dt = ℓ` bound needs `δ^{ns} ≤ |X̃|/|A|` while
 `s.hsz` only controls `δ^{nd+nu+ns}` jointly (the `nd + nu > 0` slack is
 not absorbable: `ns = 0`, `nu = 1`, `sd = sdd = 1`, `dinit = ℓ` is a
 legal stage with `|X̃|/|A| = δ`, where `hPb` gives `|P̃| ≤ sMin^{-1}|B|`
@@ -1531,7 +1645,7 @@ theorem final_P_bounds {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
     (SubSumDim s.X c' < ℓ → (s.W.P.toFinset.card : ℝ) ≤
         C₆₈ * (B.card : ℝ)) := by
   set m : ℝ := max 0 ((dinit : ℝ) - (ℓ : ℝ)) with hm
-  set d̃ : ℕ := SubSumDim s.X c' with hd̃
+  set dt : ℕ := SubSumDim s.X c' with hdt
   set U : ℕ := s.nd + s.nu with hU
   have hβ0 : (0 : ℝ) < β := by linarith
   have hsMinpos : (0 : ℝ) < sMin := lt_trans zero_lt_one hsMin
@@ -1605,14 +1719,14 @@ theorem final_P_bounds {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
           mul_le_mul_of_nonneg_right
             (mul_le_mul_of_nonneg_left h1 hC₆₈.le) (Nat.cast_nonneg _)
   refine ⟨?_, ?_, ?_⟩
-  · -- `d̃ > ℓ`: each net dimension increase costs a factor `sMin^{-1}`,
-    -- and `sMin ≥ |A|^{1-ε}` converts this into `|A|^{-(1-ε)(d̃-ℓ)}`.
+  · -- `dt > ℓ`: each net dimension increase costs a factor `sMin^{-1}`,
+    -- and `sMin ≥ |A|^{1-ε}` converts this into `|A|^{-(1-ε)(dt-ℓ)}`.
     intro hlt
-    have hdimr : (d̃ : ℝ) = (dinit : ℝ) + (s.sd : ℝ) - (s.sdd : ℝ) := by
+    have hdimr : (dt : ℝ) = (dinit : ℝ) + (s.sd : ℝ) - (s.sdd : ℝ) := by
       have h := congrArg (fun z : ℤ ↦ (z : ℝ)) s.hdim
       push_cast at h
       exact h
-    have hdle : (d̃ : ℝ) - ℓ ≤ (s.sd : ℝ) + m := by
+    have hdle : (dt : ℝ) - ℓ ≤ (s.sd : ℝ) + m := by
       have hmge : (dinit : ℝ) - ℓ ≤ m := le_max_right _ _
       have hsdd0 : (0 : ℝ) ≤ (s.sdd : ℝ) := Nat.cast_nonneg _
       linarith [hdimr]
@@ -1622,19 +1736,19 @@ theorem final_P_bounds {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
       Real.rpow_le_rpow_of_nonpos (Real.rpow_pos_of_pos hApos _) hsMinA hexp0
     rw [← Real.rpow_mul hApos.le] at hstep1
     have hex : (1 - ε) * -((s.sd : ℝ) + m) ≤
-        -(1 - ε) * ((d̃ : ℝ) - ℓ) := by
+        -(1 - ε) * ((dt : ℝ) - ℓ) := by
       have hmul := mul_le_mul_of_nonneg_left hdle h1ε.le
       linarith [hmul]
     have hstep3 : (A.card : ℝ) ^ ((1 - ε) * -((s.sd : ℝ) + m)) ≤
-        (A.card : ℝ) ^ (-(1 - ε) * ((d̃ : ℝ) - ℓ)) :=
+        (A.card : ℝ) ^ (-(1 - ε) * ((dt : ℝ) - ℓ)) :=
       Real.rpow_le_rpow_of_exponent_le hA1 hex
     calc (s.W.P.toFinset.card : ℝ)
         ≤ C₆₈ * sMin ^ (-((s.sd : ℝ) + m)) * (B.card : ℝ) := hmaster'
-      _ ≤ C₆₈ * (A.card : ℝ) ^ (-(1 - ε) * ((d̃ : ℝ) - ℓ)) * (B.card : ℝ) :=
+      _ ≤ C₆₈ * (A.card : ℝ) ^ (-(1 - ε) * ((dt : ℝ) - ℓ)) * (B.card : ℝ) :=
           mul_le_mul_of_nonneg_right
             (mul_le_mul_of_nonneg_left
               (le_trans hstep1 hstep3) hC₆₈.le) (Nat.cast_nonneg _)
-  · -- `d̃ = ℓ`: `γ^ns ≤ (|X̃|/|A|)^K·δ^{-UK}` and `δ^{-UK} ≤ sMin^{sd+m}`
+  · -- `dt = ℓ`: `γ^ns ≤ (|X̃|/|A|)^K·δ^{-UK}` and `δ^{-UK} ≤ sMin^{sd+m}`
     -- since `nd + nu ≤ sdd + sd = 2·sd + (dinit - ℓ) ≤ 2·sd + m`.
     intro heq
     have hδUp : (0 : ℝ) < δ ^ U := pow_pos hδ _
@@ -1691,7 +1805,8 @@ theorem final_P_bounds {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
     have h1δ : (1 : ℝ) ≤ 1 / δ := (one_le_div hδ).mpr hδ1.le
     have hUK : (U : ℝ) * K ≤ 2 * K * ((s.sd : ℝ) + m) := by
       have h := mul_le_mul_of_nonneg_right hUle hK0.le
-      linarith [h]
+      have hmge0 : (0 : ℝ) ≤ m := le_max_left _ _
+      linarith [h, mul_nonneg hK0.le hmge0]
     have hδinv : δ ^ (-(U : ℝ) * K) = (1 / δ) ^ ((U : ℝ) * K) := by
       rw [show (-(U : ℝ) * K) = (-1) * ((U : ℝ) * K) by ring,
         Real.rpow_mul hδ.le, Real.rpow_neg_one, one_div]
@@ -1707,8 +1822,11 @@ theorem final_P_bounds {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
               (Real.rpow_nonneg (by positivity : (0 : ℝ) ≤ 1 / δ) _)
               hδsMin (by linarith [hexp0])
     have hcomb : δ ^ (-(U : ℝ) * K) * sMin ^ (-((s.sd : ℝ) + m)) ≤ 1 := by
-      have h1 := mul_le_mul_of_nonneg_right hδUbound
-        (Real.rpow_nonneg hsMin0.le _)
+      have hsneg : (0 : ℝ) ≤ sMin ^ (-((s.sd : ℝ) + m)) :=
+        Real.rpow_nonneg hsMin0.le _
+      have h1 : δ ^ (-(U : ℝ) * K) * sMin ^ (-((s.sd : ℝ) + m)) ≤
+          sMin ^ ((s.sd : ℝ) + m) * sMin ^ (-((s.sd : ℝ) + m)) :=
+        mul_le_mul_of_nonneg_right hδUbound hsneg
       have h2 : sMin ^ ((s.sd : ℝ) + m) * sMin ^ (-((s.sd : ℝ) + m)) = 1 := by
         rw [← Real.rpow_add hsMin0,
           show (s.sd : ℝ) + m + -((s.sd : ℝ) + m) = 0 by ring,
@@ -1716,8 +1834,9 @@ theorem final_P_bounds {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
       rwa [h2] at h1
     have hg' : γ ^ s.ns * sMin ^ (-((s.sd : ℝ) + m)) ≤
         ((s.X.card : ℝ) / (A.card : ℝ)) ^ K := by
-      have h1 := mul_le_mul_of_nonneg_right hγδns
-        (Real.rpow_nonneg hsMin0.le _)
+      have hsneg : (0 : ℝ) ≤ sMin ^ (-((s.sd : ℝ) + m)) :=
+        Real.rpow_nonneg hsMin0.le _
+      have h1 := mul_le_mul_of_nonneg_right hγδns hsneg
       have hbase : (0 : ℝ) ≤ ((s.X.card : ℝ) / (A.card : ℝ)) ^ K :=
         Real.rpow_nonneg (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)) _
       have h2 := mul_le_mul_of_nonneg_left hcomb hbase
@@ -1734,7 +1853,7 @@ theorem final_P_bounds {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
       _ ≤ C₆₈ * ((s.X.card : ℝ) / (A.card : ℝ)) ^ K * (B.card : ℝ) :=
           mul_le_mul_of_nonneg_right
             (mul_le_mul_of_nonneg_left hg' hC₆₈.le) (Nat.cast_nonneg _)
-  · -- `d̃ < ℓ`: `sMin^{-(sd+m)} ≤ 1` already suffices.
+  · -- `dt < ℓ`: `sMin^{-(sd+m)} ≤ 1` already suffices.
     intro _
     have hle1 : sMin ^ (-((s.sd : ℝ) + m)) ≤ 1 :=
       Real.rpow_le_one_of_one_le_of_nonpos hsMin.le hexp0
@@ -1745,10 +1864,12 @@ theorem final_P_bounds {A : Finset (Fin ℓ → ℤ)} {B : GAP.Box ℓ}
             (mul_le_mul_of_nonneg_left hle1 hC₆₈.le) (Nat.cast_nonneg _)
       _ = C₆₈ * (B.card : ℝ) := by rw [mul_one]
 
-/-- Transport along a dimension-index equality does not change `P`. -/
+/-- Transport along a dimension-index equality does not change the
+cardinality of `P` (stated at cardinalities so the equality is
+homogeneous: `(h ▸ W).P : GAP n d₂` while `W.P : GAP n d₁`). -/
 theorem SubSumWitness.P_cast {n : ℕ} {X : Finset (Fin n → ℤ)} {c : ℝ}
     {d₁ d₂ : ℕ} (h : d₁ = d₂) (W : SubSumWitness X c d₁) :
-    (h ▸ W).P = W.P := by
+    ((h ▸ W).P.toFinset.card : ℝ) = (W.P.toFinset.card : ℝ) := by
   cases h
   rfl
 
@@ -1830,7 +1951,11 @@ theorem l10_descent {A : Finset (Fin ℓ → ℤ)} {δ ε γ : ℝ} {c' β' sMin
   have hηd : L10η γ sMin C₆₈ ≤ Real.log sMin / 2 - Real.log C₆₈ :=
     min_le_left _ _
   have hηγ : L10η γ sMin C₆₈ ≤ -Real.log γ := min_le_right _ _
-  refine WellFounded.fix (measure L10Stage.μ).wf ?_ s
+  refine WellFounded.fix
+    (C := fun _ : L10Stage A δ ε γ c' D sMin C₆₈ P0 dinit ↦
+      ∃ s' : L10Stage A δ ε γ c' D sMin C₆₈ P0 dinit,
+        Irreducible s'.W c' δ γ)
+    (measure L10Stage.μ).wf ?_ s
   intro s ih
   -- `ih : ∀ s', s'.μ < s.μ → ∃ s'', Irreducible s''.W c' δ γ`
   by_cases hirr : Irreducible s.W c' δ γ
@@ -1852,7 +1977,7 @@ theorem l10_descent {A : Finset (Fin ℓ → ℤ)} {δ ε γ : ℝ} {c' β' sMin
       lt_of_lt_of_le hAvac (mul_le_mul_of_nonneg_left s.size hδ.le)
     linarith
   obtain ⟨A₁, x, hA₁, hx, hA₁card, hder', hcase⟩ :=
-    DerivedFrom.step_cases_of_derived s.der s.W rfl hirr
+    DerivedFrom.step_cases_of_derived s.der s.W rfl hd1 hirr
   set X' := A₁.image (· - x) with hX'def
   have hX'card : (X'.card : ℝ) = (A₁.card : ℝ) := by
     rw [hX'def, Finset.card_image_of_injective _ sub_left_injective]
@@ -1863,6 +1988,13 @@ theorem l10_descent {A : Finset (Fin ℓ → ℤ)} {δ ε γ : ℝ} {c' β' sMin
   obtain ⟨d₂, hwit2⟩ := hwit' s.dim hB'int hX'sub hB'card hX'thr
   have hwitne : ∃ d', Nonempty (SubSumWitness X' c' d') := ⟨d₂, hwit2⟩
   obtain ⟨W', hW'b⟩ := hmove s.W rfl hA₁ hx hA₁card hwitne
+  -- `X'` is a `set`-bound let, so `SubSumDim X' c'` is definitionally
+  -- `SubSumDim (A₁.image (· - x)) c'`; restate `hW'b` in `X'`-form so that
+  -- downstream `simpa [hmax]` rewrites match syntactically.
+  replace hW'b : (W'.P.toFinset.card : ℝ) ≤
+      C₆₈ * sMin ^
+          (-(max 0 ((SubSumDim X' c' : ℝ) - (SubSumDim s.X c' : ℝ)))) *
+        (s.W.P.toFinset.card : ℝ) := hW'b
   have hP1 : (1 : ℝ) ≤ (s.W.P.toFinset.card : ℝ) := s.W.one_le_card_P
   have hP'1 : (1 : ℝ) ≤ (W'.P.toFinset.card : ℝ) := W'.one_le_card_P
   -- **Dimension budget**: the next stage's `SubSumDim` is bounded by the
@@ -1920,12 +2052,14 @@ theorem l10_descent {A : Finset (Fin ℓ → ℤ)} {δ ε γ : ℝ} {c' β' sMin
         mul_le_mul_of_nonneg_left hP0b hspos.le
       have h3 : (1 : ℝ) ≤ sMin ^ (-(sd' : ℝ)) * (A.card : ℝ) ^ E :=
         le_trans h1 h2
+      have hcancel : sMin ^ (sd' : ℝ) * sMin ^ (-(sd' : ℝ)) = 1 := by
+        rw [← Real.rpow_add (by linarith : (0 : ℝ) < sMin),
+          add_neg_cancel, Real.rpow_zero]
       have h4 : sMin ^ (sd' : ℝ) * (sMin ^ (-(sd' : ℝ)) * (A.card : ℝ) ^ E) =
           (A.card : ℝ) ^ E := by
-        rw [← mul_assoc, ← Real.rpow_add (by linarith : (0 : ℝ) < sMin),
-          show (sd' : ℝ) + -(sd' : ℝ) = 0 by ring, Real.rpow_zero, one_mul]
+        rw [← mul_assoc, hcancel, one_mul]
       have h5 := mul_le_mul_of_nonneg_left h3
-        (Real.rpow_pos_of_pos (by linarith : (0 : ℝ) < sMin) _).le
+        (Real.rpow_pos_of_pos (by linarith : (0 : ℝ) < sMin) (sd' : ℝ)).le
       rwa [mul_one, h4] at h5
     have hsd : (sd' : ℝ) * Real.log sMin ≤ E * Real.log (A.card : ℝ) := by
       have h := Real.log_le_log
@@ -2009,7 +2143,7 @@ theorem l10_descent {A : Finset (Fin ℓ → ℤ)} {δ ε γ : ℝ} {c' β' sMin
         omega
       have hnd2 : s.nd + 1 ≤ s.sdd + (SubSumDim s.X c' - SubSumDim X' c') := by
         have h1 : 1 ≤ SubSumDim s.X c' - SubSumDim X' c' :=
-          Nat.sub_pos_of_lt hdown |>.le
+          Nat.sub_pos_of_lt hdown
         exact Nat.add_le_add s.hnd h1
       have hdim2 : SubSumDim X' c' ≤ D :=
         hdim_of W' (s.nd + 1 + s.nu) s.ns s.sd
@@ -2091,7 +2225,7 @@ theorem l10_descent {A : Finset (Fin ℓ → ℤ)} {δ ε γ : ℝ} {c' β' sMin
         _ ≤ (A₁.card:ℝ) := hA₁card
     have hnu' : s.nu + 1 ≤ s.sd + (SubSumDim X' c' - SubSumDim s.X c') := by
       have h1 : 1 ≤ SubSumDim X' c' - SubSumDim s.X c' :=
-        Nat.sub_pos_of_lt hup |>.le
+        Nat.sub_pos_of_lt hup
       exact Nat.add_le_add s.hnu h1
     by_cases hsm : (X'.card : ℝ) < (A.card : ℝ) ^ (1 - ε / 2)
     · have hnd' : ((s.nd : ℕ) : ℝ) ≤ (dinit : ℝ) +
@@ -2163,7 +2297,9 @@ theorem l10_descent {A : Finset (Fin ℓ → ℤ)} {δ ε γ : ℝ} {c' β' sMin
       exact ih s' (L10Stage.μ_lt hη hdrop hpos)
   · -- **shrink-move**: `SubSumDim X' c' = SubSumDim s.X c'`, `|P'| < γ|P|`
     set W''s : SubSumWitness X' c' (SubSumDim X' c') := heq.symm ▸ W''
-    have hPcast : W''s.P = W''.P := SubSumWitness.P_cast heq.symm W''
+      with hW''s
+    have hPcast : (W''s.P.toFinset.card : ℝ) = (W''.P.toFinset.card : ℝ) := by
+      rw [hW''s]; exact SubSumWitness.P_cast heq.symm W''
     have hW''b : (W''s.P.toFinset.card : ℝ) <
         γ * (s.W.P.toFinset.card : ℝ) := by
       rw [hPcast]; exact hW''
@@ -2326,8 +2462,11 @@ theorem iterates_to_irreducible
   have hdinitD : dinit ≤ D :=
     le_trans hdinit (le_trans (Nat.le_add_right _ _) hGD)
   have hdinitv : (dinit : ℝ) ≤ (D : ℝ) := by exact_mod_cast hdinitD
-  have hsize0 : (A.card : ℝ) ^ (1 - ε / 2) ≤ (A.card : ℝ) :=
-    Real.rpow_le_rpow_of_exponent_le hA1 (by linarith)
+  have hsize0 : (A.card : ℝ) ^ (1 - ε / 2) ≤ (A.card : ℝ) := by
+    calc (A.card : ℝ) ^ (1 - ε / 2)
+        ≤ (A.card : ℝ) ^ (1 : ℝ) :=
+          Real.rpow_le_rpow_of_exponent_le hA1 (by linarith)
+      _ = (A.card : ℝ) := Real.rpow_one _
   have hP0b : P0 ≤ (A.card : ℝ) ^ (2 * ℓ + β + 2) := by
     rw [hP0def]
     have hr : sMin ^ (-(max 0 ((dinit : ℝ) - (ℓ : ℝ)))) ≤ 1 :=
@@ -2342,8 +2481,8 @@ theorem iterates_to_irreducible
           mul_le_mul hC₆₈b hBβ (Nat.cast_nonneg _)
             (by linarith : (0 : ℝ) ≤ (A.card : ℝ))
       _ = (A.card : ℝ) ^ (1 + β) := by
-          rw [← Real.rpow_one (A.card : ℝ),
-            ← Real.rpow_add (by linarith : (0 : ℝ) < (A.card : ℝ))]
+          rw [Real.rpow_add (by linarith : (0 : ℝ) < (A.card : ℝ)),
+            Real.rpow_one]
       _ ≤ (A.card : ℝ) ^ (2 * ℓ + β + 2) :=
           Real.rpow_le_rpow_of_exponent_le hA1 (by linarith)
   -- size-stop exclusion via `size_stop_absurd` (with `Q := D`)
@@ -2362,9 +2501,10 @@ theorem iterates_to_irreducible
   have hsz0 : (δ : ℝ) ^ (0 + 0 + 0) * (A.card : ℝ) ≤ (A.card : ℝ) := by
     simp
   have hPb0 : (W0.P.toFinset.card : ℝ) ≤
-      C₆₈ ^ (0 + 0 : ℕ) * γ ^ (0 : ℕ) * sMin ^ (-(0 : ℝ)) * P0 := by
+      C₆₈ ^ ((0 : ℕ) + 0) * γ ^ (0 : ℕ) * sMin ^ (-((0 : ℕ) : ℝ)) * P0 := by
     simpa using hinit
-  have hdim0 : (SubSumDim A c' : ℤ) = (dinit : ℤ) + (0 : ℤ) - (0 : ℤ) := by
+  have hdim0 : (SubSumDim A c' : ℤ) =
+      (dinit : ℤ) + ((0 : ℕ) : ℤ) - ((0 : ℕ) : ℤ) := by
     rw [hdinitdef]; push_cast; ring
   -- `|A| > 1` (from `hAvac` and `δ < 1`), needed for the dimension budget.
   have hAgt1' : (1 : ℝ) < (A.card : ℝ) := by
@@ -2393,8 +2533,8 @@ theorem iterates_to_irreducible
   have hδsMin : (1 / δ) ^ (2 * K) ≤ sMin := le_trans hδA hsMinA
   refine ⟨s'.n, s'.X, SubSumDim s'.X c', s'.W, s'.der,
     s'.der.nonAveraging hNA, ?_, s'.dim, hirr,
-    final_P_bounds s' hβ hε hε3 hδ hδ1 hγ hγδ hKbig hC₆₈ hC₆₈1 hsMin
-      hA1 hsMinA hδsMin hBβ hP0def⟩
+    final_P_bounds (β' := β') s' hβ hε hε3 hδ hδ1 hγ hγδ hKbig hC₆₈
+      hC₆₈1 hsMin hA1 hsMinA hδsMin hBβ (le_of_eq hP0def)⟩
   exact le_trans
     (Real.rpow_le_rpow_of_exponent_le hA1 (by linarith : (1 - ε) ≤ 1 - ε / 2))
     s'.size
@@ -2452,7 +2592,7 @@ theorem irreduciblization_faithful {β ε δ γ K : ℝ}
   -- `F := ⌈(2ℓ+β+2)/(1-ε)⌉₊` is the iteration's dimension budget: the
   -- cap `D` covers `ℓ + G ℓ + F`, so every stage dimension is `≤ D`.
   obtain ⟨c', G, C₀, D, hc', hDG, hval⟩ :=
-    uniform_cor5_bounded_exists (β' := 3 * β) (by linarith)
+    uniform_cor5_bounded_exists (β' := 3 * β) (ℓ := ℓ) (by linarith)
       ⌈(2 * (ℓ : ℝ) + β + 2) / (1 - ε)⌉₊
   have hℓD : ℓ ≤ D := le_trans (by omega) hDG
   have hGD : G ℓ + ⌈(2 * (ℓ : ℝ) + β + 2) / (1 - ε)⌉₊ ≤ D :=
@@ -2464,9 +2604,12 @@ theorem irreduciblization_faithful {β ε δ γ K : ℝ}
   have ha : 0 < a := by dsimp [a]; linarith
   set Cmax := (Finset.range (D + 1)).sup'
     ⟨0, Finset.mem_range.mpr (Nat.succ_pos D)⟩ fun d ↦ max (C₀ d) 0
-  have hCmax0 : (0 : ℝ) ≤ Cmax :=
-    le_trans (le_max_right _ _)
-      (Finset.le_sup' _ (Finset.mem_range.mpr (Nat.succ_pos D)))
+  have hCmax0 : (0 : ℝ) ≤ Cmax := by
+    show (0 : ℝ) ≤ (Finset.range (D + 1)).sup'
+      ⟨0, Finset.mem_range.mpr (Nat.succ_pos D)⟩ (fun d ↦ max (C₀ d) 0)
+    exact le_trans (le_max_right _ _)
+      (Finset.le_sup' (fun d ↦ max (C₀ d) 0)
+        (Finset.mem_range.mpr (Nat.succ_pos D)))
   set T1 := (1 / δ) ^ (1 / a : ℝ)
   set T2 := (Cmax / δ) ^ (1 / a : ℝ)
   -- `T3`: makes `(1/δ)^{2K} ≤ |A|^{1-ε}` (the `δ^{-2K} ≤ sMin` input of
@@ -2526,7 +2669,10 @@ theorem irreduciblization_faithful {β ε δ γ K : ℝ}
     have h7 : (C₀ d : ℝ) ≤ Cmax := by
       have hmem : d ∈ Finset.range (D + 1) :=
         Finset.mem_range.mpr (Nat.lt_succ_iff.mpr hd)
-      have h8 : max (C₀ d) 0 ≤ Cmax := Finset.le_sup' _ hmem
+      have h8 : max (C₀ d) 0 ≤ Cmax := by
+        show max (C₀ d) 0 ≤ (Finset.range (D + 1)).sup'
+          ⟨d, hmem⟩ (fun d ↦ max (C₀ d) 0)
+        exact Finset.le_sup' (fun d ↦ max (C₀ d) 0) hmem
       exact le_trans (le_max_left _ _) h8
     linarith
   -- the residual hypotheses, then `iterates_to_irreducible`
@@ -2536,11 +2682,15 @@ theorem irreduciblization_faithful {β ε δ γ K : ℝ}
     have hC₀ℓ : (C₀ ℓ : ℝ) ≤ (A.card : ℝ) := by
       have h1 := hC₀bound ℓ hℓD
       have h2 : δ * (A.card : ℝ) ^ a ≤ (A.card : ℝ) := by
-        have h3 : (A.card : ℝ) ^ a ≤ (A.card : ℝ) :=
-          Real.rpow_le_rpow_of_exponent_le hA1 (by dsimp [a]; linarith)
-        calc δ * (A.card : ℝ) ^ a ≤ 1 * (A.card : ℝ) ^ a := by
-              apply mul_le_mul_of_nonneg_right hδ1.le
-                (Real.rpow_nonneg hA1 _)
+        have h3 : (A.card : ℝ) ^ a ≤ (A.card : ℝ) := by
+          dsimp [a]
+          calc (A.card : ℝ) ^ (1 - ε / 2)
+              ≤ (A.card : ℝ) ^ (1 : ℝ) :=
+                Real.rpow_le_rpow_of_exponent_le hA1 (by linarith)
+            _ = (A.card : ℝ) := Real.rpow_one _
+        calc δ * (A.card : ℝ) ^ a ≤ 1 * (A.card : ℝ) ^ a :=
+              mul_le_mul_of_nonneg_right hδ1.le
+                (Real.rpow_nonneg (Nat.cast_nonneg _) _)
           _ = (A.card : ℝ) ^ a := one_mul _
           _ ≤ (A.card : ℝ) := h3
       linarith
@@ -2572,8 +2722,9 @@ theorem irreduciblization_faithful {β ε δ γ K : ℝ}
   have hδA : (1 / δ) ^ (2 * K) ≤ (A.card : ℝ) ^ (1 - ε) := by
     have h1ε : (0 : ℝ) < 1 - ε := by linarith
     have hT3le : T3 ≤ (A.card : ℝ) :=
-      le_trans (le_trans (le_max_left _ _) (le_max_right _ _))
-        (le_trans (le_max_left _ _) hAgt.le)
+      le_trans (le_max_left _ _)
+        (le_trans (le_max_right _ _)
+          (le_trans (le_max_right _ _) hAgt.le))
     have hT3eq : T3 ^ (1 - ε) = (1 / δ) ^ (2 * K) := by
       dsimp [T3]
       rw [← Real.rpow_mul (by positivity : (0 : ℝ) ≤ 1 / δ),
@@ -2588,8 +2739,9 @@ theorem irreduciblization_faithful {β ε δ γ K : ℝ}
       have h := (div_lt_iff₀ hε).mp hKbig
       linarith [h]
     have hT4le : T4 ≤ (A.card : ℝ) :=
-      le_trans (le_trans (le_max_right _ _) (le_max_right _ _))
-        (le_trans (le_max_left _ _) hAgt.le)
+      le_trans (le_max_right _ _)
+        (le_trans (le_max_right _ _)
+          (le_trans (le_max_right _ _) hAgt.le))
     have hexp' : Real.log T4 = K * Real.log (1 / δ) *
         (D : ℝ) / (K * ε / 2 - (2 * ℓ + β + 2)) := by
       dsimp [T4]
@@ -2608,6 +2760,8 @@ theorem irreduciblization_faithful {β ε δ γ K : ℝ}
     (by simpa using hsMin') hβ' hℓD hGD
     hBint hNA hsub hBβ hA1 hA1 hAvac
     (le_refl 1) (le_refl _) hδA hLarg
-    lem68_move_bound hwit0 hwit' moved_set_is_lb
+    lem68_move_bound hwit0 hwit'
+      (by intro n d X A₁ x W hA₁ hx hcard
+          exact moved_set_is_lb W hA₁ hx hcard)
 
 end Nonaveraging

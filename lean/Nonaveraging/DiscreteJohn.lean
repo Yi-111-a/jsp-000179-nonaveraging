@@ -338,38 +338,1360 @@ theorem smul_self_subset (hBc : Convex ℝ B) (hB0 : (0 : Fin d → ℝ) ∈ B)
   have h := hBc hB0 hy (sub_nonneg.mpr ht1) ht0 (by ring)
   simpa using h
 
-/- **The Mahler-form lattice-basis input** — the geometry-of-numbers
-gap behind Lemma 7 (discrete John), isolated as a single statement.
-For every bounded symmetric convex `B ⊆ ℝ^d` containing `0`, the integer
-lattice `ℤ^d` admits a basis `v` together with its dual basis `w`
-(i.e. `∑_k v i k * w j k = δᵢⱼ`) and weights `M i ≥ 0` bounding the
-pairing `|⟨z, w i⟩|` of every integer point `z ∈ B`, such that `v i`
-lies in every dilation `t • B` with `t > C / M i` whenever `M i > 0`.
+/-! ### Successive minima and the Mahler basis for bounded `B`
 
-This is the content that the classical proof of Lemma 7 (Tao–Vu,
-Theorem 3.36) extracts from **Minkowski's second theorem**
-`λ₁⋯λ_d · vol B ≤ 2^d` on the successive minima of `B`: the
-successive-minima vectors `uᵢ` of `B` (which exist greedily, cf.
-`GeoNumbers.exists_succMinima`) generate a sublattice `Λ'` of `ℤ^d` of
-index `[ℤ^d : Λ'] ≤ d!` — the cross-polytope bound
-`vol B ≥ 2^d·|det u| / (d!·λ₁⋯λ_d)` combined with the product bound —
-the flag `span(u₁,…,uᵢ) ∩ ℤ^d` then completes to a `ℤ`-basis `v`
-(Hermite normal form) with `gauge B (vᵢ) ≲_d λᵢ`, and Cramer's rule
-applied to `det(v₁,…,z,…,v_d)` gives `|⟨z, w i⟩| ≲_d λᵢ⁻¹` for
-`z ∈ B ∩ ℤ^d`; the last hypothesis here is the resulting product bound
-`gauge B (v i) · M i ≤ C` written in membership form.  Since the
-pairing `⟨z, w i⟩` is integral, `M i` is either `0` — exactly when
-`w i` annihilates `B ∩ ℤ^d`, i.e. for the directions outside
-`span B` — or at least `1`.
+The following machinery attacks parts (a) and (b) of the classical proof
+of `exists_zbasis_mahler_core` (see its docstring): successive minima for
+a merely *bounded* symmetric convex `B` (living inside `intSpan B`, the
+`ℝ`-span of the integer points of `B`), and the Mahler flag-completion
+lemma over `ℤ`.  The remaining gap is only the Minkowski-second-theorem
+pairing bound `mahler_coord_bound`. -/
 
-Mathlib (v4.34.0) contains Minkowski's *first* theorem
-(`exists_ne_zero_mem_lattice_of_measure_mul_two_pow_lt_measure` and its
-weak-inequality variant in `MeasureTheory/Group/GeometryOfNumbers.lean`)
-and the `ZLattice` covolume API
-(`Algebra/Module/ZLattice/Covolume.lean`), but no successive-minima
-product bound (Minkowski's second theorem) and no Hermite/Smith normal
-form machinery producing bases adapted to a sublattice flag; this lemma
-is exactly that missing input. -/
+/-- The embedding `ℤ^d ↪ ℝ^d` as an `Int.castRingHom`-semilinear map. -/
+def intVecLin : (Fin d → ℤ) →ₛₗ[Int.castRingHom ℝ] (Fin d → ℝ) where
+  toFun := intVec
+  map_add' := intVec_add
+  map_smul' := fun n z ↦ intVec_smul n z
+
+@[simp] theorem intVecLin_apply (z : Fin d → ℤ) :
+    intVecLin z = intVec z := rfl
+
+theorem intVecLin_injective :
+    Function.Injective (intVecLin : (Fin d → ℤ) →ₛₗ[Int.castRingHom ℝ]
+      (Fin d → ℝ)) := intVec_injective
+
+/-- The `ℝ`-span of the integer points of `B`; the successive minima of
+`B` with respect to `ℤ^d` live inside this subspace (points outside are
+not absorbed by `B`, so `gauge B` is degenerate there). -/
+def intSpan (B : Set (Fin d → ℝ)) : Submodule ℝ (Fin d → ℝ) :=
+  Submodule.span ℝ (intVec '' (intVec ⁻¹' B))
+
+theorem intVec_mem_intSpan {z : Fin d → ℤ} (hz : intVec z ∈ B) :
+    intVec z ∈ intSpan B :=
+  Submodule.subset_span ⟨z, hz, rfl⟩
+
+theorem intSpan_le_span (B : Set (Fin d → ℝ)) :
+    intSpan B ≤ Submodule.span ℝ B :=
+  Submodule.span_mono (Set.image_preimage_subset _ _)
+
+/-- For convex symmetric `B ∋ 0`, every point of `span B` is absorbed:
+`x ∈ span B → x ∈ r • B` for some `r > 0`. -/
+theorem exists_pos_smul_mem_of_mem_span (hBc : Convex ℝ B)
+    (hB0 : (0 : Fin d → ℝ) ∈ B) (hBs : ∀ x ∈ B, -x ∈ B) {x : Fin d → ℝ}
+    (hx : x ∈ Submodule.span ℝ B) :
+    ∃ r : ℝ, 0 < r ∧ x ∈ r • B := by
+  classical
+  induction hx using Submodule.span_induction with
+  | mem y hy => exact ⟨1, one_pos, ⟨y, hy, one_smul ℝ _⟩⟩
+  | zero => exact ⟨1, one_pos, ⟨0, hB0, by simp⟩⟩
+  | add y hy_mem z hz_mem ihy ihz =>
+      obtain ⟨r₁, hr₁, hyr⟩ := ihy
+      obtain ⟨r₂, hr₂, hzr⟩ := ihz
+      exact ⟨r₁ + r₂, add_pos hr₁ hr₂,
+        mem_smul_add hBc hB0 hr₁.le hr₂.le hyr hzr⟩
+  | smul a y hy_mem ihy =>
+      obtain ⟨r, hr, hyr⟩ := ihy
+      rcases eq_or_lt_of_le (abs_nonneg a) with ha | ha
+      · -- `a = 0`: `a • y = 0 ∈ 1 • B`
+        have : a = 0 := abs_eq_zero.mp ha.symm
+        subst this
+        rw [zero_smul]
+        exact ⟨1, one_pos, ⟨0, hB0, by simp⟩⟩
+      · obtain ⟨y', hy', rfl⟩ := Set.mem_smul_set.mp hyr
+        rcases le_or_gt 0 a with ha0 | ha0
+        · refine ⟨|a| * r, mul_pos ha hr, ⟨y', hy', ?_⟩⟩
+          rw [smul_smul, abs_of_nonneg ha0]
+        · refine ⟨|a| * r, mul_pos ha hr, ⟨-y', hBs _ hy', ?_⟩⟩
+          simp only [smul_smul, abs_of_neg ha0, neg_mul, neg_smul,
+            smul_neg, neg_neg]
+
+/-- For convex symmetric bounded `B ∋ 0`, an absorbed point `x` of gauge
+strictly below `t` lies in `t • B`.  (No openness needed.) -/
+theorem mem_smul_of_gauge_lt (hBc : Convex ℝ B) (hB0 : (0 : Fin d → ℝ) ∈ B)
+    (hBs : ∀ x ∈ B, -x ∈ B) {x : Fin d → ℝ}
+    (hx : x ∈ Submodule.span ℝ B) {t : ℝ} (ht : gauge B x < t) :
+    x ∈ t • B := by
+  obtain ⟨r₀, hr₀, hxr₀⟩ := exists_pos_smul_mem_of_mem_span hBc hB0 hBs hx
+  have hne : {r : ℝ | 0 < r ∧ x ∈ r • B}.Nonempty := ⟨r₀, hr₀, hxr₀⟩
+  obtain ⟨r, ⟨hr0, hxr⟩, hrt⟩ :=
+    exists_lt_of_csInf_lt hne (show gauge B x < t from ht)
+  have htp : (0 : ℝ) < t := hr0.trans hrt
+  have hsub : r • B ⊆ t • B := by
+    have h1 : (r / t) • B ⊆ B :=
+      smul_self_subset hBc hB0 (div_nonneg hr0.le htp.le)
+        ((div_le_one htp).mpr hrt.le)
+    calc r • B = t • ((r / t) • B) := by
+          rw [smul_smul, mul_div_cancel₀ r htp.ne']
+      _ ⊆ t • B := Set.smul_set_mono h1
+  exact hsub hxr
+
+/-- For convex symmetric bounded `B ∋ 0`, a nonzero absorbed point has
+positive gauge. -/
+theorem gauge_pos_of_mem_span (hBc : Convex ℝ B) (hB0 : (0 : Fin d → ℝ) ∈ B)
+    (hBs : ∀ x ∈ B, -x ∈ B) (hBb : Bornology.IsBounded B) {x : Fin d → ℝ}
+    (hx : x ∈ Submodule.span ℝ B) (hx0 : x ≠ 0) : 0 < gauge B x := by
+  obtain ⟨R, hR⟩ := hBb.subset_closedBall (0 : Fin d → ℝ)
+  obtain ⟨r₀, hr₀, hxr₀⟩ := exists_pos_smul_mem_of_mem_span hBc hB0 hBs hx
+  have hne : {r : ℝ | 0 < r ∧ x ∈ r • B}.Nonempty := ⟨r₀, hr₀, hxr₀⟩
+  have hRpos : 0 < R := by
+    obtain ⟨y, hy, rfl⟩ := Set.mem_smul_set.mp hxr₀
+    have hy0 : y ≠ 0 := fun h ↦ by simp [h] at hx0
+    have : ‖y‖ ≤ R := mem_closedBall_zero_iff.mp (hR hy)
+    exact (norm_pos_iff.mpr hy0).trans_le this
+  apply lt_of_lt_of_le (div_pos (norm_pos_iff.mpr hx0) hRpos)
+  apply le_csInf hne
+  rintro r ⟨hr0, hxr⟩
+  obtain ⟨y, hy, rfl⟩ := Set.mem_smul_set.mp hxr
+  have hyR : ‖y‖ ≤ R := mem_closedBall_zero_iff.mp (hR hy)
+  rw [div_le_iff₀ hRpos]
+  calc ‖r • y‖ = r * ‖y‖ := by
+        rw [norm_smul, Real.norm_of_nonneg hr0.le]
+    _ ≤ r * R := mul_le_mul_of_nonneg_left hyR hr0.le
+
+/-- A bounded set contains only finitely many integer vectors of bounded
+gauge inside `intSpan B` — the bounded-`B` replacement of
+`GeoNumbers.finite_intVec_gauge_le`. -/
+theorem finite_intVec_gauge_le_of_mem_intSpan (hBc : Convex ℝ B)
+    (hB0 : (0 : Fin d → ℝ) ∈ B) (hBs : ∀ x ∈ B, -x ∈ B)
+    (hBb : Bornology.IsBounded B) (C : ℝ) :
+    Set.Finite {z : Fin d → ℤ |
+      intVec z ∈ intSpan B ∧ gauge B (intVec z) ≤ C} := by
+  obtain ⟨R, hR⟩ := hBb.subset_closedBall (0 : Fin d → ℝ)
+  have hR0 : 0 ≤ R := Metric.nonempty_closedBall.mp ⟨0, hR hB0⟩
+  set D : ℝ := max C 0 + 1 with hD
+  have hDpos : (0 : ℝ) < D := by rw [hD]; linarith [le_max_right C 0]
+  have hCD : C < D := by rw [hD]; linarith [le_max_left C 0]
+  have hsub : D • B ⊆ Metric.closedBall (0 : Fin d → ℝ) (D * R) := by
+    calc D • B ⊆ D • Metric.closedBall 0 R := fun x hx ↦ by
+          obtain ⟨y, hy, rfl⟩ := Set.mem_smul_set.mp hx
+          exact Set.smul_mem_smul_set (hR hy)
+      _ = Metric.closedBall (D • (0 : Fin d → ℝ)) (‖D‖ * R) :=
+          smul_closedBall D _ hR0
+      _ = Metric.closedBall 0 (D * R) := by
+          rw [smul_zero, Real.norm_of_nonneg hDpos.le]
+  refine Set.Finite.subset
+    (Set.Finite.pi (t := fun i ↦ Set.Icc (-(⌈D * R⌉₊ : ℤ)) (⌈D * R⌉₊ : ℤ))
+      fun i ↦ Set.finite_Icc _ _) ?_
+  intro z hz
+  rw [Set.mem_univ_pi]
+  intro i
+  obtain ⟨hzV, hzC⟩ := hz
+  have hxD : intVec z ∈ D • B :=
+    mem_smul_of_gauge_lt hBc hB0 hBs (intSpan_le_span _ hzV)
+      (hzC.trans_lt hCD)
+  have hx : intVec z ∈ Metric.closedBall (0 : Fin d → ℝ) (D * R) :=
+    hsub hxD
+  have hzi : |(z i : ℝ)| ≤ D * R := by
+    calc |(z i : ℝ)| = ‖intVec z i‖ := by
+          rw [intVec_apply, Real.norm_eq_abs]
+      _ ≤ ‖intVec z‖ := norm_le_pi_norm _ i
+      _ ≤ D * R := mem_closedBall_zero_iff.mp hx
+  rw [Set.mem_Icc, ← abs_le]
+  have h5 : ((|z i| : ℤ) : ℝ) ≤ ((⌈D * R⌉₊ : ℤ) : ℝ) := by
+    rw [Int.cast_abs, Int.cast_natCast]
+    exact hzi.trans (Nat.le_ceil _)
+  exact Int.cast_le.mp h5
+
+/-- **Greedy minimization inside `intSpan B`**: if `S` is a proper
+subspace of `intSpan B`, some integer vector with `intVec z ∈
+intSpan B \ S` minimizes `gauge B` among such vectors. -/
+theorem exists_intVec_min_gauge_intSpan (hBc : Convex ℝ B)
+    (hB0 : (0 : Fin d → ℝ) ∈ B) (hBs : ∀ x ∈ B, -x ∈ B)
+    (hBb : Bornology.IsBounded B) (S : Submodule ℝ (Fin d → ℝ))
+    (hS : S < intSpan B) :
+    ∃ z : Fin d → ℤ, intVec z ∈ intSpan B ∧ intVec z ∉ S ∧
+      ∀ z' : Fin d → ℤ, intVec z' ∈ intSpan B → intVec z' ∉ S →
+        gauge B (intVec z) ≤ gauge B (intVec z') := by
+  classical
+  obtain ⟨u, huB, huS⟩ : ∃ u : Fin d → ℤ, intVec u ∈ B ∧ intVec u ∉ S := by
+    by_contra h
+    push Not at h
+    have hsub : intSpan B ≤ S := by
+      rw [intSpan, Submodule.span_le]
+      rintro x ⟨z, hz, rfl⟩
+      exact h z hz
+    exact absurd (le_antisymm hS.le hsub) (ne_of_lt hS)
+  -- the finite minimizing set
+  have huV : intVec u ∈ intSpan B := intVec_mem_intSpan huB
+  set F : Set (Fin d → ℤ) := {z | intVec z ∈ intSpan B ∧ intVec z ∉ S ∧
+      gauge B (intVec z) ≤ gauge B (intVec u)} with hF
+  have hFfin : F.Finite :=
+    (finite_intVec_gauge_le_of_mem_intSpan hBc hB0 hBs hBb _).subset
+      fun z hz ↦ ⟨hz.1, hz.2.2⟩
+  obtain ⟨z, hzF, hzmin⟩ :=
+    Set.exists_min_image F (fun z ↦ gauge B (intVec z)) hFfin
+      ⟨u, huV, huS, le_rfl⟩
+  refine ⟨z, hzF.1, hzF.2.1, fun z' hz'V hz'S ↦ ?_⟩
+  by_cases hzz : gauge B (intVec z') ≤ gauge B (intVec u)
+  · exact hzmin z' ⟨hz'V, hz'S, hzz⟩
+  · exact (hzF.2.2).trans (not_le.mp hzz).le
+
+/-- `Vᵢ` for an integer family `u`: the `ℝ`-span of `u₀,…,u_{i-1}`
+(more precisely, of the `uⱼ` with `j < i`). -/
+def flagSpan (u : Fin d → Fin d → ℤ) (i : ℕ) : Submodule ℝ (Fin d → ℝ) :=
+  Submodule.span ℝ (Set.range fun j : {j : Fin d // (j : ℕ) < i} ↦
+    intVec (u j))
+
+/-- `Lᵢ = Vᵢ ∩ ℤ^d`, a pure `ℤ`-submodule of `ℤ^d` (pure because `Vᵢ` is
+a linear subspace: `n • intVec z ∈ Vᵢ` with `n ≠ 0` implies
+`intVec z ∈ Vᵢ`). -/
+def flagLattice (u : Fin d → Fin d → ℤ) (i : ℕ) : Submodule ℤ (Fin d → ℤ) :=
+  (flagSpan u i).comap intVecLin
+
+theorem mem_flagLattice {u : Fin d → Fin d → ℤ} {i : ℕ} {z : Fin d → ℤ} :
+    z ∈ flagLattice u i ↔ intVec z ∈ flagSpan u i :=
+  Iff.rfl
+
+theorem flagSpan_mono {u : Fin d → Fin d → ℤ} {i j : ℕ} (h : i ≤ j) :
+    flagSpan u i ≤ flagSpan u j := by
+  apply Submodule.span_mono
+  rintro x ⟨l, rfl⟩
+  exact ⟨⟨l, lt_of_lt_of_le l.2 h⟩, rfl⟩
+
+theorem flagLattice_mono {u : Fin d → Fin d → ℤ} {i j : ℕ} (h : i ≤ j) :
+    flagLattice u i ≤ flagLattice u j :=
+  fun _ hx ↦ flagSpan_mono h hx
+
+theorem mem_flagLattice_succ_self (u : Fin d → Fin d → ℤ) (i : Fin d) :
+    u i ∈ flagLattice u ((i : ℕ) + 1) :=
+  Submodule.subset_span ⟨⟨i, Nat.lt_succ_self (i : ℕ)⟩, rfl⟩
+
+theorem flagLattice_zero (u : Fin d → Fin d → ℤ) : flagLattice u 0 = ⊥ := by
+  have hempty : (Set.range fun j : {j : Fin d // (j:ℕ) < 0} ↦
+      intVec (u j)) = ∅ := by
+    apply Set.eq_empty_of_forall_notMem
+    rintro x ⟨j, -⟩
+    exact absurd j.2 (by simp)
+  have h0 : flagSpan u 0 = ⊥ := by
+    rw [flagSpan, hempty, Submodule.span_empty]
+  ext z
+  rw [flagLattice, Submodule.mem_comap, intVecLin_apply, h0,
+    Submodule.mem_bot, Submodule.mem_bot]
+  constructor
+  · intro hz
+    exact intVec_injective (by rw [hz, intVec_zero])
+  · intro hz
+    rw [hz, intVec_zero]
+
+/-- **Successive minima for a bounded (not necessarily open) symmetric
+convex body** — the bounded-`B` generalization of
+`GeoNumbers.exists_succMinima`, with successive-minima vectors drawn
+from `intSpan B`, the `ℝ`-span of `B ∩ ℤ^d`.  Produces a full `ℝ`-basis
+`u` of integer vectors whose first `r = dim(intSpan B)` members lie in
+`intSpan B`, `uᵢ` minimizing `gauge B` among integer vectors of
+`intSpan B` outside `Vᵢ = span{u₀,…,u_{i-1}}`; in particular
+`Vᵣ = intSpan B`, so every integer point of `B` lies in `Vᵣ`. -/
+theorem exists_succMinima_bounded (hBc : Convex ℝ B)
+    (hB0 : (0 : Fin d → ℝ) ∈ B) (hBs : ∀ x ∈ B, -x ∈ B)
+    (hBb : Bornology.IsBounded B) :
+    ∃ (r : ℕ) (u : Fin d → Fin d → ℤ),
+      r = Module.finrank ℝ ↥(intSpan B) ∧
+      LinearIndependent ℝ (fun i ↦ intVec (u i)) ∧
+      (∀ i : Fin d, (i : ℕ) < r → intVec (u i) ∈ intSpan B) ∧
+      (∀ i : Fin d, (i : ℕ) < r → ∀ z : Fin d → ℤ,
+          intVec z ∈ intSpan B → intVec z ∉ flagSpan u (i : ℕ) →
+          gauge B (intVec (u i)) ≤ gauge B (intVec z)) ∧
+      flagSpan u r = intSpan B := by
+  classical
+  -- We build `u` by induction on `k ≤ d`.  The invariant: `intVec ∘ u`
+  -- is `ℝ`-linearly independent, and every index `j` whose
+  -- predecessor-span `Sⱼ` is a proper subspace of `intSpan B` was picked
+  -- greedily in `intSpan B ∖ Sⱼ`.
+  suffices hsuff : ∀ k : ℕ, k ≤ d → ∃ u : Fin k → (Fin d → ℤ),
+      LinearIndependent ℝ (fun i ↦ intVec (u i)) ∧
+      ∀ j : Fin k,
+        Submodule.span ℝ (Set.range
+            fun l : {l : Fin k // (l : ℕ) < (j : ℕ)} ↦ intVec (u l)) <
+          intSpan B →
+        intVec (u j) ∈ intSpan B ∧
+        ∀ z : Fin d → ℤ, intVec z ∈ intSpan B →
+          intVec z ∉ Submodule.span ℝ (Set.range
+            fun l : {l : Fin k // (l : ℕ) < (j : ℕ)} ↦ intVec (u l)) →
+          gauge B (intVec (u j)) ≤ gauge B (intVec z) by
+    obtain ⟨u, huI, huM⟩ := hsuff d le_rfl
+    set r := Module.finrank ℝ ↥(intSpan B) with hr
+    have hrd : r ≤ d := by
+      rw [hr]
+      calc Module.finrank ℝ ↥(intSpan B)
+          ≤ Module.finrank ℝ (Fin d → ℝ) := Submodule.finrank_le _
+        _ = d := by
+            rw [Module.finrank_fintype_fun_eq_card, Fintype.card_fin]
+    have hcard : ∀ i : ℕ, i ≤ d →
+        Fintype.card {l : Fin d // (l : ℕ) < i} = i := by
+      intro i hi
+      let e : Fin i ≃ {l : Fin d // (l : ℕ) < i} :=
+        { toFun := fun j ↦ ⟨⟨j, j.isLt.trans_le hi⟩, j.isLt⟩
+          invFun := fun j ↦ ⟨(j : Fin d).1, j.2⟩
+          left_inv := fun j ↦ by ext; rfl
+          right_inv := fun j ↦ by ext; rfl }
+      rw [← Fintype.card_congr e, Fintype.card_fin]
+    have hfinrank : ∀ i : ℕ, i ≤ d →
+        Module.finrank ℝ ↥(flagSpan u i) ≤ i := by
+      intro i hi
+      show Module.finrank ℝ ↥(Submodule.span ℝ (Set.range
+          fun j : {j : Fin d // (j:ℕ) < i} ↦ intVec (u j))) ≤ i
+      calc Module.finrank ℝ ↥(Submodule.span ℝ (Set.range
+              fun j : {j : Fin d // (j:ℕ) < i} ↦ intVec (u j)))
+          ≤ (Set.range fun j : {j : Fin d // (j:ℕ) < i} ↦
+              intVec (u j)).toFinset.card := finrank_span_le_card _
+        _ = (Finset.univ.image fun j : {j : Fin d // (j:ℕ) < i} ↦
+              intVec (u j)).card := by rw [Set.toFinset_range]
+        _ ≤ Finset.univ.card := Finset.card_image_le
+        _ = Fintype.card {l : Fin d // (l:ℕ) < i} := Finset.card_univ
+        _ = i := hcard i hi
+    -- `flagSpan u i ≤ intSpan B` whenever `i ≤ r`
+    have hle : ∀ i : ℕ, i ≤ r → flagSpan u i ≤ intSpan B := by
+      intro i
+      induction i with
+      | zero =>
+          intro _
+          show Submodule.span ℝ (Set.range
+              fun j : {j : Fin d // (j:ℕ) < 0} ↦ intVec (u j)) ≤ intSpan B
+          rw [Submodule.span_le]
+          rintro x ⟨j, -⟩
+          exact absurd j.2 (by simp)
+      | succ i ih =>
+          intro hir
+          have hii : i ≤ r := Nat.le_of_succ_le hir
+          show Submodule.span ℝ (Set.range
+              fun j : {j : Fin d // (j:ℕ) < i+1} ↦ intVec (u j)) ≤
+            intSpan B
+          rw [Submodule.span_le]
+          rintro x ⟨l, rfl⟩
+          have hsub : flagSpan u (l : ℕ) ≤ intSpan B :=
+            (flagSpan_mono (Nat.lt_succ_iff.mp l.2)).trans (ih hii)
+          have hll : flagSpan u (l : ℕ) < intSpan B := by
+            refine lt_of_le_of_ne hsub ?_
+            intro heq
+            have hfr := hfinrank (l : ℕ) (l.1.isLt.le)
+            rw [heq, ← hr] at hfr
+            have hlr : (l : ℕ) < r := (Nat.lt_succ_iff.mp l.2).trans_lt hir
+            exact absurd (hfr.trans_lt hlr) (lt_irrefl _)
+          exact (huM l hll).1
+    -- `flagSpan u i` is a proper subspace of `intSpan B` for `i < r`
+    have hlt : ∀ i : Fin d, (i : ℕ) < r →
+        flagSpan u (i : ℕ) < intSpan B := by
+      intro i hi
+      refine lt_of_le_of_ne (hle (i : ℕ) hi.le) ?_
+      intro heq
+      have hfr := hfinrank (i : ℕ) i.isLt.le
+      rw [heq, ← hr] at hfr
+      exact absurd (hfr.trans_lt hi) (lt_irrefl _)
+    refine ⟨r, u, rfl, huI, fun i hi ↦ (huM i (hlt i hi)).1,
+      fun i hi ↦ (huM i (hlt i hi)).2, ?_⟩
+    -- `flagSpan u r = intSpan B` by equality of finranks
+    apply Submodule.eq_of_le_of_finrank_eq (hle r le_rfl)
+    rw [← hr]
+    show Module.finrank ℝ ↥(Submodule.span ℝ (Set.range
+        fun j : {j : Fin d // (j:ℕ) < r} ↦ intVec (u j))) = r
+    have hind : LinearIndependent ℝ
+        (fun l : {l : Fin d // (l:ℕ) < r} ↦ intVec (u l)) :=
+      huI.comp Subtype.val Subtype.coe_injective
+    rw [finrank_span_eq_card hind, hcard r hrd]
+  -- the induction on `k`
+  intro k
+  induction k with
+  | zero =>
+      intro _
+      exact ⟨fun i ↦ i.elim0, linearIndependent_empty_type,
+        fun i ↦ i.elim0⟩
+  | succ k ih =>
+      intro hk
+      obtain ⟨u, huI, huM⟩ := ih (Nat.le_of_succ_le hk)
+      set S := Submodule.span ℝ
+        (Set.range fun j : Fin k ↦ intVec (u j)) with hSdef
+      have hSne : S ≠ ⊤ := by
+        intro htop
+        have hle : Module.finrank ℝ (⊤ : Submodule ℝ (Fin d → ℝ)) ≤ k := by
+          calc Module.finrank ℝ (⊤ : Submodule ℝ (Fin d → ℝ))
+              = Module.finrank ℝ ↥S := by rw [htop]
+            _ ≤ (Set.range fun j : Fin k ↦ intVec (u j)).toFinset.card :=
+                finrank_span_le_card _
+            _ ≤ Fintype.card (Fin k) := by
+                rw [Set.toFinset_range]
+                exact Finset.card_image_le
+            _ = k := Fintype.card_fin _
+        rw [finrank_top, Module.finrank_fintype_fun_eq_card,
+          Fintype.card_fin] at hle
+        omega
+      by_cases hSV : S < intSpan B
+      · -- greedy step: minimize `gauge` over `intSpan B ∖ S`
+        obtain ⟨v, hvV, hvS, hvMin⟩ :=
+          exists_intVec_min_gauge_intSpan hBc hB0 hBs hBb S hSV
+        refine ⟨Fin.snoc u v, ?_, ?_⟩
+        · have hcomp : Fin.snoc (fun i ↦ intVec (u i)) (intVec v) =
+              fun i ↦ intVec ((Fin.snoc u v : Fin (k+1) → Fin d → ℤ) i) :=
+            (Fin.comp_snoc intVec u v).symm
+          rw [← hcomp, linearIndependent_finSnoc]
+          exact ⟨huI, hvS⟩
+        · intro j hj
+          by_cases hjk : (j : ℕ) < k
+          · have hrw : (Set.range fun l : {l : Fin (k+1) //
+                    (l : ℕ) < (j : ℕ)} ↦
+                  intVec ((Fin.snoc u v : Fin (k+1) → Fin d → ℤ) l)) =
+                Set.range fun l : {l : Fin k // (l : ℕ) < (j : ℕ)} ↦
+                  intVec (u l) := by
+              ext x
+              constructor
+              · rintro ⟨l, rfl⟩
+                have hlk : (l : Fin (k+1)).1 < k := lt_trans l.2 hjk
+                refine ⟨⟨⟨(l : Fin (k+1)).1, hlk⟩, l.2⟩, ?_⟩
+                show intVec (u ⟨(l : Fin (k+1)).1, hlk⟩) =
+                    intVec ((Fin.snoc u v : Fin (k+1) → Fin d → ℤ) ↑l)
+                conv_rhs =>
+                  rw [show (l : Fin (k+1)) =
+                        Fin.castSucc ⟨(l : Fin (k+1)).1, hlk⟩
+                        from Fin.ext rfl]
+                rw [Fin.snoc_castSucc]
+              · rintro ⟨l, rfl⟩
+                refine ⟨⟨Fin.castSucc l.1, l.2⟩, ?_⟩
+                show intVec ((Fin.snoc u v : Fin (k+1) → Fin d → ℤ)
+                      (Fin.castSucc l.1)) = intVec (u l.1)
+                rw [Fin.snoc_castSucc]
+            rw [hrw] at hj ⊢
+            have hje : (Fin.snoc u v : Fin (k+1) → Fin d → ℤ) j =
+                u ⟨(j : ℕ), hjk⟩ := by
+              conv_lhs =>
+                rw [show j = Fin.castSucc ⟨(j : ℕ), hjk⟩
+                      from Fin.ext rfl]
+              rw [Fin.snoc_castSucc]
+            rw [hje]
+            exact huM ⟨(j : ℕ), hjk⟩ hj
+          · have hik : (j : ℕ) = k := by
+              have := j.isLt
+              omega
+            have hj' : j = Fin.last k :=
+              Fin.ext (hik.trans (Fin.val_last k).symm)
+            subst hj'
+            have hrw : (Set.range fun l : {l : Fin (k+1) //
+                    (l : ℕ) < (Fin.last k : ℕ)} ↦
+                  intVec ((Fin.snoc u v : Fin (k+1) → Fin d → ℤ) l)) =
+                Set.range fun j : Fin k ↦ intVec (u j) := by
+              ext x
+              constructor
+              · rintro ⟨l, rfl⟩
+                have hlk : (l : Fin (k+1)).1 < k :=
+                  lt_of_lt_of_eq l.2 (Fin.val_last k)
+                refine ⟨⟨(l : Fin (k+1)).1, hlk⟩, ?_⟩
+                show intVec (u ⟨(l : Fin (k+1)).1, hlk⟩) =
+                    intVec ((Fin.snoc u v : Fin (k+1) → Fin d → ℤ) ↑l)
+                conv_rhs =>
+                  rw [show (l : Fin (k+1)) =
+                        Fin.castSucc ⟨(l : Fin (k+1)).1, hlk⟩
+                        from Fin.ext rfl]
+                rw [Fin.snoc_castSucc]
+              · rintro ⟨l, rfl⟩
+                refine ⟨⟨Fin.castSucc l, l.isLt⟩, ?_⟩
+                show intVec ((Fin.snoc u v : Fin (k+1) → Fin d → ℤ)
+                      (Fin.castSucc l)) = intVec (u l)
+                rw [Fin.snoc_castSucc]
+            rw [hrw, ← hSdef] at hj ⊢
+            rw [Fin.snoc_last]
+            exact ⟨hvV, hvMin⟩
+      · -- extension step: pick a standard basis vector outside `S`
+        obtain ⟨m, hm⟩ : ∃ m : Fin d, Pi.basisFun ℝ (Fin d) m ∉ S := by
+          by_contra h
+          push Not at h
+          have htop : (⊤ : Submodule ℝ (Fin d → ℝ)) ≤ S := by
+            rw [← (Pi.basisFun ℝ (Fin d)).span_eq, Submodule.span_le]
+            rintro x ⟨i, rfl⟩
+            exact h i
+          exact hSne (top_unique htop)
+        refine ⟨Fin.snoc u (Pi.single m 1), ?_, ?_⟩
+        · have hcomp : Fin.snoc (fun i ↦ intVec (u i))
+              (intVec (Pi.single m 1)) =
+              fun i ↦ intVec ((Fin.snoc u (Pi.single m 1) :
+                Fin (k+1) → Fin d → ℤ) i) :=
+            (Fin.comp_snoc intVec u (Pi.single m 1)).symm
+          rw [← hcomp, linearIndependent_finSnoc]
+          refine ⟨huI, ?_⟩
+          rw [basisFun_eq_intVec_single] at hm
+          exact hm
+        · intro j hj
+          by_cases hjk : (j : ℕ) < k
+          · have hrw : (Set.range fun l : {l : Fin (k+1) //
+                    (l : ℕ) < (j : ℕ)} ↦
+                  intVec ((Fin.snoc u (Pi.single m 1) :
+                    Fin (k+1) → Fin d → ℤ) l)) =
+                Set.range fun l : {l : Fin k // (l : ℕ) < (j : ℕ)} ↦
+                  intVec (u l) := by
+              ext x
+              constructor
+              · rintro ⟨l, rfl⟩
+                have hlk : (l : Fin (k+1)).1 < k := lt_trans l.2 hjk
+                refine ⟨⟨⟨(l : Fin (k+1)).1, hlk⟩, l.2⟩, ?_⟩
+                show intVec (u ⟨(l : Fin (k+1)).1, hlk⟩) =
+                    intVec ((Fin.snoc u (Pi.single m 1) :
+                      Fin (k+1) → Fin d → ℤ) ↑l)
+                conv_rhs =>
+                  rw [show (l : Fin (k+1)) =
+                        Fin.castSucc ⟨(l : Fin (k+1)).1, hlk⟩
+                        from Fin.ext rfl]
+                rw [Fin.snoc_castSucc]
+              · rintro ⟨l, rfl⟩
+                refine ⟨⟨Fin.castSucc l.1, l.2⟩, ?_⟩
+                show intVec ((Fin.snoc u (Pi.single m 1) :
+                      Fin (k+1) → Fin d → ℤ) (Fin.castSucc l.1)) =
+                    intVec (u l.1)
+                rw [Fin.snoc_castSucc]
+            rw [hrw] at hj ⊢
+            have hje : (Fin.snoc u (Pi.single m 1) :
+                Fin (k+1) → Fin d → ℤ) j = u ⟨(j : ℕ), hjk⟩ := by
+              conv_lhs =>
+                rw [show j = Fin.castSucc ⟨(j : ℕ), hjk⟩
+                      from Fin.ext rfl]
+              rw [Fin.snoc_castSucc]
+            rw [hje]
+            exact huM ⟨(j : ℕ), hjk⟩ hj
+          · have hik : (j : ℕ) = k := by
+              have := j.isLt
+              omega
+            have hj' : j = Fin.last k :=
+              Fin.ext (hik.trans (Fin.val_last k).symm)
+            subst hj'
+            have hrw : (Set.range fun l : {l : Fin (k+1) //
+                    (l : ℕ) < (Fin.last k : ℕ)} ↦
+                  intVec ((Fin.snoc u (Pi.single m 1) :
+                    Fin (k+1) → Fin d → ℤ) l)) =
+                Set.range fun j : Fin k ↦ intVec (u j) := by
+              ext x
+              constructor
+              · rintro ⟨l, rfl⟩
+                have hlk : (l : Fin (k+1)).1 < k :=
+                  lt_of_lt_of_eq l.2 (Fin.val_last k)
+                refine ⟨⟨(l : Fin (k+1)).1, hlk⟩, ?_⟩
+                show intVec (u ⟨(l : Fin (k+1)).1, hlk⟩) =
+                    intVec ((Fin.snoc u (Pi.single m 1) :
+                      Fin (k+1) → Fin d → ℤ) ↑l)
+                conv_rhs =>
+                  rw [show (l : Fin (k+1)) =
+                        Fin.castSucc ⟨(l : Fin (k+1)).1, hlk⟩
+                        from Fin.ext rfl]
+                rw [Fin.snoc_castSucc]
+              · rintro ⟨l, rfl⟩
+                refine ⟨⟨Fin.castSucc l, l.isLt⟩, ?_⟩
+                show intVec ((Fin.snoc u (Pi.single m 1) :
+                      Fin (k+1) → Fin d → ℤ) (Fin.castSucc l)) =
+                    intVec (u l)
+                rw [Fin.snoc_castSucc]
+            rw [hrw, ← hSdef] at hj
+            exact absurd hj hSV
+
+/-! ### The flag determinant and the adapted `ℤ`-basis (part (b))
+
+`intMat u` is the integer matrix with columns `u i`; replacing column
+`i` by `z` and taking the determinant defines `flagDetLin u i`, a
+`ℤ`-linear functional on `ℤ^d` which vanishes on `Lᵢ = flagLattice u i`
+(because `Lᵢ ⊆ Vᵢ = span{u₀,…,u_{i-1}}` and `Dᵢ` is alternating in the
+columns).  The image of `L_{i+1}` under `Dᵢ` is a `ℤ`-submodule of `ℤ`,
+hence principal, generated by some `kᵢ ≠ 0`; a preimage `vᵢ` of `kᵢ`
+splits `L_{i+1} = Lᵢ ⊕ ℤ·vᵢ`.  Iterating over `i` produces a `ℤ`-basis
+adapted to the flag (`exists_mahler_zbasis`), and rounding the
+`u`-coordinates of `vᵢ` to the nearest integer produces the shifted
+Mahler basis vectors `vᵢ' = vᵢ - Σⱼ nⱼ uⱼ` with
+`intVec vᵢ' = θᵢ uᵢ + Σⱼ θⱼ'' uⱼ`, `|θᵢ| ≤ 1`, `|θⱼ''| ≤ 1/2`
+(`exists_mahler_shift`). -/
+
+/-- `Fintype.card {l : Fin d // l < i} = i` for `i ≤ d`. -/
+theorem card_flagSubtype (i : ℕ) (hi : i ≤ d) :
+    Fintype.card {l : Fin d // (l : ℕ) < i} = i := by
+  classical
+  let e : Fin i ≃ {l : Fin d // (l : ℕ) < i} :=
+    { toFun := fun j ↦ ⟨⟨j, j.isLt.trans_le hi⟩, j.isLt⟩
+      invFun := fun j ↦ ⟨(j : Fin d).1, j.2⟩
+      left_inv := fun j ↦ by ext; rfl
+      right_inv := fun j ↦ by ext; rfl }
+  rw [← Fintype.card_congr e, Fintype.card_fin]
+
+/-- `intVec` commutes with finite sums over arbitrary index types. -/
+theorem intVec_sum' {ι : Type*} (s : Finset ι) (f : ι → (Fin d → ℤ)) :
+    intVec (∑ i ∈ s, f i) = ∑ i ∈ s, intVec (f i) := by
+  classical
+  induction s using Finset.induction with
+  | empty => simp
+  | insert a s has ih =>
+      rw [Finset.sum_insert has, Finset.sum_insert has, intVec_add, ih]
+
+theorem intVec_sub (z z' : Fin d → ℤ) :
+    intVec (z - z') = intVec z - intVec z' := by
+  rw [sub_eq_add_neg, intVec_add, intVec_neg, sub_eq_add_neg]
+
+/-- Splitting off the last index of a `{l < i+1}`-indexed sum. -/
+theorem sum_flagSnoc {M : Type*} [AddCommMonoid M] (i : Fin d)
+    (f : {l : Fin d // (l:ℕ) < (i:ℕ)+1} → M) :
+    ∑ l : {l : Fin d // (l:ℕ) < (i:ℕ)+1}, f l =
+      f ⟨i, Nat.lt_succ_self _⟩ +
+        ∑ l : {l : Fin d // (l:ℕ) < (i:ℕ)},
+          f ⟨l.1, Nat.lt_succ_of_lt l.2⟩ := by
+  classical
+  rw [← Finset.add_sum_erase _ f (Finset.mem_univ ⟨i, Nat.lt_succ_self _⟩)]
+  congr 1
+  apply Finset.sum_bij
+    (fun a ha ↦ (⟨a.1, by
+      have hne : (a : Fin d).1 ≠ (i : ℕ) := fun h ↦
+        (Finset.mem_erase.mp ha).1 (Subtype.ext (Fin.ext h))
+      have := a.2
+      omega⟩ : {l : Fin d // (l:ℕ) < (i:ℕ)}))
+  · intro a _
+    exact Finset.mem_univ _
+  · intro a _ b₂ _ hab
+    exact Subtype.ext (congrArg
+      (fun x : {l : Fin d // (l:ℕ) < (i:ℕ)} ↦ x.val) hab)
+  · intro l _
+    refine ⟨⟨l.1, Nat.lt_succ_of_lt l.2⟩, ?_, rfl⟩
+    rw [Finset.mem_erase]
+    exact ⟨fun h ↦ absurd (congrArg Fin.val (congrArg Subtype.val h))
+      (ne_of_lt l.2), Finset.mem_univ _⟩
+  · intro a _
+    rfl
+
+/-- The integer matrix whose columns are `u 0, …, u_{d-1}`. -/
+def intMat (u : Fin d → Fin d → ℤ) : Matrix (Fin d) (Fin d) ℤ :=
+  Matrix.of fun a b ↦ u b a
+
+/-- The real matrix whose columns are `intVec (u i)`. -/
+def intMatCast (u : Fin d → Fin d → ℤ) : Matrix (Fin d) (Fin d) ℝ :=
+  (intMat u).map (Int.castRingHom ℝ)
+
+theorem intMatCast_apply (u : Fin d → Fin d → ℤ) (a b : Fin d) :
+    intMatCast u a b = (u b a : ℝ) := rfl
+
+theorem intMatCast_det_ne_zero {u : Fin d → Fin d → ℤ}
+    (huI : LinearIndependent ℝ fun i ↦ intVec (u i)) :
+    (intMatCast u).det ≠ 0 := by
+  classical
+  have hunit := (Pi.basisFun ℝ (Fin d)).isUnit_det
+    (basisOfLinearIndependentOfCardEqFinrank' _ huI (by
+      rw [Module.finrank_fintype_fun_eq_card, Fintype.card_fin]))
+  rw [Pi.basisFun_det_apply, coe_basisOfLinearIndependentOfCardEqFinrank']
+    at hunit
+  have hmat : Matrix.of (fun i ↦ intVec (u i)) = (intMatCast u).transpose :=
+    rfl
+  rw [hmat, Matrix.det_transpose] at hunit
+  exact hunit.ne_zero
+
+theorem intMat_det_ne_zero {u : Fin d → Fin d → ℤ}
+    (huI : LinearIndependent ℝ fun i ↦ intVec (u i)) :
+    (intMat u).det ≠ 0 := by
+  intro hd
+  have h := RingHom.map_det (Int.castRingHom ℝ) (intMat u)
+  rw [hd, map_zero, RingHom.mapMatrix_apply] at h
+  exact intMatCast_det_ne_zero huI h.symm
+
+/-- `flagDetLin u i z` — the determinant of `intMat u` with column `i`
+replaced by `z`; a `ℤ`-linear functional on `ℤ^d` vanishing on
+`Lᵢ = Vᵢ ∩ ℤ^d`. -/
+def flagDetLin (u : Fin d → Fin d → ℤ) (i : Fin d) :
+    (Fin d → ℤ) →ₗ[ℤ] ℤ where
+  toFun z := ((intMat u).updateCol i z).det
+  map_add' x y := Matrix.det_updateCol_add _ _ _ _
+  map_smul' c x := by
+    rw [smul_eq_mul]
+    exact Matrix.det_updateCol_smul _ _ _ _
+
+/-- The real analogue of `flagDetLin`. -/
+def flagDetLinℝ (u : Fin d → Fin d → ℤ) (i : Fin d) :
+    (Fin d → ℝ) →ₗ[ℝ] ℝ where
+  toFun x := ((intMatCast u).updateCol i x).det
+  map_add' x y := Matrix.det_updateCol_add _ _ _ _
+  map_smul' c x := by
+    rw [smul_eq_mul]
+    exact Matrix.det_updateCol_smul _ _ _ _
+
+theorem flagDetLin_apply (u : Fin d → Fin d → ℤ) (i : Fin d)
+    (z : Fin d → ℤ) :
+    flagDetLin u i z = ((intMat u).updateCol i z).det := rfl
+
+theorem flagDetLinℝ_apply (u : Fin d → Fin d → ℤ) (i : Fin d)
+    (x : Fin d → ℝ) :
+    flagDetLinℝ u i x = ((intMatCast u).updateCol i x).det := rfl
+
+theorem flagDetLin_u_self (u : Fin d → Fin d → ℤ) (i : Fin d) :
+    flagDetLin u i (u i) = (intMat u).det := by
+  show ((intMat u).updateCol i (u i)).det = _
+  rw [show (u i) = fun a ↦ intMat u a i from rfl,
+    Matrix.updateCol_eq_self]
+
+theorem flagDetLinℝ_u_self (u : Fin d → Fin d → ℤ) (i : Fin d) :
+    flagDetLinℝ u i (intVec (u i)) = (intMatCast u).det := by
+  show ((intMatCast u).updateCol i (intVec (u i))).det = _
+  rw [show intVec (u i) = fun a ↦ intMatCast u a i from rfl,
+    Matrix.updateCol_eq_self]
+
+theorem flagDetLin_u_of_ne {u : Fin d → Fin d → ℤ} {i j : Fin d}
+    (h : j ≠ i) : flagDetLin u i (u j) = 0 := by
+  show ((intMat u).updateCol i (u j)).det = 0
+  rw [show (u j) = fun a ↦ intMat u a j from rfl]
+  exact Matrix.det_updateCol_eq_zero h
+
+theorem flagDetLinℝ_u_of_ne {u : Fin d → Fin d → ℤ} {i j : Fin d}
+    (h : j ≠ i) : flagDetLinℝ u i (intVec (u j)) = 0 := by
+  show ((intMatCast u).updateCol i (intVec (u j))).det = 0
+  rw [show intVec (u j) = fun a ↦ intMatCast u a j from rfl]
+  exact Matrix.det_updateCol_eq_zero h
+
+/-- `flagDetLin` and `flagDetLinℝ` agree on integer vectors. -/
+theorem flagDetLin_cast (u : Fin d → Fin d → ℤ) (i : Fin d)
+    (z : Fin d → ℤ) :
+    (flagDetLin u i z : ℝ) = flagDetLinℝ u i (intVec z) := by
+  show (((intMat u).updateCol i z).det : ℝ) =
+    ((intMatCast u).updateCol i (intVec z)).det
+  have hmap : (intMatCast u).updateCol i (intVec z) =
+      ((intMat u).updateCol i z).map (Int.castRingHom ℝ) := by
+    ext a b
+    rw [Matrix.map_apply]
+    by_cases hb : b = i
+    · subst hb
+      rw [Matrix.updateCol_self, Matrix.updateCol_self]
+      rfl
+    · rw [Matrix.updateCol_ne hb, Matrix.updateCol_ne hb]
+      rfl
+  rw [hmap, ← RingHom.mapMatrix_apply]
+  exact RingHom.map_det (Int.castRingHom ℝ) ((intMat u).updateCol i z)
+
+/-- `Dᵢ` vanishes on `Vᵢ`. -/
+theorem flagDetLinℝ_eq_zero_of_mem_flagSpan {u : Fin d → Fin d → ℤ}
+    {i : Fin d} {x : Fin d → ℝ} (hx : x ∈ flagSpan u (i:ℕ)) :
+    flagDetLinℝ u i x = 0 := by
+  classical
+  rw [flagSpan] at hx
+  obtain ⟨c, hc⟩ := (Submodule.mem_span_range_iff_exists_fun ℝ).mp hx
+  rw [← hc, map_sum]
+  apply Finset.sum_eq_zero
+  intro j _
+  rw [map_smul, flagDetLinℝ_u_of_ne, smul_zero]
+  exact fun h ↦ absurd (congrArg Fin.val h) (ne_of_lt j.2)
+
+/-- `Dᵢ` vanishes on `Lᵢ`. -/
+theorem flagDetLin_eq_zero_of_mem_flagLattice {u : Fin d → Fin d → ℤ}
+    {i : Fin d} {z : Fin d → ℤ} (hz : z ∈ flagLattice u (i:ℕ)) :
+    flagDetLin u i z = 0 := by
+  have h0 : (flagDetLin u i z : ℝ) = 0 := by
+    rw [flagDetLin_cast]
+    exact flagDetLinℝ_eq_zero_of_mem_flagSpan hz
+  exact_mod_cast h0
+
+/-- The converse vanishing statement: for `z ∈ L_{i+1}`, `Dᵢ z = 0`
+forces `z ∈ Lᵢ`.  This is the key linear-algebra step in the flag
+extension: `Dᵢ` reads off the `uᵢ`-coordinate of `intVec z`. -/
+theorem mem_flagLattice_of_flagDetLin_eq_zero {u : Fin d → Fin d → ℤ}
+    (huI : LinearIndependent ℝ fun i ↦ intVec (u i)) {i : Fin d}
+    {z : Fin d → ℤ} (hz : z ∈ flagLattice u ((i:ℕ)+1))
+    (hD : flagDetLin u i z = 0) :
+    z ∈ flagLattice u (i:ℕ) := by
+  rw [mem_flagLattice] at hz ⊢
+  rw [flagSpan] at hz ⊢
+  obtain ⟨c, hc⟩ := (Submodule.mem_span_range_iff_exists_fun ℝ).mp hz
+  have hDi : flagDetLinℝ u i (intVec z) = 0 := by
+    rw [← flagDetLin_cast, hD]
+    simp
+  rw [← hc] at hDi
+  rw [map_sum] at hDi
+  have hterm : ∀ l : {l : Fin d // (l:ℕ) < (i:ℕ)+1},
+      flagDetLinℝ u i (intVec (u (l : Fin d))) =
+        if (l : Fin d) = i then (intMatCast u).det else 0 := by
+    intro l
+    by_cases hl : (l : Fin d) = i
+    · rw [if_pos hl, hl, flagDetLinℝ_u_self]
+    · rw [if_neg hl, flagDetLinℝ_u_of_ne hl]
+  have hDi2 : ∑ l : {l : Fin d // (l:ℕ) < (i:ℕ)+1},
+      c l • flagDetLinℝ u i (intVec (u l)) = 0 := by
+    rw [← hDi]
+    exact Finset.sum_congr rfl fun l _ ↦ (map_smul _ _ _).symm
+  rw [Finset.sum_eq_single ⟨i, Nat.lt_succ_self _⟩
+    (fun b _ hb ↦ by
+      rw [hterm b, if_neg (fun h ↦ hb (Subtype.ext h)), smul_zero])
+    (fun h ↦ absurd (Finset.mem_univ _) h)] at hDi2
+  rw [hterm, if_pos rfl, smul_eq_mul] at hDi2
+  have hci : c ⟨i, Nat.lt_succ_self _⟩ = 0 := by
+    rcases mul_eq_zero.mp hDi2 with h | h
+    · exact h
+    · exact absurd h (intMatCast_det_ne_zero huI)
+  rw [← hc, sum_flagSnoc i, hci, zero_smul, zero_add]
+  apply Submodule.sum_mem
+  intro l _
+  exact Submodule.smul_mem _ _ (Submodule.subset_span ⟨l, rfl⟩)
+
+/-- **The flag extension step.**  The image of `L_{i+1}` under the flag
+determinant `Dᵢ` is a `ℤ`-submodule of `ℤ`, hence principal with
+generator `kᵢ ≠ 0` (`kᵢ` divides `det(intMat u) ≠ 0`).  A preimage `vᵢ`
+of `kᵢ` satisfies `L_{i+1} = Lᵢ ⊕ ℤ·vᵢ`: every `z ∈ L_{i+1}` has
+`z - (Dᵢ z / kᵢ) • vᵢ ∈ Lᵢ`. -/
+theorem exists_flag_extension {u : Fin d → Fin d → ℤ}
+    (huI : LinearIndependent ℝ fun i ↦ intVec (u i)) (i : Fin d) :
+    ∃ v : Fin d → ℤ,
+      flagDetLin u i v ≠ 0 ∧
+      v ∈ flagLattice u ((i:ℕ)+1) ∧
+      ∀ z : Fin d → ℤ, z ∈ flagLattice u ((i:ℕ)+1) →
+        ∃ m : ℤ, z - m • v ∈ flagLattice u (i:ℕ) := by
+  classical
+  let I : Ideal ℤ := (flagLattice u ((i:ℕ)+1)).map (flagDetLin u i)
+  have hIprin : I.IsPrincipal := IsPrincipalIdealRing.principal I
+  set k := Submodule.IsPrincipal.generator I with hk
+  have hkI : k ∈ I := Submodule.IsPrincipal.generator_mem I
+  have hkne : k ≠ 0 := by
+    intro hk0
+    have hIbot : I = ⊥ :=
+      (Submodule.IsPrincipal.eq_bot_iff_generator_eq_zero I).mpr hk0
+    have hmem : flagDetLin u i (u i) ∈ I :=
+      Submodule.mem_map_of_mem (mem_flagLattice_succ_self u i)
+    rw [flagDetLin_u_self, hIbot] at hmem
+    rw [Submodule.mem_bot] at hmem
+    exact intMat_det_ne_zero huI hmem
+  obtain ⟨v, hvL, hvD⟩ := Submodule.mem_map.mp hkI
+  refine ⟨v, ?_, hvL, ?_⟩
+  · rw [hvD]; exact hkne
+  · intro z hz
+    have hDz : flagDetLin u i z ∈ I := Submodule.mem_map_of_mem hz
+    obtain ⟨m, hm⟩ :=
+      (Submodule.IsPrincipal.mem_iff_eq_smul_generator I).mp hDz
+    refine ⟨m, mem_flagLattice_of_flagDetLin_eq_zero huI ?_ ?_⟩
+    · exact Submodule.sub_mem _ hz (Submodule.smul_mem _ m hvL)
+    · have hstep : flagDetLin u i (z - m • v) =
+          flagDetLin u i z - m • flagDetLin u i v := by
+        rw [map_sub, map_smul]
+      rw [hstep, hvD, hm, sub_self]
+
+/-- A family `v` is *adapted* to the flag of `u` when `vᵢ ∈ L_{i+1}`,
+`Dᵢ vᵢ ≠ 0`, and every `z ∈ L_{i+1}` splits off an integer multiple of
+`vᵢ` into `Lᵢ`. -/
+def adaptedToFlag (u v : Fin d → Fin d → ℤ) : Prop :=
+  (∀ i : Fin d, v i ∈ flagLattice u ((i:ℕ)+1)) ∧
+  (∀ i : Fin d, flagDetLin u i (v i) ≠ 0) ∧
+  (∀ i : Fin d, ∀ z : Fin d → ℤ, z ∈ flagLattice u ((i:ℕ)+1) →
+    ∃ m : ℤ, z - m • v i ∈ flagLattice u (i:ℕ))
+
+/-- An adapted family spans each flag lattice: `Lᵢ` is contained in
+(hence equal to) the `ℤ`-span of `v₀,…,v_{i-1}`. -/
+theorem adaptedToFlag_span {u v : Fin d → Fin d → ℤ}
+    (had : adaptedToFlag u v) (i : ℕ) (hi : i ≤ d) :
+    flagLattice u i ≤ Submodule.span ℤ
+      (Set.range fun j : {j : Fin d // (j:ℕ) < i} ↦ v (j : Fin d)) := by
+  classical
+  induction i with
+  | zero =>
+      rw [flagLattice_zero]
+      exact bot_le
+  | succ i ih =>
+      intro z hz
+      have hid : i < d := Nat.lt_of_succ_le hi
+      obtain ⟨m, hm⟩ := had.2.2 ⟨i, hid⟩ z hz
+      have hsub : z = m • v ⟨i, hid⟩ + (z - m • v ⟨i, hid⟩) := by
+        rw [add_comm, sub_add_cancel]
+      have hmono : (Set.range fun j : {j : Fin d // (j:ℕ) < i} ↦
+            v (j : Fin d)) ⊆
+          Set.range fun j : {j : Fin d // (j:ℕ) < (i:ℕ)+1} ↦
+            v (j : Fin d) := by
+        rintro x ⟨j, rfl⟩
+        exact ⟨⟨j.1, Nat.lt_succ_of_lt j.2⟩, rfl⟩
+      rw [hsub]
+      apply Submodule.add_mem
+      · exact Submodule.smul_mem _ _ (Submodule.subset_span
+          ⟨⟨⟨i, hid⟩, Nat.lt_succ_self _⟩, rfl⟩)
+      · exact Submodule.span_mono hmono
+          (ih (Nat.le_of_succ_le hi) hm)
+
+/-- An adapted family is `ℤ`-linearly independent: in a relation
+`Σ cⱼ vⱼ = 0`, applying `Dᵢ` at the largest index with `cᵢ ≠ 0` yields
+`cᵢ · Dᵢ vᵢ = 0`, a contradiction. -/
+theorem adaptedToFlag_linearIndependent {u v : Fin d → Fin d → ℤ}
+    (had : adaptedToFlag u v) : LinearIndependent ℤ v := by
+  classical
+  rw [Fintype.linearIndependent_iff]
+  intro g hg i
+  by_contra hgi
+  let S := Finset.univ.filter fun j ↦ g j ≠ 0
+  have hS : S.Nonempty := ⟨i, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hgi⟩⟩
+  set i₀ := S.max' hS
+  have hi₀ : i₀ ∈ S := S.max'_mem hS
+  have hgi₀ : g i₀ ≠ 0 := (Finset.mem_filter.mp hi₀).2
+  have hmap : ∑ j : Fin d, g j • flagDetLin u i₀ (v j) = 0 := by
+    have h := map_sum (flagDetLin u i₀)
+      (fun j ↦ g j • v j) Finset.univ
+    rw [hg, map_zero] at h
+    have h' : ∑ j : Fin d, g j • flagDetLin u i₀ (v j) =
+        ∑ j : Fin d, flagDetLin u i₀ (g j • v j) :=
+      Finset.sum_congr rfl fun j _ ↦ (map_smul _ _ _).symm
+    rw [h']
+    exact h.symm
+  rw [Finset.sum_eq_single i₀
+    (fun b _ hb ↦ by
+      by_cases hbS : b ∈ S
+      · have hle : b ≤ i₀ := Finset.le_max' S b hbS
+        have hlt : b < i₀ := lt_of_le_of_ne hle hb
+        have hv : v b ∈ flagLattice u (i₀:ℕ) :=
+          flagLattice_mono (Nat.succ_le_of_lt hlt) (had.1 b)
+        rw [flagDetLin_eq_zero_of_mem_flagLattice hv, smul_zero]
+      · have : g b = 0 := by
+          by_contra h
+          exact hbS (Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩)
+        rw [this, zero_smul])
+    (fun h ↦ absurd (Finset.mem_univ _) h)] at hmap
+  rw [smul_eq_mul] at hmap
+  exact hgi₀ ((mul_eq_zero.mp hmap).resolve_right (had.2.1 i₀))
+
+/-- An adapted family spans `ℤ^d`: `L_d = ℤ^d` since `V_d` contains the
+`ℝ`-basis `intVec ∘ u`. -/
+theorem adaptedToFlag_span_top {u v : Fin d → Fin d → ℤ}
+    (huI : LinearIndependent ℝ fun i ↦ intVec (u i))
+    (had : adaptedToFlag u v) :
+    Submodule.span ℤ (Set.range v) = ⊤ := by
+  classical
+  have hfr : Module.finrank ℝ (Fin d → ℝ) = Fintype.card (Fin d) := by
+    rw [Module.finrank_fintype_fun_eq_card]
+  have htop : flagSpan u d = ⊤ := by
+    have hsp := huI.span_eq_top_of_card_eq_finrank' hfr.symm
+    rw [flagSpan]
+    have hrange : (Set.range fun j : {j : Fin d // (j:ℕ) < d} ↦
+        intVec (u j)) = Set.range fun j : Fin d ↦ intVec (u j) := by
+      ext x
+      constructor
+      · rintro ⟨j, rfl⟩; exact ⟨j.1, rfl⟩
+      · rintro ⟨j, rfl⟩; exact ⟨⟨j, j.isLt⟩, rfl⟩
+    rw [hrange]
+    exact hsp
+  have hd : flagLattice u d = ⊤ := by
+    rw [flagLattice, htop, Submodule.comap_top]
+  have hrangev : (Set.range fun j : {j : Fin d // (j:ℕ) < d} ↦
+      v (j : Fin d)) = Set.range v := by
+    ext x
+    constructor
+    · rintro ⟨j, rfl⟩; exact ⟨j.1, rfl⟩
+    · rintro ⟨j, rfl⟩; exact ⟨⟨j, j.isLt⟩, rfl⟩
+  rw [eq_top_iff]
+  intro z _
+  rw [← hrangev]
+  exact adaptedToFlag_span had d le_rfl (by
+    rw [hd]; exact Submodule.mem_top)
+
+/-- **The adapted `ℤ`-basis (Mahler's basis lemma).**  Iterating
+`exists_flag_extension` produces a `ℤ`-basis `v` of `ℤ^d` adapted to
+the successive-minima flag: `vᵢ ∈ L_{i+1}` and `Lᵢ` is the `ℤ`-span of
+`v₀,…,v_{i-1}`. -/
+theorem exists_mahler_zbasis {u : Fin d → Fin d → ℤ}
+    (huI : LinearIndependent ℝ fun i ↦ intVec (u i)) :
+    ∃ v : Fin d → Fin d → ℤ, adaptedToFlag u v ∧
+      LinearIndependent ℤ v ∧ Submodule.span ℤ (Set.range v) = ⊤ := by
+  classical
+  have hex : ∀ i : Fin d, ∃ w : Fin d → ℤ,
+      flagDetLin u i w ≠ 0 ∧ w ∈ flagLattice u ((i:ℕ)+1) ∧
+      ∀ z : Fin d → ℤ, z ∈ flagLattice u ((i:ℕ)+1) →
+        ∃ m : ℤ, z - m • w ∈ flagLattice u (i:ℕ) :=
+    fun i ↦ exists_flag_extension huI i
+  choose v hv using hex
+  have had : adaptedToFlag u v :=
+    ⟨fun i ↦ (hv i).2.1, fun i ↦ (hv i).1, fun i ↦ (hv i).2.2⟩
+  exact ⟨v, had, adaptedToFlag_linearIndependent had,
+    adaptedToFlag_span_top huI had⟩
+
+/-- The Mahler-shifted basis vector `vᵢ' = vᵢ - Σⱼ ⌈θⱼ⌋ uⱼ`, where `θ`
+are the `u`-coordinates of `intVec (v i)` (below index `i+1`). -/
+noncomputable def mahlerVec (u v : Fin d → Fin d → ℤ) (i : Fin d)
+    (θ : {l : Fin d // (l:ℕ) < (i:ℕ)+1} → ℝ) : Fin d → ℤ :=
+  v i - ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+    round (θ ⟨j.1, Nat.lt_succ_of_lt j.2⟩) • u j
+
+/-- The shifted vector has `u`-expansion `θᵢ uᵢ + Σⱼ θⱼ'' uⱼ` with
+`|θⱼ''| ≤ 1/2` (nearest-integer rounding). -/
+theorem intVec_mahlerVec {u v : Fin d → Fin d → ℤ} {i : Fin d}
+    {θ : {l : Fin d // (l:ℕ) < (i:ℕ)+1} → ℝ}
+    (hexp : intVec (v i) = ∑ l : {l : Fin d // (l:ℕ) < (i:ℕ)+1},
+      θ l • intVec (u l)) :
+    intVec (mahlerVec u v i θ) =
+      θ ⟨i, Nat.lt_succ_self _⟩ • intVec (u i) +
+        ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+          (θ ⟨j.1, Nat.lt_succ_of_lt j.2⟩ -
+            ((round (θ ⟨j.1, Nat.lt_succ_of_lt j.2⟩) : ℤ) : ℝ)) •
+            intVec (u j) := by
+  classical
+  have h1 : intVec (∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+      round (θ ⟨j.1, Nat.lt_succ_of_lt j.2⟩) • u j) =
+      ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+        ((round (θ ⟨j.1, Nat.lt_succ_of_lt j.2⟩) : ℤ) : ℝ) •
+          intVec (u j) := by
+    rw [intVec_sum']
+    exact Finset.sum_congr rfl fun j _ ↦ intVec_smul _ _
+  show intVec (v i - ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+      round (θ ⟨j.1, Nat.lt_succ_of_lt j.2⟩) • u j) = _
+  rw [intVec_sub, h1, hexp, sum_flagSnoc, add_sub_assoc,
+    ← Finset.sum_sub_distrib]
+  congr 1
+  apply Finset.sum_congr rfl
+  intro j _
+  rw [sub_smul]
+
+/-- The `uᵢ`-coefficient of `vᵢ` in the `u`-basis has `|θᵢ| ≤ 1`:
+`Dᵢ(vᵢ) | det(intMat u)` over `ℤ` (since `uᵢ = Σ_{j≤i} cⱼ vⱼ` with
+`cᵢ·Dᵢvᵢ = det`), while `θᵢ·det = Dᵢvᵢ` over `ℝ`. -/
+theorem abs_flagCoord_le_one {u v : Fin d → Fin d → ℤ}
+    (huI : LinearIndependent ℝ fun i ↦ intVec (u i))
+    (had : adaptedToFlag u v) (i : Fin d)
+    {θ : {l : Fin d // (l:ℕ) < (i:ℕ)+1} → ℝ}
+    (hexp : intVec (v i) = ∑ l, θ l • intVec (u l)) :
+    |θ ⟨i, Nat.lt_succ_self _⟩| ≤ 1 := by
+  classical
+  have huL : u i ∈ Submodule.span ℤ
+      (Set.range fun j : {j : Fin d // (j:ℕ) < (i:ℕ)+1} ↦
+        v (j : Fin d)) :=
+    adaptedToFlag_span had _ (Nat.succ_le_of_lt i.isLt)
+      (mem_flagLattice_succ_self u i)
+  obtain ⟨c, hc⟩ := (Submodule.mem_span_range_iff_exists_fun ℤ).mp huL
+  -- `detU = cᵢ · kᵢ` over `ℤ`
+  have hdet : (intMat u).det =
+      c ⟨i, Nat.lt_succ_self _⟩ * flagDetLin u i (v i) := by
+    have h1 : flagDetLin u i (u i) =
+        ∑ j : {j : Fin d // (j:ℕ) < (i:ℕ)+1},
+          c j • flagDetLin u i (v j) := by
+      conv_lhs => rw [← hc]
+      rw [map_sum]
+      exact Finset.sum_congr rfl fun j _ ↦ map_smul _ _ _
+    rw [flagDetLin_u_self] at h1
+    rw [Finset.sum_eq_single ⟨i, Nat.lt_succ_self _⟩] at h1
+    · rw [smul_eq_mul] at h1; exact h1
+    · intro b _ hb
+      have hbv : (b : Fin d).1 ≠ (i : ℕ) := fun h ↦
+        hb (Subtype.ext (Fin.ext h))
+      have hlt : (b : Fin d).1 < (i : ℕ) := by
+        have := b.2; omega
+      rw [flagDetLin_eq_zero_of_mem_flagLattice
+        (flagLattice_mono (Nat.succ_le_of_lt hlt) (had.1 b)), smul_zero]
+    · exact fun h ↦ absurd (Finset.mem_univ _) h
+  -- `θᵢ · detU = kᵢ` over `ℝ`
+  have hθ : θ ⟨i, Nat.lt_succ_self _⟩ * (intMatCast u).det =
+      (flagDetLin u i (v i) : ℝ) := by
+    have hD : flagDetLinℝ u i (intVec (v i)) =
+        θ ⟨i, Nat.lt_succ_self _⟩ * (intMatCast u).det := by
+      rw [hexp, map_sum]
+      rw [Finset.sum_eq_single ⟨i, Nat.lt_succ_self _⟩]
+      · rw [map_smul, flagDetLinℝ_u_self, smul_eq_mul]
+      · intro b _ hb
+        have hbv : (b : Fin d) ≠ i := fun h ↦ hb (Subtype.ext h)
+        rw [map_smul, flagDetLinℝ_u_of_ne hbv, smul_zero]
+      · exact fun h ↦ absurd (Finset.mem_univ _) h
+    rw [← flagDetLin_cast] at hD
+    exact hD.symm
+  have hdetcast : (intMatCast u).det = ((intMat u).det : ℝ) := by
+    have h := RingHom.map_det (Int.castRingHom ℝ) (intMat u)
+    rw [RingHom.mapMatrix_apply] at h
+    exact h.symm
+  rw [hdetcast] at hθ
+  have hdet0 : (intMat u).det ≠ 0 := intMat_det_ne_zero huI
+  have hci : c ⟨i, Nat.lt_succ_self _⟩ ≠ 0 := by
+    intro h; rw [h, zero_mul] at hdet; exact hdet0 hdet
+  -- `|θᵢ| = |kᵢ| / |detU| = 1/|cᵢ| ≤ 1`
+  have hk : flagDetLin u i (v i) ≠ 0 := had.2.1 i
+  have hk' : (flagDetLin u i (v i) : ℝ) ≠ 0 := Int.cast_ne_zero.mpr hk
+  have hθeq : θ ⟨i, Nat.lt_succ_self _⟩ =
+      (flagDetLin u i (v i) : ℝ) / ((intMat u).det : ℝ) :=
+    (eq_div_iff (Int.cast_ne_zero.mpr hdet0)).mpr hθ
+  have hd' : ((intMat u).det : ℝ) =
+      (c ⟨i, Nat.lt_succ_self _⟩ : ℝ) * (flagDetLin u i (v i) : ℝ) := by
+    rw [hdet]; push_cast; ring
+  rw [hθeq, abs_div, hd', abs_mul]
+  have hcan : |(flagDetLin u i (v i) : ℝ)| /
+      (|(c ⟨i, Nat.lt_succ_self _⟩ : ℝ)| * |(flagDetLin u i (v i) : ℝ)|) =
+      1 / |(c ⟨i, Nat.lt_succ_self _⟩ : ℝ)| := by
+    rw [mul_comm (|(c ⟨i, Nat.lt_succ_self _⟩ : ℝ)|), ← div_div,
+      div_self (abs_ne_zero.mpr hk')]
+  rw [hcan, one_div]
+  exact inv_le_one_of_one_le₀
+    (by exact_mod_cast Int.one_le_abs hci)
+
+/-! ### Shifted basis: membership bounds and integer duality -/
+
+/-- Triangle inequality for `gauge B` at points of `span B` — no
+absorbency hypothesis needed. -/
+theorem gauge_add_le_of_mem_span (hBc : Convex ℝ B)
+    (hB0 : (0 : Fin d → ℝ) ∈ B) (hBs : ∀ x ∈ B, -x ∈ B)
+    {x y : Fin d → ℝ} (hx : x ∈ Submodule.span ℝ B)
+    (hy : y ∈ Submodule.span ℝ B) :
+    gauge B (x + y) ≤ gauge B x + gauge B y := by
+  refine le_of_forall_pos_le_add fun ε hε ↦ ?_
+  have h1 : x ∈ (gauge B x + ε / 2) • B :=
+    mem_smul_of_gauge_lt hBc hB0 hBs hx (lt_add_of_pos_right _ (half_pos hε))
+  have h2 : y ∈ (gauge B y + ε / 2) • B :=
+    mem_smul_of_gauge_lt hBc hB0 hBs hy (lt_add_of_pos_right _ (half_pos hε))
+  have hsum : x + y ∈ (gauge B x + gauge B y + ε) • B := by
+    have h := mem_smul_add hBc hB0
+      (add_nonneg (gauge_nonneg _) (by linarith))
+      (add_nonneg (gauge_nonneg _) (by linarith)) h1 h2
+    have heq : gauge B x + ε / 2 + (gauge B y + ε / 2) =
+        gauge B x + gauge B y + ε := by ring
+    rwa [heq] at h
+  have hg := gauge_le_of_mem
+    (add_nonneg (add_nonneg (gauge_nonneg _) (gauge_nonneg _)) hε.le) hsum
+  linarith
+
+/-- Sum version of the gauge triangle inequality on `span B`. -/
+theorem gauge_sum_le_of_mem_span (hBc : Convex ℝ B)
+    (hB0 : (0 : Fin d → ℝ) ∈ B) (hBs : ∀ x ∈ B, -x ∈ B)
+    {ι : Type*} (s : Finset ι) {f : ι → Fin d → ℝ}
+    (hf : ∀ j ∈ s, f j ∈ Submodule.span ℝ B) :
+    gauge B (∑ j ∈ s, f j) ≤ ∑ j ∈ s, gauge B (f j) := by
+  classical
+  induction s using Finset.induction with
+  | empty => simp [gauge_zero]
+  | insert a s has ih =>
+      rw [Finset.sum_insert has, Finset.sum_insert has]
+      refine (gauge_add_le_of_mem_span hBc hB0 hBs
+        (hf a (Finset.mem_insert_self _ _))
+        (Submodule.sum_mem _ fun j hj ↦ hf j (Finset.mem_insert_of_mem hj))).trans
+        (add_le_add_right (ih (fun j hj ↦ hf j (Finset.mem_insert_of_mem hj))) _)
+
+/-- The shifted Mahler vector `v'ᵢ` has gauge bounded by
+`(1 + i/2)·λᵢ`, hence lies in every larger dilation of `B`. -/
+theorem mahlerVec_mem_smul (hBc : Convex ℝ B) (hB0 : (0 : Fin d → ℝ) ∈ B)
+    (hBs : ∀ x ∈ B, -x ∈ B) {u v : Fin d → Fin d → ℤ} {i : Fin d}
+    {θ : {l : Fin d // (l:ℕ) < (i:ℕ)+1} → ℝ}
+    (hexp : intVec (v i) = ∑ l : {l : Fin d // (l:ℕ) < (i:ℕ)+1},
+      θ l • intVec (u l))
+    (hθi : |θ ⟨i, Nat.lt_succ_self _⟩| ≤ 1)
+    (huS : ∀ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+      intVec (u j) ∈ Submodule.span ℝ B)
+    (huiS : intVec (u i) ∈ Submodule.span ℝ B)
+    (hlam : ∀ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+      gauge B (intVec (u j)) ≤ gauge B (intVec (u i)))
+    {t : ℝ} (ht : (1 + (i:ℝ)/2) * gauge B (intVec (u i)) < t) :
+    intVec (mahlerVec u v i θ) ∈ t • B := by
+  classical
+  have hbal := balanced_of_symmetric hBc hB0 hBs
+  set cj : {l : Fin d // (l:ℕ) < (i:ℕ)} → ℝ :=
+    fun j ↦ θ ⟨j.1, Nat.lt_succ_of_lt j.2⟩ -
+      ((round (θ ⟨j.1, Nat.lt_succ_of_lt j.2⟩) : ℤ) : ℝ) with hcj
+  have hexp' : intVec (mahlerVec u v i θ) =
+      θ ⟨i, Nat.lt_succ_self _⟩ • intVec (u i) +
+        ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)}, cj j • intVec (u j) := by
+    rw [intVec_mahlerVec hexp]
+  have hspan1 : θ ⟨i, Nat.lt_succ_self _⟩ • intVec (u i) ∈
+      Submodule.span ℝ B := Submodule.smul_mem _ _ huiS
+  have hspan2 : (∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)}, cj j • intVec (u j)) ∈
+      Submodule.span ℝ B :=
+    Submodule.sum_mem _ fun j _ ↦ Submodule.smul_mem _ _ (huS j)
+  have hmem : intVec (mahlerVec u v i θ) ∈ Submodule.span ℝ B := by
+    rw [hexp']; exact add_mem hspan1 hspan2
+  have hcj_abs : ∀ j : {l : Fin d // (l:ℕ) < (i:ℕ)}, |cj j| ≤ 1/2 := by
+    intro j
+    show |(θ ⟨j.1, Nat.lt_succ_of_lt j.2⟩ -
+      ((round (θ ⟨j.1, Nat.lt_succ_of_lt j.2⟩) : ℤ) : ℝ))| ≤ 1/2
+    exact abs_sub_round _
+  have hgj : ∀ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+      gauge B (cj j • intVec (u j)) ≤
+        (1/2 : ℝ) * gauge B (intVec (u i)) := by
+    intro j
+    rw [gauge_smul hbal, Real.norm_eq_abs]
+    exact mul_le_mul (hcj_abs j) (hlam j) (gauge_nonneg _) (by norm_num)
+  have hsum : (∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+        gauge B (cj j • intVec (u j))) ≤
+        (i : ℝ)/2 * gauge B (intVec (u i)) := by
+    calc _ ≤ ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+          (1/2 : ℝ) * gauge B (intVec (u i)) :=
+        Finset.sum_le_sum fun j _ ↦ hgj j
+      _ = (i : ℝ) * ((1/2 : ℝ) * gauge B (intVec (u i))) := by
+        rw [Finset.sum_const, Finset.card_univ,
+          card_flagSubtype i.val i.isLt.le, nsmul_eq_mul]
+      _ = (i : ℝ)/2 * gauge B (intVec (u i)) := by ring
+  have hgi : gauge B (θ ⟨i, Nat.lt_succ_self _⟩ • intVec (u i)) ≤
+      gauge B (intVec (u i)) := by
+    rw [gauge_smul hbal, Real.norm_eq_abs]
+    calc |θ ⟨i, Nat.lt_succ_self _⟩| * gauge B (intVec (u i))
+        ≤ 1 * gauge B (intVec (u i)) :=
+          mul_le_mul_of_nonneg_right hθi (gauge_nonneg _)
+      _ = gauge B (intVec (u i)) := one_mul _
+  have hg : gauge B (intVec (mahlerVec u v i θ)) ≤
+      (1 + (i:ℝ)/2) * gauge B (intVec (u i)) := by
+    rw [hexp']
+    calc gauge B (θ ⟨i, Nat.lt_succ_self _⟩ • intVec (u i) +
+            ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)}, cj j • intVec (u j))
+        ≤ gauge B (θ ⟨i, Nat.lt_succ_self _⟩ • intVec (u i)) +
+            gauge B (∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+              cj j • intVec (u j)) :=
+          gauge_add_le_of_mem_span hBc hB0 hBs hspan1 hspan2
+      _ ≤ gauge B (θ ⟨i, Nat.lt_succ_self _⟩ • intVec (u i)) +
+            ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+              gauge B (cj j • intVec (u j)) :=
+          add_le_add le_rfl (gauge_sum_le_of_mem_span hBc hB0 hBs
+            (s := Finset.univ) (f := fun j ↦ cj j • intVec (u j))
+            (fun j _ ↦ Submodule.smul_mem _ _ (huS j)))
+      _ ≤ gauge B (intVec (u i)) +
+            (i : ℝ)/2 * gauge B (intVec (u i)) :=
+          add_le_add hgi hsum
+      _ = (1 + (i:ℝ)/2) * gauge B (intVec (u i)) := by ring
+  exact mem_smul_of_gauge_lt hBc hB0 hBs hmem (hg.trans_lt ht)
+
+/-- Shifting `vᵢ` by integer combinations of earlier `uⱼ` preserves
+adaptedness to the flag. -/
+theorem adaptedToFlag_mahlerVec {u v : Fin d → Fin d → ℤ}
+    (had : adaptedToFlag u v)
+    (θ : ∀ i : Fin d, {l : Fin d // (l:ℕ) < (i:ℕ)+1} → ℝ) :
+    adaptedToFlag u (fun i ↦ mahlerVec u v i (θ i)) := by
+  classical
+  have hshift : ∀ i : Fin d,
+      (∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+        round (θ i ⟨j.1, Nat.lt_succ_of_lt j.2⟩) • u j) ∈
+        flagLattice u (i:ℕ) := by
+    intro i
+    apply Submodule.sum_mem
+    intro j _
+    exact Submodule.smul_mem _ _
+      (flagLattice_mono (Nat.succ_le_of_lt j.2)
+        (mem_flagLattice_succ_self u j.1))
+  refine ⟨?_, ?_, ?_⟩
+  · intro i
+    exact sub_mem (had.1 i)
+      (flagLattice_mono (Nat.le_succ _) (hshift i))
+  · intro i
+    have hD : flagDetLin u i (∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+        round (θ i ⟨j.1, Nat.lt_succ_of_lt j.2⟩) • u j) = 0 := by
+      rw [map_sum]
+      apply Finset.sum_eq_zero
+      intro j _
+      rw [map_smul, flagDetLin_u_of_ne, smul_zero]
+      intro h
+      exact absurd (congrArg Fin.val h) (ne_of_lt j.2)
+    show flagDetLin u i (v i - _) ≠ 0
+    rw [map_sub, hD, sub_zero]
+    exact had.2.1 i
+  · intro i z hz
+    obtain ⟨m, hm⟩ := had.2.2 i z hz
+    refine ⟨m, ?_⟩
+    have hEq : z - m • mahlerVec u v i (θ i) =
+        (z - m • v i) + m • ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+          round (θ i ⟨j.1, Nat.lt_succ_of_lt j.2⟩) • u j := by
+      show z - m • (v i - ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+            round (θ i ⟨j.1, Nat.lt_succ_of_lt j.2⟩) • u j) =
+          (z - m • v i) + m • ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+            round (θ i ⟨j.1, Nat.lt_succ_of_lt j.2⟩) • u j
+      rw [smul_sub]
+      abel
+    show z - m • mahlerVec u v i (θ i) ∈ flagLattice u (i:ℕ)
+    rw [hEq]
+    exact add_mem hm (Submodule.smul_mem _ _ (hshift i))
+
+/-- The shifted Mahler basis: an adapted `ℤ`-basis of `ℤ^d` whose first
+`r` vectors lie in every dilation of `B` beyond `(1 + i/2)·λᵢ`. -/
+theorem exists_mahler_shift (hBc : Convex ℝ B) (hB0 : (0 : Fin d → ℝ) ∈ B)
+    (hBs : ∀ x ∈ B, -x ∈ B) {u : Fin d → Fin d → ℤ}
+    (huI : LinearIndependent ℝ fun i ↦ intVec (u i)) {r : ℕ}
+    (huV : ∀ i : Fin d, (i:ℕ) < r → intVec (u i) ∈ intSpan B)
+    (huMin : ∀ i : Fin d, (i:ℕ) < r → ∀ z : Fin d → ℤ,
+      intVec z ∈ intSpan B → intVec z ∉ flagSpan u (i:ℕ) →
+      gauge B (intVec (u i)) ≤ gauge B (intVec z)) :
+    ∃ v' : Fin d → Fin d → ℤ, adaptedToFlag u v' ∧
+      LinearIndependent ℤ v' ∧
+      Submodule.span ℤ (Set.range v') = ⊤ ∧
+      ∀ i : Fin d, (i:ℕ) < r → ∀ t : ℝ,
+        (1 + (i:ℝ)/2) * gauge B (intVec (u i)) < t →
+        intVec (v' i) ∈ t • B := by
+  classical
+  obtain ⟨v, had, hvI, hvspan⟩ := exists_mahler_zbasis huI
+  have hexp : ∀ i : Fin d, ∃ θ : {l : Fin d // (l:ℕ) < (i:ℕ)+1} → ℝ,
+      intVec (v i) = ∑ l, θ l • intVec (u l) := by
+    intro i
+    have hvL := had.1 i
+    rw [mem_flagLattice, flagSpan] at hvL
+    obtain ⟨θ, hθ⟩ := (Submodule.mem_span_range_iff_exists_fun ℝ).mp hvL
+    exact ⟨θ, hθ.symm⟩
+  choose θ hθ using hexp
+  have had' : adaptedToFlag u (fun i ↦ mahlerVec u v i (θ i)) :=
+    adaptedToFlag_mahlerVec had θ
+  refine ⟨_, had', adaptedToFlag_linearIndependent had',
+    adaptedToFlag_span_top huI had', fun i hi t ht ↦ ?_⟩
+  have huNot : ∀ j : Fin d, intVec (u j) ∉ flagSpan u (j:ℕ) := by
+    intro j
+    rw [flagSpan]
+    have hrange : (Set.range fun l : {l : Fin d // (l:ℕ) < (j:ℕ)} ↦
+        intVec (u l)) =
+        (fun l ↦ intVec (u l)) '' {l : Fin d | (l:ℕ) < (j:ℕ)} := by
+      ext x
+      constructor
+      · rintro ⟨l, rfl⟩; exact ⟨l.1, l.2, rfl⟩
+      · rintro ⟨l, hl, rfl⟩; exact ⟨⟨l, hl⟩, rfl⟩
+    rw [hrange]
+    exact huI.notMem_span_image (by simp)
+  apply mahlerVec_mem_smul hBc hB0 hBs (hθ i)
+    (abs_flagCoord_le_one huI had i (hθ i))
+  · intro j
+    exact intSpan_le_span B (huV j.1 (j.2.trans hi))
+  · exact intSpan_le_span B (huV i hi)
+  · intro j
+    exact huMin j.1 (j.2.trans hi) (u i) (huV i hi)
+      (fun h ↦ huNot i (flagSpan_mono (Nat.le_of_lt j.2) h))
+  · exact ht
+
+/-- The integer dual family `w j k = det(V) · adjugate(V)ⱼₖ`, where
+`V` is the integer matrix with columns `v j`.  When `v` is a `ℤ`-basis
+of `ℤ^d`, `det V = ±1` and `w` is genuinely dual to `v`. -/
+def dualVec (v : Fin d → Fin d → ℤ) (j : Fin d) (k : Fin d) : ℤ :=
+  (intMat v).det * (intMat v).adjugate j k
+
+/-- An integer basis of `ℤ^d` has unimodular determinant. -/
+theorem intMat_isUnit_det {v : Fin d → Fin d → ℤ}
+    (hvI : LinearIndependent ℤ v)
+    (hvspan : Submodule.span ℤ (Set.range v) = ⊤) :
+    IsUnit (intMat v).det := by
+  classical
+  have hunit := (Pi.basisFun ℤ (Fin d)).isUnit_det
+    (Module.Basis.mk hvI hvspan.ge)
+  rw [Pi.basisFun_det_apply, Module.Basis.coe_mk] at hunit
+  have hmat : Matrix.of v = (intMat v).transpose := rfl
+  rw [hmat, Matrix.det_transpose] at hunit
+  exact hunit
+
+/-- `dualVec` is dual to `v` whenever `det V = ±1`:
+`∑_k v i k · w j k = δᵢⱼ`. -/
+theorem dualVec_dot {v : Fin d → Fin d → ℤ}
+    (hunit : IsUnit (intMat v).det) (i j : Fin d) :
+    ∑ k, v i k * dualVec v j k = if i = j then (1 : ℤ) else 0 := by
+  have hdet2 : (intMat v).det * (intMat v).det = 1 := by
+    rcases Int.isUnit_iff.mp hunit with h | h <;> rw [h] <;> norm_num
+  have hcalc : (∑ k, v i k * dualVec v j k) =
+      (intMat v).det * ∑ k, (intMat v).adjugate j k * intMat v k i := by
+    rw [Finset.mul_sum]
+    exact Finset.sum_congr rfl fun k _ ↦ by
+      show v i k * ((intMat v).det * (intMat v).adjugate j k) =
+        (intMat v).det * ((intMat v).adjugate j k * intMat v k i)
+      rw [show intMat v k i = v i k from rfl]
+      ring
+  rw [hcalc, ← Matrix.mul_apply, Matrix.adjugate_mul, Matrix.smul_apply,
+    Matrix.one_apply]
+  by_cases hij : i = j
+  · subst hij
+    rw [smul_eq_mul, if_pos rfl, mul_one]
+    exact hdet2
+  · rw [if_neg (fun h ↦ hij h.symm), if_neg hij, smul_eq_mul, mul_zero,
+      mul_zero]
+
+/-- **The remaining geometric input: Minkowski's second theorem.**
+For `i < r`, the `i`-th coordinate of an integer point `z ∈ B` in the
+adapted basis satisfies `|coord| · λᵢ ≤ C`, where `λᵢ` is the `i`-th
+successive minimum `gauge B (uᵢ)` and `C` depends only on the ambient
+dimension `d`.
+
+Classically this is the unique step of Mahler's lemma that uses
+Minkowski's second theorem `λ₁ ⋯ λ_d · vol(B ∩ V_d) ≤ 2^d` (applied to
+the intersection `B ∩ Vᵢ` and the lattice `Lᵢ = Vᵢ ∩ ℤ^d`), together
+with the determinant bounds from `adaptedToFlag`.  Mathlib currently
+provides only Minkowski's *first* theorem, so this remains the single
+intentional `sorry` of the formalization. -/
+theorem mahler_coord_bound (d : ℕ) :
+    ∃ C : ℝ, 0 < C ∧ ∀ (B : Set (Fin d → ℝ)), Convex ℝ B →
+      (0 : Fin d → ℝ) ∈ B → (∀ x ∈ B, -x ∈ B) → Bornology.IsBounded B →
+      ∀ (u : Fin d → Fin d → ℤ) (r : ℕ) (v : Fin d → Fin d → ℤ),
+        LinearIndependent ℝ (fun i ↦ intVec (u i)) →
+        (∀ i : Fin d, (i:ℕ) < r → intVec (u i) ∈ intSpan B) →
+        (∀ i : Fin d, (i:ℕ) < r → ∀ z : Fin d → ℤ,
+          intVec z ∈ intSpan B → intVec z ∉ flagSpan u (i:ℕ) →
+          gauge B (intVec (u i)) ≤ gauge B (intVec z)) →
+        flagSpan u r = intSpan B →
+        adaptedToFlag u v →
+        LinearIndependent ℤ v →
+        Submodule.span ℤ (Set.range v) = ⊤ →
+        ∀ i : Fin d, (i:ℕ) < r →
+          ∀ z : Fin d → ℤ, intVec z ∈ B →
+            |(∑ k, (z k : ℝ) * (dualVec v i k : ℝ))| *
+              gauge B (intVec (u i)) ≤ C := by
+  sorry
+
 /-- **The geometric core of the Mahler basis theorem** — the exact
 geometry-of-numbers content needed by `exists_zbasis_mahler`, isolated as a
 single input.  Uniformly in the symmetric convex bounded body `B ∋ 0`,
@@ -379,34 +1701,30 @@ there is a scale `r > 0` (classically `r ≍ λᵢ`, the `i`-th successive
 minimum) with `|⟨z, w i⟩| · r ≤ C` for every integer point `z ∈ B` and
 `v i ∈ t • B` for all `t > r`.
 
-**Status: this is the only remaining gap** — it is *true*, and its
-classical proof (which is what remains to be formalized) has three parts,
-only the last of which uses Minkowski's second theorem:
+**Proof structure.**  Three parts; the first two are now fully formalized
+and the third is isolated as the single remaining `sorry`
+(`mahler_coord_bound` above):
 
-1. **Successive minima for a bounded (not necessarily open) `B`.**
-   `GeoNumbers.exists_succMinima` produces the greedy minimizers
-   `u₁,…,u_d` for open `B`; the same greedy argument works for any
-   bounded `B` using `gauge B`, since `{z : gauge B (intVec z) ≤ C}` is
-   finite (it is contained in `C • closure B`, which is bounded).  Write
-   `λᵢ = gauge B (intVec uᵢ)`, `Vᵢ = span_ℝ{u₁,…,uᵢ}`.
+1. **Successive minima for a bounded (not necessarily open) `B`** —
+   `exists_succMinima_bounded` produces greedy gauge-minimizers
+   `u₁,…,u_r` spanning `intSpan B`, using finiteness of integer vectors
+   of bounded gauge.
 
-2. **Mahler's basis lemma (pure algebra over `ℤ`, no Minkowski-2nd).**
-   The pure sublattices `Lᵢ = Vᵢ ∩ ℤ^d` form a flag with `Lᵢ/Lᵢ₋₁` free
-   of rank `1`; choosing generators `vᵢ` gives a `ℤ`-basis of `ℤ^d` with
-   `vᵢ ∈ Vᵢ`.  Writing `uᵢ = kᵢ vᵢ + w`, `w ∈ Lᵢ₋₁`, and shifting `vᵢ` by
-   integer multiples of `u₁,…,uᵢ₋₁` puts `vᵢ = kᵢ⁻¹ uᵢ + Σⱼ cⱼ uⱼ` with
-   `|cⱼ| ≤ 1/2`, whence `gauge B (vᵢ) ≤ (i+1)/2 · λᵢ ≤ d·λᵢ`.
+2. **Mahler's basis lemma (pure algebra over `ℤ`, no Minkowski-2nd)** —
+   `exists_mahler_zbasis` builds an adapted `ℤ`-basis `v` via the
+   principal ideal `flagDetLin`-image argument, and `exists_mahler_shift`
+   shifts each `vᵢ` by integer combinations of earlier `uⱼ` so that
+   `gauge B (vᵢ) ≤ (1 + i/2)·λᵢ` (`mahlerVec_mem_smul`).
 
-3. **The pairing bound (the Minkowski-2nd step).**  For `z ∈ B ∩ ℤ^d`,
-   `mᵢ := ⟨z, wᵢ⟩` is the `i`-th `v`-coordinate of `z`; if `mᵢ ≠ 0` then
-   `z ∉ Vᵢ₋₁`, so `λᵢ ≤ gauge z ≤ 1` and all of `λ₁,…,λᵢ` are finite.
-   Working in `V_r` (`r` = largest index with `λᵣ < ∞`), Cramer's rule
-   gives `|mᵢ| = |det(v₁,…,z,…,vᵣ)| ≤ (r!/2ʳ) · ∏ⱼ≠ᵢ gauge(vⱼ) · gauge(z)
-   · vol_r(B ∩ V_r)` (inscribed weighted cross-polytope:
-   `vol conv{±xⱼ} = 2ʳ|det x|/r!`), and Minkowski's second theorem
-   `∏ⱼ λⱼ · vol_r(B∩V_r) ≤ 2ʳ` for the lattice `L_r` — *the* missing
-   Mathlib input — yields `|mᵢ| ≤ C_d / λᵢ`.  Taking `rᵢ = d·λᵢ` gives
-   `|mᵢ|·rᵢ ≤ d·C_d` and `vᵢ ∈ t•B` for `t > rᵢ`. -/
+3. **The pairing bound (the Minkowski-2nd step)** — `mahler_coord_bound`:
+   for `z ∈ B ∩ ℤ^d` and `i < r`, `|mᵢ|·λᵢ ≤ C` where
+   `mᵢ = ⟨z, wᵢ⟩` is the `i`-th `v`-coordinate of `z` (with
+   `w = dualVec v`, `dualVec_dot` certifying duality).  Classically this
+   uses Cramer's rule plus Minkowski's second theorem
+   `∏ⱼ λⱼ · vol_r(B∩V_r) ≤ 2ʳ` — the missing Mathlib input.
+
+For `i ≥ r`, `hflag` puts every `z ∈ B` inside `Lᵢ`, so `wᵢ` annihilates
+`B ∩ ℤ^d` outright. -/
 theorem exists_zbasis_mahler_core (d : ℕ) :
     ∃ C : ℝ, 0 < C ∧ ∀ (B : Set (Fin d → ℝ)), Convex ℝ B →
       (0 : Fin d → ℝ) ∈ B → (∀ x ∈ B, -x ∈ B) → Bornology.IsBounded B →
@@ -419,7 +1737,73 @@ theorem exists_zbasis_mahler_core (d : ℕ) :
                 (∀ z : Fin d → ℤ, intVec z ∈ B →
                     |(∑ k, (z k : ℝ) * (w i k : ℝ))| * r ≤ C) ∧
                 (∀ t : ℝ, r < t → intVec (v i) ∈ t • B)) := by
-  sorry
+  classical
+  obtain ⟨C₀, hC₀, hbound⟩ := mahler_coord_bound d
+  refine ⟨((d:ℝ) + 1)/2 * C₀, mul_pos (by positivity) hC₀,
+    fun B hBc hB0 hBs hBb ↦ ?_⟩
+  obtain ⟨r, u, hr, huI, huV, huMin, hflag⟩ :=
+    exists_succMinima_bounded hBc hB0 hBs hBb
+  obtain ⟨v, had, hvI, hvspan, hvMem⟩ :=
+    exists_mahler_shift hBc hB0 hBs huI huV huMin
+  have hunit := intMat_isUnit_det hvI hvspan
+  refine ⟨v, fun j ↦ dualVec v j, hvI, hvspan,
+    fun i j ↦ dualVec_dot hunit i j, fun i ↦ ?_⟩
+  by_cases hir : (i:ℕ) < r
+  · -- `i < r`: Minkowski bound with scale `rᵢ = (1 + i/2)·λᵢ`.
+    right
+    refine ⟨(1 + (i:ℝ)/2) * gauge B (intVec (u i)), ?_, ?_, ?_⟩
+    · exact mul_pos (by positivity)
+        (gauge_pos_of_mem_span hBc hB0 hBs hBb
+          (intSpan_le_span B (huV i hir)) (huI.ne_zero i))
+    · intro z hz
+      have hcz := hbound B hBc hB0 hBs hBb u r v huI huV huMin hflag had
+        hvI hvspan i hir z hz
+      calc |(∑ k, (z k : ℝ) * (dualVec v i k : ℝ))| *
+            ((1 + (i:ℝ)/2) * gauge B (intVec (u i)))
+          = (1 + (i:ℝ)/2) * (|(∑ k, (z k : ℝ) *
+              (dualVec v i k : ℝ))| * gauge B (intVec (u i))) := by ring
+        _ ≤ (1 + (i:ℝ)/2) * C₀ :=
+            mul_le_mul_of_nonneg_left hcz (by positivity)
+        _ ≤ ((d:ℝ) + 1)/2 * C₀ := by
+            apply mul_le_mul_of_nonneg_right _ hC₀.le
+            have hid : ((i:ℕ) : ℝ) + 1 ≤ d := by exact_mod_cast i.isLt
+            linarith
+    · exact fun t ht ↦ hvMem i hir t ht
+  · -- `i ≥ r`: every `z ∈ B` lies in `Lᵢ`, so `wᵢ` annihilates `B ∩ ℤ^d`.
+    left
+    intro z hz
+    have hzL : z ∈ flagLattice u (i:ℕ) := by
+      have h1 : intVec z ∈ intSpan B := intVec_mem_intSpan hz
+      have h2 : intVec z ∈ flagSpan u r := hflag ▸ h1
+      exact flagSpan_mono (Nat.le_of_not_gt hir) h2
+    obtain ⟨c, hc⟩ := (Submodule.mem_span_range_iff_exists_fun ℤ).mp
+      (adaptedToFlag_span had (i:ℕ) i.isLt.le hzL)
+    have hzsum : (∑ k, z k * dualVec v i k : ℤ) = 0 := by
+      calc ∑ k, z k * dualVec v i k
+          = ∑ k, (∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+              c j • v j) k * dualVec v i k := by rw [← hc]
+        _ = ∑ k, ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+              (c j * (v j) k) * dualVec v i k := by
+            apply Finset.sum_congr rfl
+            intro k _
+            rw [Finset.sum_apply, Finset.sum_mul]
+            exact Finset.sum_congr rfl fun j _ ↦ by
+              rw [Pi.smul_apply, smul_eq_mul]
+        _ = ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+              ∑ k, c j * ((v j) k * dualVec v i k) := by
+            rw [Finset.sum_comm]
+            exact Finset.sum_congr rfl fun j _ ↦
+              Finset.sum_congr rfl fun k _ ↦ by ring
+        _ = ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)},
+              c j * ∑ k, (v j) k * dualVec v i k := by
+            exact Finset.sum_congr rfl fun j _ ↦ by rw [Finset.mul_sum]
+        _ = ∑ j : {l : Fin d // (l:ℕ) < (i:ℕ)}, c j * 0 := by
+            apply Finset.sum_congr rfl
+            intro j _
+            rw [dualVec_dot hunit j i,
+              if_neg (fun h ↦ absurd (congrArg Fin.val h) (ne_of_lt j.2))]
+        _ = 0 := by simp
+    exact_mod_cast hzsum
 
 theorem exists_zbasis_mahler (d : ℕ) :
     ∃ C : ℝ, 0 < C ∧ ∀ (B : Set (Fin d → ℝ)), Convex ℝ B →

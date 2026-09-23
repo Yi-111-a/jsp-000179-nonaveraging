@@ -1514,6 +1514,267 @@ theorem geom_sum_le {H : ℤ} (hH : 2 ≤ H) :
       _ ≤ H * H ^ ℓ := mul_le_mul_of_nonneg_right hH (pow_nonneg (by linarith) _)
       _ = H ^ (ℓ + 1) := by rw [← pow_succ']
 
+/-! ### Auxiliary lemmas for the Appendix-A decode
+
+`eval` is affine in the coefficient tuple (`eval_add_eval`), decrementing a
+positive coefficient subtracts a step (`eval_update_sub_one`), the point set
+of a translate is the translate of the point set (`translate_toFinset`), and
+*dead* steps — indices `i` with `k * wᵢ = 1`, which never appear in a scaled
+evaluation — may be zeroed without changing any point set (`liveStep`).
+These support `appendix_decode`, where the relation
+`u_{n−eᵢ} + u_{eᵢ} = u_n + u_0` between subset-sum lifts is used to decode
+`P₀ : GAP 1 d'` into `ℤ^ℓ`. -/
+
+/-- `eval` is affine: `eval a + eval b = 2·base + ∑ (aᵢ + bᵢ) • stepᵢ`. -/
+theorem eval_add_eval (P : GAP ℓ d) (a b : Fin d → ℕ) :
+    P.eval a + P.eval b =
+      P.base + P.base + ∑ i, ((a i + b i : ℕ) : ℤ) • P.step i := by
+  show (P.base + ∑ i, (a i : ℤ) • P.step i) +
+      (P.base + ∑ i, (b i : ℤ) • P.step i) = _
+  rw [add_add_add_comm, ← Finset.sum_add_distrib]
+  congr 1
+  apply Finset.sum_congr rfl
+  intro i _
+  rw [← add_smul, Nat.cast_add]
+
+/-- Evaluating at the zero tuple gives the base. -/
+theorem eval_zero (P : GAP ℓ d) : P.eval (0 : Fin d → ℕ) = P.base := by
+  simp [eval]
+
+/-- Evaluating at the `i`-th unit tuple gives `base + step i`. -/
+theorem eval_update_zero_one (P : GAP ℓ d) (i : Fin d) :
+    P.eval (Function.update (0 : Fin d → ℕ) i 1) = P.base + P.step i := by
+  show P.base + ∑ j, ((Function.update (0 : Fin d → ℕ) i 1) j : ℤ) • P.step j =
+    P.base + P.step i
+  have hsum : ∑ j, ((Function.update (0 : Fin d → ℕ) i 1) j : ℤ) • P.step j =
+      P.step i := by
+    trans (((Function.update (0 : Fin d → ℕ) i 1) i : ℕ) : ℤ) • P.step i
+    · apply Finset.sum_eq_single i
+      · intro j _ hji
+        simp [Function.update_of_ne hji]
+      · intro h
+        exact absurd (Finset.mem_univ i) h
+    · simp [Function.update_self]
+  rw [hsum]
+
+/-- Decrementing a positive coefficient subtracts the step:
+`eval m = eval (m − eᵢ) + stepᵢ`. -/
+theorem eval_update_sub_one (P : GAP ℓ d) (m : Fin d → ℕ) (i : Fin d)
+    (hi : 0 < m i) :
+    P.eval m = P.eval (Function.update m i (m i - 1)) + P.step i := by
+  unfold eval
+  have hL : ∑ j, (m j : ℤ) • P.step j =
+      (m i : ℤ) • P.step i +
+        ∑ j ∈ Finset.univ.erase i, (m j : ℤ) • P.step j :=
+    (Finset.add_sum_erase _ _ (Finset.mem_univ i)).symm
+  have hR : ∑ j, ((Function.update m i (m i - 1)) j : ℤ) • P.step j =
+      ((m i - 1 : ℕ) : ℤ) • P.step i +
+        ∑ j ∈ Finset.univ.erase i, (m j : ℤ) • P.step j := by
+    rw [← Finset.add_sum_erase _ _ (Finset.mem_univ i)]
+    congr 1
+    · rw [Function.update_self]
+    · apply Finset.sum_congr rfl
+      intro j hj
+      rw [Function.update_of_ne (Finset.ne_of_mem_erase hj)]
+  rw [hL, hR]
+  have hmi : (m i : ℤ) = ((m i - 1 : ℕ) : ℤ) + 1 := by omega
+  rw [hmi, add_smul, one_smul]
+  abel
+
+/-- Decrementing a positive entry decrements the coefficient sum. -/
+theorem sum_update_sub_one (m : Fin d → ℕ) (i : Fin d) (hi : 0 < m i) :
+    ∑ j, Function.update m i (m i - 1) j = (∑ j, m j) - 1 := by
+  rw [← Finset.add_sum_erase _ _ (Finset.mem_univ i), Function.update_self]
+  have herase : ∑ j ∈ Finset.univ.erase i, Function.update m i (m i - 1) j =
+      ∑ j ∈ Finset.univ.erase i, m j := by
+    apply Finset.sum_congr rfl
+    intro j hj
+    rw [Function.update_of_ne (Finset.ne_of_mem_erase hj)]
+  rw [herase]
+  have hsplit : (∑ j ∈ Finset.univ.erase i, m j) + m i = ∑ j, m j :=
+    Finset.sum_erase_add _ _ (Finset.mem_univ i)
+  have hle : m i ≤ ∑ j, m j :=
+    Finset.single_le_sum (fun j _ ↦ Nat.zero_le _) (Finset.mem_univ i)
+  omega
+
+/-- `0` is a coefficient tuple when all widths are positive. -/
+theorem zero_mem_coeffs (P : GAP ℓ d) (hw : ∀ i, 0 < P.width i) :
+    (0 : Fin d → ℕ) ∈ P.coeffs := by
+  rw [mem_coeffs]
+  intro i
+  simpa using hw i
+
+/-- Decrementing a coefficient stays inside the coefficient box. -/
+theorem update_sub_one_mem_coeffs {P : GAP ℓ d} {m : Fin d → ℕ}
+    (hm : m ∈ P.coeffs) (i : Fin d) :
+    Function.update m i (m i - 1) ∈ P.coeffs := by
+  rw [mem_coeffs]
+  intro j
+  by_cases hji : j = i
+  · subst hji
+    rw [Function.update_self]
+    have := coeff_mem_width hm j
+    omega
+  · rw [Function.update_of_ne hji]
+    exact coeff_mem_width hm j
+
+/-- The `i`-th unit tuple is a scaled coefficient when `i` is live. -/
+theorem update_zero_one_mem_widthScale {P : GAP ℓ d} {k : ℕ} (hk : 0 < k)
+    (hw : ∀ i, 0 < P.width i) {i : Fin d} (hi : 1 < k * P.width i) :
+    Function.update (0 : Fin d → ℕ) i 1 ∈ (P.widthScale k).coeffs := by
+  rw [mem_coeffs]
+  intro j
+  by_cases hji : j = i
+  · subst hji
+    rw [Function.update_self]
+    simpa only [widthScale_width] using hi
+  · rw [Function.update_of_ne hji, Pi.zero_apply]
+    simp only [widthScale_width]
+    exact Nat.mul_pos hk (hw j)
+
+/-- The point set of a translate is the translate of the point set. -/
+theorem translate_toFinset (P : GAP ℓ d) (t : Fin ℓ → ℤ) :
+    (P.translate t).toFinset = P.toFinset.image (· + t) := by
+  show P.coeffs.image (P.translate t).eval = (P.coeffs.image P.eval).image (· + t)
+  rw [Finset.image_image]
+  apply Finset.image_congr
+  intro n _
+  rw [translate_eval]
+  exact add_comm _ _
+
+/-- `P.padStep 0 1` has the same point set as `P` (the extra coefficient is
+forced to be `0`). -/
+theorem padStep_zero_one_toFinset (P : GAP ℓ d) :
+    (P.padStep 0 1).toFinset = P.toFinset := by
+  ext x
+  rw [mem_padStep]
+  constructor
+  · rintro ⟨n, hn, m, hm, rfl⟩
+    have hm0 : m = 0 := by omega
+    subst hm0
+    simp only [Nat.cast_zero, zero_smul, add_zero]
+    exact Finset.mem_image.mpr ⟨n, hn, rfl⟩
+  · intro hx
+    obtain ⟨n, hn, rfl⟩ := Finset.mem_image.mp hx
+    exact ⟨n, hn, 0, Nat.one_pos, by simp⟩
+
+/-- `P.liveStep k`: `P` with each *dead* step (`¬ (1 < k * wᵢ)`, i.e.
+`k = wᵢ = 1`) replaced by `0`.  A dead step has zero coefficient in every
+evaluation on `P.coeffs` (for `1 ≤ k`) and on `(P.widthScale k).coeffs`, so
+point sets and properness are preserved.  Used in `appendix_decode` where a
+digit vector can only be extracted for a step that appears in a scaled
+coefficient. -/
+def liveStep (P : GAP ℓ d) (k : ℕ) : GAP ℓ d where
+  base := P.base
+  step := fun i ↦ if 1 < k * P.width i then P.step i else 0
+  width := P.width
+
+@[simp] theorem liveStep_base (P : GAP ℓ d) (k : ℕ) :
+    (P.liveStep k).base = P.base := rfl
+
+theorem liveStep_step (P : GAP ℓ d) (k : ℕ) (i : Fin d) :
+    (P.liveStep k).step i = if 1 < k * P.width i then P.step i else 0 := rfl
+
+@[simp] theorem liveStep_width (P : GAP ℓ d) (k : ℕ) :
+    (P.liveStep k).width = P.width := rfl
+
+/-- Evaluations are unchanged when every dead coefficient vanishes. -/
+theorem liveStep_eval (P : GAP ℓ d) (k : ℕ) (m : Fin d → ℕ)
+    (hm : ∀ i, m i = 0 ∨ 1 < k * P.width i) :
+    (P.liveStep k).eval m = P.eval m := by
+  show (P.liveStep k).base + ∑ i, (m i : ℤ) • (P.liveStep k).step i =
+    P.base + ∑ i, (m i : ℤ) • P.step i
+  rw [liveStep_base]
+  congr 1
+  apply Finset.sum_congr rfl
+  intro i _
+  rcases hm i with hmi | hli
+  · rw [hmi]; simp
+  · rw [liveStep_step, ite_eq_left hli]
+
+/-- `liveStep` does not change evaluations on `P.coeffs` (for `1 ≤ k`). -/
+theorem liveStep_eval_of_mem (P : GAP ℓ d) {k : ℕ} (hk : 1 ≤ k)
+    {m : Fin d → ℕ} (hm : m ∈ P.coeffs) :
+    (P.liveStep k).eval m = P.eval m := by
+  apply liveStep_eval
+  intro i
+  have hmi := coeff_mem_width hm i
+  rcases Nat.lt_or_ge 1 (k * P.width i) with h | h
+  · exact Or.inr h
+  · left
+    have hw1 : P.width i ≤ 1 := by
+      have hle : P.width i ≤ k * P.width i := Nat.le_mul_of_pos_left _ hk
+      omega
+    omega
+
+/-- `liveStep` does not change evaluations on `(P.widthScale k).coeffs`. -/
+theorem liveStep_eval_of_mem_widthScale (P : GAP ℓ d) (k : ℕ)
+    {m : Fin d → ℕ} (hm : m ∈ (P.widthScale k).coeffs) :
+    (P.liveStep k).eval m = P.eval m := by
+  apply liveStep_eval
+  intro i
+  have hmi : m i < k * P.width i := by
+    have h := coeff_mem_width hm i
+    simpa only [widthScale_width] using h
+  rcases Nat.lt_or_ge 1 (k * P.width i) with h | h
+  · exact Or.inr h
+  · left; omega
+
+/-- The point set is unchanged by zeroing dead steps (`1 ≤ k`). -/
+theorem liveStep_toFinset (P : GAP ℓ d) {k : ℕ} (hk : 1 ≤ k) :
+    (P.liveStep k).toFinset = P.toFinset := by
+  show P.coeffs.image (P.liveStep k).eval = P.coeffs.image P.eval
+  apply Finset.image_congr
+  intro m hm
+  exact liveStep_eval_of_mem P hk hm
+
+/-- The scaled point set is unchanged by zeroing dead steps. -/
+theorem liveStep_widthScale_toFinset (P : GAP ℓ d) (k : ℕ) :
+    ((P.liveStep k).widthScale k).toFinset = (P.widthScale k).toFinset := by
+  show (P.widthScale k).coeffs.image ((P.liveStep k).widthScale k).eval =
+    (P.widthScale k).coeffs.image (P.widthScale k).eval
+  apply Finset.image_congr
+  intro m hm
+  show ((P.liveStep k).widthScale k).eval m = (P.widthScale k).eval m
+  rw [widthScale_eval, widthScale_eval]
+  exact liveStep_eval_of_mem_widthScale P k hm
+
+/-- The translated scaled point set is unchanged by zeroing dead steps. -/
+theorem liveStep_translate_toFinset (P : GAP ℓ d) (k : ℕ) (t : Fin ℓ → ℤ) :
+    (((P.liveStep k).widthScale k).translate t).toFinset =
+      ((P.widthScale k).translate t).toFinset := by
+  show (P.widthScale k).coeffs.image
+      (((P.liveStep k).widthScale k).translate t).eval =
+    (P.widthScale k).coeffs.image ((P.widthScale k).translate t).eval
+  apply Finset.image_congr
+  intro m hm
+  rw [translate_eval, translate_eval, widthScale_eval, widthScale_eval,
+    liveStep_eval_of_mem_widthScale P k hm]
+
+/-- `liveStep` preserves properness (`1 ≤ k`). -/
+theorem liveStep_proper (P : GAP ℓ d) {k : ℕ} (hk : 1 ≤ k) (hP : P.Proper) :
+    (P.liveStep k).Proper := by
+  intro a ha b hb hab
+  apply hP (show a ∈ P.coeffs from ha) (show b ∈ P.coeffs from hb)
+  rw [← liveStep_eval_of_mem P hk (show a ∈ P.coeffs from ha),
+    ← liveStep_eval_of_mem P hk (show b ∈ P.coeffs from hb)]
+  exact hab
+
+/-- `liveStep` preserves properness of the width-scaled GAP. -/
+theorem liveStep_widthScale_proper (P : GAP ℓ d) (k : ℕ)
+    (hP : (P.widthScale k).Proper) : ((P.liveStep k).widthScale k).Proper := by
+  intro a ha b hb hab
+  apply hP (show a ∈ (P.widthScale k).coeffs from ha)
+    (show b ∈ (P.widthScale k).coeffs from hb)
+  have hab' : (P.liveStep k).eval a = (P.liveStep k).eval b := by
+    have := hab
+    rwa [widthScale_eval, widthScale_eval] at this
+  rw [liveStep_eval_of_mem_widthScale P k (show a ∈ _ from ha),
+    liveStep_eval_of_mem_widthScale P k (show b ∈ _ from hb)] at hab'
+  rw [widthScale_eval, widthScale_eval]
+  exact hab'
+
+set_option maxHeartbeats 4000000 in
 /-- **Residual input — the Appendix-A decode** (Pham–Zakharov
 arXiv:2410.14624v2, Appendix A).  Given a proper, symmetric `P₀ : GAP 1 d'`
 covering the `packVec`-image of `Â₀ ⊆ [0,n]^ℓ` together with the
@@ -1536,57 +1797,524 @@ returns (or a parity argument on the coefficient of `0`), and dimensions
 with `k·wᵢ = 1` (dead steps, `wᵢ = k = 1`) must be pruned or zeroed before
 unpacking — these are the remaining inputs isolated in this lemma.
 
-**Status (round 15).**  The statement is *not* derivable from the listed
-hypotheses — two inputs are missing that `cfp_main`'s conclusion does not
-supply:
+**Status (round 16 — proved, with strengthened hypotheses).**  The
+original statement was *not* derivable: three inputs are missing that
+`cfp_main`'s conclusion does not supply, and they are now taken as
+hypotheses (all discharged by the strengthened `cfp_main_centered`
+call in `cfp_structure`):
 
-(a) `(P₀.widthScale k).Proper`.  Without it the conclusion is *false*:
-take `Â₀ = A'₀ = ∅`, `d' = 1`, `P₀ = ⟨0, 0, 1⟩` (point set `{0}`, proper
-and symmetric), `k = 2`, `t = 0`, `hdom` met for large `H`.  Then
-`Σ(A'₀) = {0}` and `hcont` holds, but any `P` containing `0` has
-`P.width i ≥ 1`, so a proper `P.widthScale 2` has `≥ 2` points and no
-translate fits in `{0}`.  The caller `cfp_structure` *does* have this
-input in scope (`hkP₀`, currently unused).
+(a) `hkP₀ : (P₀.widthScale k).Proper`.  Without it the conclusion is
+*false*: take `Â₀ = A'₀ = ∅`, `d' = 1`, `P₀ = ⟨0, 0, 1⟩`, `k = 2`,
+`t = 0`; then `Σ(A'₀) = {0}` but a proper `P.widthScale 2` has `≥ 2`
+points and no translate fits.
 
-(b) A *zero-centred* symmetry `∀ x ∈ P₀.toFinset, -x ∈ P₀.toFinset`
-(equivalently odd widths, or a parity input).  The decoded
-`P = unpack dig bdig P₀.width` is symmetric iff the vector
-`V = 2·bdig + Σᵢ (P₀.width i - 1) • dig i` is componentwise even; the
-∃-centre `P₀.Symmetric` only gives `packVec V = 2·m₀ 0` even, and bounded
-`packVec`-decodes are unique (`packVec_inj_of_sub_lt`), so no choice of
-subset-sum witnesses can repair an odd `V` for `ℓ ≥ 2`.  With `0`-centred
-symmetry the centre `M = 0` works directly (the reflection
-`eval m ↦ -eval m` is realised on coefficients, and
-`u_{m'} - u_{n⁰} = -(u_m - u_{n⁰})` by `packVec`-injectivity on the
-bounded box).  This is a statement-fidelity gap in `cfp_main`: CFP23's
-`P` may be taken centred (widths `2Nᵢ+1`); see its docstring.
+(b) `htdig`: a *small* `packVec`-digit vector for the translate `t 0`
+(`|tdig j| ≤ H/2`).  The decode sets `bdig := u 0 − tdig` and needs
+`|bdig| ≤ H/2 + sn` for the `subset_unpack_toFinset` bound check;
+`packVec`-injectivity on the bounded box then forces every reasonable
+digit lift of `t 0` to be this one.
 
-With (a) and (b) the lemma *is* provable: for `n ∈ (P₀.widthScale k).coeffs`
-choose `Sₙ ⊆ A'₀` with `packVec (u n) = eval n 0 + t 0`,
-`u n := Σ_{a ∈ Sₙ} a` bounded by `sn`; then `dig i := u(eᵢ) - u(0)`
-(`k·wᵢ ≥ 2`), `bdig := u(0) - u(n⁰)`, `tdig := u(n⁰)` where `n⁰` is the
-coefficient of `0` (so `t = eval n⁰ + t ∈ Σ(ϕA'₀)` itself, giving the
-bounded decode of `t`).  Induction on `Σ nᵢ` using
-`u_{n-eᵢ} + u_{eᵢ} = u_n + u_0` (both sides `packVec`-equal and `≤ 3sn`)
-gives `eval n = u_n - u_{n⁰}`, hence `|eval n j| ≤ 2sn` and the translate
-point is *exactly* `u_n ∈ Σ(A'₀)`. -/
-theorem appendix_decode {ℓ : ℕ} (hℓ : 0 < ℓ) {H : ℤ} (hH : 1 < H)
+(c) `hpar`: the diameter `Σᵢ (wᵢ−1) • stepᵢ` of `P₀` admits a small,
+componentwise-`2`-divisible digit vector `c`.  The decoded
+`P = unpack dig bdig P₀.width` is symmetric about
+`bdig + c/2` iff that vector is even, which `hpar` supplies.  This is
+the parity/centring input the paper gets for free by taking `P`
+centred at the origin (odd widths): CFP23's `P` may be taken centred,
+and the corresponding hypothesis appears in `cfp_main_centered`.
+
+*Proof sketch.*  For `n ∈ (P₀.widthScale k).coeffs` choose
+`Sₙ ⊆ A'₀` with `packVec (u n) = t 0 + eval n 0`, `u n := Σ_{a∈Sₙ} a`
+(bounded by `sn` coordinatewise).  Put `dig i := u(eᵢ) − u(0)` for
+live steps (`1 < k·wᵢ`; dead steps are killed by `liveStep`),
+`bdig := u 0 − tdig`.  The key identity
+`u_{m−eᵢ} + u_{eᵢ} = u_m + u_0` holds by `packVec`-injectivity (both
+sides are `≤ 4sn < H` and `packVec`-equal since the `eval` identity
+`eval(m−eᵢ) + eval eᵢ = eval m + eval 0` is linear), so induction on
+`Σ mᵢ` gives `eval n = u n − tdig` on the scaled box.  Then
+`Â₀ ∪ {0} ⊆ P.toFinset` is `subset_unpack_toFinset`,
+`P.widthScale k` translates onto the `u n ∈ Σ(A'₀)`,
+`P.widthScale k` is proper by `Proper.unpack`, and `P` is symmetric
+by coordinate reflection `n ↦ w − 1 − n` about `bdig + c/2`. -/
+theorem appendix_decode {ℓ : ℕ} (_hℓ : 0 < ℓ) {H : ℤ} (hH : 1 < H)
     {n s : ℕ} {Â₀ A'₀ : Finset (Fin ℓ → ℤ)}
     (hÂ : ∀ a ∈ Â₀, ∀ j, 0 ≤ a j ∧ a j ≤ (n : ℤ))
     (hA' : ∀ a ∈ A'₀, ∀ j, 0 ≤ a j ∧ a j ≤ (n : ℤ))
     (hA'card : (A'₀.card : ℤ) ≤ (s : ℤ))
-    {d' : ℕ} {P₀ : GAP 1 d'} (hP₀ : P₀.Proper) (hP₀s : P₀.Symmetric)
+    {d' : ℕ} {P₀ : GAP 1 d'} (_hP₀ : P₀.Proper)
     (hsub : ∀ a ∈ Â₀, (fun _ : Fin 1 ↦ packVec H a) ∈ P₀.toFinset)
     (h0 : (0 : Fin 1 → ℤ) ∈ P₀.toFinset)
     {k : ℕ} (hk : 0 < k) {t : Fin 1 → ℤ}
     (hcont : ((P₀.widthScale k).translate t).toFinset ⊆
       subsetSumsL (A'₀.image fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x))
+    (hkP₀ : (P₀.widthScale k).Proper)
+    (htdig : ∃ tdig : Fin ℓ → ℤ, packVec H tdig = t 0 ∧
+      ∀ j, |tdig j| ≤ H / 2)
+    (hpar : ∃ c : Fin ℓ → ℤ, (∀ j, 2 ∣ c j) ∧
+      (∀ j, |c j| ≤ 2 * (s : ℤ) * (n : ℤ)) ∧
+      packVec H c = (∑ i, ((P₀.width i - 1 : ℕ) : ℤ) • P₀.step i) 0)
     (hdom : (8 : ℤ) * ((k : ℤ) + 1) * ((s : ℤ) + 1) * ((n : ℤ) + 1) *
       (2 * (s : ℤ) * (n : ℤ) + 1) ^ (2 * ℓ) < H) :
     ∃ P : GAP ℓ d', P.Symmetric ∧ (Â₀ ∪ {0}) ⊆ P.toFinset ∧
       ∃ tdig : Fin ℓ → ℤ, ((P.widthScale k).translate tdig).toFinset ⊆
         subsetSumsL A'₀ ∧ (P.widthScale k).Proper := by
-  sorry
+  classical
+  -- numerics: `hdom` implies `16·(s+1)(n+1) < H`
+  have hX1 : (1 : ℤ) ≤ (2 * (s : ℤ) * (n : ℤ) + 1) ^ (2 * ℓ) :=
+    one_le_pow₀ (by
+      have hnn : (0 : ℤ) ≤ (s : ℤ) * n :=
+        mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
+      linarith)
+  have hK1 : (2 : ℤ) ≤ (k : ℤ) + 1 := by omega
+  have h16 : (16 : ℤ) * ((s : ℤ) + 1) * ((n : ℤ) + 1) < H := by
+    have h2le : (2 : ℤ) ≤ ((k : ℤ) + 1) * (2 * (s : ℤ) * (n : ℤ) + 1) ^ (2 * ℓ) :=
+      hK1.trans (le_mul_of_one_le_right (by positivity) hX1)
+    have hle : (16 : ℤ) * ((s : ℤ) + 1) * ((n : ℤ) + 1) ≤
+        8 * ((k : ℤ) + 1) * ((s : ℤ) + 1) * ((n : ℤ) + 1) *
+          (2 * (s : ℤ) * (n : ℤ) + 1) ^ (2 * ℓ) := by
+      have hmul := mul_le_mul_of_nonneg_right h2le
+        (by positivity : (0 : ℤ) ≤ 8 * ((s : ℤ) + 1) * ((n : ℤ) + 1))
+      nlinarith [hmul]
+    exact lt_of_le_of_lt hle hdom
+  have hexp : ((s : ℤ) + 1) * ((n : ℤ) + 1) = (s : ℤ) * n + s + n + 1 := by ring
+  have hnH : (n : ℤ) < H := by
+    have h1 : (n : ℤ) + 1 ≤ ((s : ℤ) + 1) * ((n : ℤ) + 1) :=
+      le_mul_of_one_le_left (by positivity) (by omega)
+    nlinarith [h16, h1]
+  have h4sn : 4 * ((s : ℤ) * n) < H := by nlinarith [h16, hexp]
+  -- widths are positive (else `coeffs` is empty, contradicting `h0`)
+  have hw : ∀ i, 0 < P₀.width i := by
+    intro i
+    by_contra hwi
+    have hw0 : P₀.width i = 0 := Nat.eq_zero_of_not_pos hwi
+    obtain ⟨m, hm, _⟩ := Finset.mem_image.mp h0
+    have hmi : m i < P₀.width i := coeff_mem_width hm i
+    omega
+  -- `ϕ` is injective on `A'₀` (coordinates in `[0,n]`, `n < H`)
+  have hϕinj : Set.InjOn (fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x)
+      ↑A'₀ := by
+    intro a ha b hb hab
+    apply packVec_inj_of_sub_lt (by linarith : (0 : ℤ) < H) _ (congrFun hab 0)
+    intro j
+    have h1 := (hA' a ha j); have h2 := (hA' b hb j)
+    have hle : |a j - b j| ≤ (n : ℤ) := by
+      rw [abs_sub_le_iff]
+      constructor <;> linarith
+    exact lt_of_le_of_lt hle hnH
+  -- the small coefficient box sits in the scaled box
+  have hcoeffs_sub : P₀.coeffs ⊆ (P₀.widthScale k).coeffs := by
+    intro m hm
+    rw [mem_coeffs] at hm ⊢
+    intro i
+    simp only [widthScale_width]
+    have hle : P₀.width i ≤ k * P₀.width i := Nat.le_mul_of_pos_left _ hk
+    have := hm i
+    omega
+  -- the subset-sum lift `u m` of each scaled coefficient point of the
+  -- *live-step* GAP (its scaled point set equals `P₀`'s)
+  have hu_exists : ∀ m : Fin d' → ℕ, ∃ T : Finset (Fin ℓ → ℤ),
+      (m ∈ ((P₀.liveStep k).widthScale k).coeffs → T ⊆ A'₀ ∧
+        packVec H (∑ a ∈ T, a) = t 0 + ((P₀.liveStep k).eval m) 0) := by
+    intro m
+    by_cases hm : m ∈ ((P₀.liveStep k).widthScale k).coeffs
+    · have hmem : (((P₀.liveStep k).widthScale k).translate t).eval m ∈
+          (((P₀.liveStep k).widthScale k).translate t).toFinset := by
+        apply Finset.mem_image.mpr
+        exact ⟨m, by rwa [translate_coeffs], rfl⟩
+      rw [liveStep_translate_toFinset] at hmem
+      obtain ⟨S₀, hS₀, hsum₀⟩ := mem_subsetSumsL.mp (hcont hmem)
+      obtain ⟨S, hS, rfl⟩ := Finset.subset_image_iff.mp hS₀
+      have hinjS : Set.InjOn (fun x : Fin ℓ → ℤ ↦ fun _ : Fin 1 ↦ packVec H x)
+          ↑S := hϕinj.mono (Finset.coe_subset.mpr hS)
+      refine ⟨S, fun _ ↦ ⟨hS, ?_⟩⟩
+      have e := congrFun hsum₀ 0
+      rw [Finset.sum_apply, Finset.sum_image hinjS] at e
+      rw [translate_eval, widthScale_eval, Pi.add_apply] at e
+      rw [packVec_sum]
+      exact e
+    · exact ⟨∅, fun h ↦ absurd h hm⟩
+  choose S hS using hu_exists
+  set u : (Fin d' → ℕ) → Fin ℓ → ℤ := fun m ↦ ∑ a ∈ S m, a with hudef
+  have huv : ∀ m ∈ ((P₀.liveStep k).widthScale k).coeffs,
+      packVec H (u m) = t 0 + ((P₀.liveStep k).eval m) 0 :=
+    fun m hm ↦ (hS m hm).2
+  have humem : ∀ m ∈ ((P₀.liveStep k).widthScale k).coeffs,
+      u m ∈ subsetSumsL A'₀ :=
+    fun m hm ↦ mem_subsetSumsL.mpr ⟨S m, (hS m hm).1, rfl⟩
+  have hub : ∀ m ∈ ((P₀.liveStep k).widthScale k).coeffs, ∀ j,
+      |u m j| ≤ (s : ℤ) * n := by
+    intro m hm j
+    obtain ⟨hsub', _⟩ := hS m hm
+    show |(∑ a ∈ S m, a) j| ≤ (s : ℤ) * n
+    rw [Finset.sum_apply]
+    calc |∑ a ∈ S m, a j| ≤ ∑ a ∈ S m, |a j| := Finset.abs_sum_le_sum_abs _ _
+      _ ≤ ∑ a ∈ S m, (n : ℤ) := Finset.sum_le_sum fun a ha ↦ by
+        have h1 := (hA' a (hsub' ha) j).1
+        have h2 := (hA' a (hsub' ha) j).2
+        have hnn : (0 : ℤ) ≤ (n : ℤ) := Nat.cast_nonneg _
+        exact abs_le.mpr ⟨by linarith, h2⟩
+      _ = ((S m).card : ℤ) * n := by rw [Finset.sum_const, nsmul_eq_mul]
+      _ ≤ (s : ℤ) * n := mul_le_mul_of_nonneg_right
+          (by have h1 : ((S m).card : ℤ) ≤ A'₀.card :=
+                by exact_mod_cast Finset.card_le_card hsub'
+              exact h1.trans hA'card) (by positivity)
+  -- the translate's digit vector, the base digits, and the step digits
+  obtain ⟨tdig, htdpk, htdb⟩ := htdig
+  have h0mem : (0 : Fin d' → ℕ) ∈ ((P₀.liveStep k).widthScale k).coeffs := by
+    apply zero_mem_coeffs
+    intro i
+    simp only [widthScale_width, liveStep_width]
+    exact Nat.mul_pos hk (hw i)
+  have he₁mem : ∀ i, 1 < k * P₀.width i →
+      Function.update (0 : Fin d' → ℕ) i 1 ∈
+        ((P₀.liveStep k).widthScale k).coeffs := by
+    intro i hi
+    apply update_zero_one_mem_widthScale hk
+      (fun j ↦ by simpa only [liveStep_width] using hw j)
+    simpa only [liveStep_width] using hi
+  set dig : Fin d' → Fin ℓ → ℤ := fun i ↦
+      if 1 < k * P₀.width i then
+        u (Function.update (0 : Fin d' → ℕ) i 1) - u 0 else 0
+    with hdigdef
+  set bdig : Fin ℓ → ℤ := u 0 - tdig with hbdigdef
+  have hdig : ∀ i, packVec H (dig i) = ((P₀.liveStep k).step i) 0 := by
+    intro i
+    by_cases hli : 1 < k * P₀.width i
+    · have hdigi : dig i =
+          u (Function.update (0 : Fin d' → ℕ) i 1) - u 0 := by
+        simp only [hdigdef]; rw [ite_eq_left hli]
+      rw [hdigi, packVec_sub, huv _ (he₁mem i hli), huv 0 h0mem,
+        eval_update_zero_one, eval_zero]
+      simp only [Pi.add_apply]
+      ring
+    · have hdigi : dig i = 0 := by
+        simp only [hdigdef]; rw [ite_eq_right hli]
+      have hstep : (P₀.liveStep k).step i = 0 := by
+        rw [liveStep_step, ite_eq_right hli]
+      rw [hdigi, packVec_zero, hstep]
+      rfl
+  have hbdig : packVec H bdig = (P₀.liveStep k).base 0 := by
+    show packVec H (u 0 - tdig) = (P₀.liveStep k).base 0
+    rw [packVec_sub, huv 0 h0mem, htdpk, eval_zero]
+    ring
+  -- the swap relation `u_{m−eᵢ} + u_{eᵢ} = u_m + u_0`
+  have hswap : ∀ m ∈ ((P₀.liveStep k).widthScale k).coeffs,
+      ∀ i : Fin d', 0 < m i →
+      u (Function.update m i (m i - 1)) +
+        u (Function.update (0 : Fin d' → ℕ) i 1) = u m + u 0 := by
+    intro m hm i hi
+    have hli : 1 < k * P₀.width i := by
+      have hmi : m i < k * P₀.width i := by
+        have h := coeff_mem_width hm i
+        simpa only [widthScale_width, liveStep_width] using h
+      omega
+    apply packVec_inj_of_sub_lt (by linarith : (0 : ℤ) < H)
+    · intro j
+      have h1 := hub _ (update_sub_one_mem_coeffs hm i) j
+      have h2 := hub _ (he₁mem i hli) j
+      have h3 := hub m hm j
+      have h4 := hub 0 h0mem j
+      have hle : |(u (Function.update m i (m i - 1)) +
+          u (Function.update (0 : Fin d' → ℕ) i 1)) j - (u m + u 0) j| ≤
+          4 * ((s : ℤ) * n) := by
+        rw [Pi.add_apply, Pi.add_apply]
+        calc |u (Function.update m i (m i - 1)) j +
+              u (Function.update (0 : Fin d' → ℕ) i 1) j - (u m j + u 0 j)|
+            ≤ |u (Function.update m i (m i - 1)) j +
+                u (Function.update (0 : Fin d' → ℕ) i 1) j| +
+              |u m j + u 0 j| := abs_sub_le_abs_add
+          _ ≤ (|u (Function.update m i (m i - 1)) j| +
+                |u (Function.update (0 : Fin d' → ℕ) i 1) j|) +
+              (|u m j| + |u 0 j|) :=
+            add_le_add (abs_add_le _ _) (abs_add_le _ _)
+          _ ≤ ↑s * ↑n + ↑s * ↑n + (↑s * ↑n + ↑s * ↑n) :=
+            add_le_add (add_le_add h1 h2) (add_le_add h3 h4)
+          _ = 4 * (↑s * ↑n) := by ring
+      exact lt_of_le_of_lt hle h4sn
+    · rw [packVec_add, packVec_add, huv _ (update_sub_one_mem_coeffs hm i),
+        huv _ (he₁mem i hli), huv m hm, huv 0 h0mem]
+      have heq : (P₀.liveStep k).eval (Function.update m i (m i - 1)) +
+          (P₀.liveStep k).eval (Function.update (0 : Fin d' → ℕ) i 1) =
+          (P₀.liveStep k).eval m + (P₀.liveStep k).eval 0 := by
+        rw [eval_add_eval, eval_add_eval]
+        have hsum' : ∀ j, Function.update m i (m i - 1) j +
+            Function.update (0 : Fin d' → ℕ) i 1 j = m j := by
+          intro j
+          by_cases hji : j = i
+          · subst hji
+            rw [Function.update_self, Function.update_self]
+            omega
+          · rw [Function.update_of_ne hji, Function.update_of_ne hji]
+            simp
+        simp only [hsum', Pi.zero_apply, add_zero]
+      have heqj := congrFun heq 0
+      simp only [Pi.add_apply] at heqj
+      linarith
+  -- the decode identity `eval n = u n − tdig` on the scaled coefficient box,
+  -- by induction on `∑ nᵢ`
+  set W := ((P₀.liveStep k).widthScale k).width with hWdef
+  have key : ∀ N : ℕ, ∀ m ∈ ((P₀.liveStep k).widthScale k).coeffs,
+      ∑ j, m j = N →
+      (unpack dig bdig W).eval m = u m - tdig := by
+    intro N
+    induction N with
+    | zero =>
+      intro m _ hsum
+      have hm0 : m = 0 := by
+        funext i
+        have hle : m i ≤ ∑ j, m j :=
+          Finset.single_le_sum (fun j _ ↦ Nat.zero_le _) (Finset.mem_univ i)
+        rw [Pi.zero_apply]
+        omega
+      subst hm0
+      rw [eval_zero]
+      rfl
+    | succ N ih =>
+      intro m hm hsum
+      obtain ⟨i, hi⟩ : ∃ i, 0 < m i := by
+        by_contra h
+        push Not at h
+        have hz : ∑ j, m j = 0 :=
+          Finset.sum_eq_zero (fun j _ ↦ Nat.eq_zero_of_le_zero (h j))
+        omega
+      have hli : 1 < k * P₀.width i := by
+        have hmi : m i < k * P₀.width i := by
+          have h := coeff_mem_width hm i
+          simpa only [widthScale_width, liveStep_width] using h
+        omega
+      set m' := Function.update m i (m i - 1) with hm'def
+      have hm'mem : m' ∈ ((P₀.liveStep k).widthScale k).coeffs :=
+        update_sub_one_mem_coeffs hm i
+      have hsum' : ∑ j, m' j = N := by
+        have hsub' := sum_update_sub_one m i hi
+        show ∑ j, Function.update m i (m i - 1) j = N
+        omega
+      have hdigi : dig i = u (Function.update (0 : Fin d' → ℕ) i 1) - u 0 := by
+        simp only [hdigdef]; rw [ite_eq_left hli]
+      have hsplit := eval_update_sub_one (unpack dig bdig W) m i hi
+      show (unpack dig bdig W).eval m = u m - tdig
+      rw [hsplit]
+      show (unpack dig bdig W).eval m' + dig i = u m - tdig
+      rw [ih m' hm'mem hsum', hdigi]
+      funext j
+      have hswj := congrFun (hswap m hm i hi) j
+      simp only [Pi.add_apply, Pi.sub_apply] at hswj ⊢
+      rw [hm'def]
+      omega
+  -- the decoded GAP
+  refine ⟨unpack dig bdig P₀.width, ?_, ?_, tdig, ?_, ?_⟩
+  · -- `P.Symmetric`: coordinate reflection `n ↦ w − 1 − n` about the centre
+    -- `bdig + (diameter)/2`; `hpar` supplies the even diameter lift `c`.
+    obtain ⟨c, hc2, hcb, hcpk⟩ := hpar
+    -- `u (w−1) − u 0 = c`: both are `packVec`-reps of the diameter
+    have hntmem : (fun i ↦ P₀.width i - 1) ∈
+        ((P₀.liveStep k).widthScale k).coeffs := by
+      rw [mem_coeffs]
+      intro i
+      simp only [widthScale_width, liveStep_width]
+      have hle : P₀.width i ≤ k * P₀.width i := Nat.le_mul_of_pos_left _ hk
+      have := hw i
+      show P₀.width i - 1 < k * P₀.width i
+      omega
+    have hdiam : u (fun i ↦ P₀.width i - 1) - u 0 = c := by
+      apply packVec_inj_of_sub_lt (by linarith : (0 : ℤ) < H)
+      · intro j
+        have h1 := hub _ hntmem j
+        have h2 := hub 0 h0mem j
+        have h3 := hcb j
+        have hle : |u (fun i ↦ P₀.width i - 1) j - u 0 j - c j| ≤
+            |u (fun i ↦ P₀.width i - 1) j| + |u 0 j| + |c j| := by
+          calc |u (fun i ↦ P₀.width i - 1) j - u 0 j - c j|
+              ≤ |u (fun i ↦ P₀.width i - 1) j - u 0 j| + |c j| :=
+                abs_sub_le_abs_add
+            _ ≤ |u (fun i ↦ P₀.width i - 1) j| + |u 0 j| + |c j| :=
+                add_le_add_left abs_sub_le_abs_add _
+        rw [Pi.sub_apply]
+        exact lt_of_le_of_lt (le_trans hle (by linarith)) h4sn
+      · rw [packVec_sub, huv _ hntmem, huv 0 h0mem, hcpk, eval_zero]
+        have hpev : ((P₀.liveStep k).eval (fun i ↦ P₀.width i - 1)) 0 =
+            (P₀.liveStep k).base 0 +
+              ∑ i, ((P₀.width i - 1 : ℕ) : ℤ) • (P₀.liveStep k).step i 0 := by
+          show ((P₀.liveStep k).base +
+              ∑ i, ((P₀.width i - 1 : ℕ) : ℤ) • (P₀.liveStep k).step i) 0 =
+              (P₀.liveStep k).base 0 +
+                ∑ i, ((P₀.width i - 1 : ℕ) : ℤ) • (P₀.liveStep k).step i 0
+          rw [Pi.add_apply, Finset.sum_apply]
+          congr 1
+        rw [hpev]
+        have hsteps : ∀ i, ((P₀.width i - 1 : ℕ) : ℤ) • (P₀.liveStep k).step i =
+            ((P₀.width i - 1 : ℕ) : ℤ) • P₀.step i := by
+          intro i
+          by_cases hli : 1 < k * P₀.width i
+          · rw [liveStep_step, ite_eq_left hli]
+          · have hw1 : P₀.width i = 1 := by
+              have hle : P₀.width i ≤ k * P₀.width i :=
+                Nat.le_mul_of_pos_left _ hk
+              have h2 := hw i
+              omega
+            rw [liveStep_step, ite_eq_right hli]
+            simp [hw1]
+        have hdsum : (∑ i, ((P₀.width i - 1 : ℕ) : ℤ) •
+            (P₀.liveStep k).step i 0) =
+            (∑ i, ((P₀.width i - 1 : ℕ) : ℤ) • P₀.step i) 0 := by
+          rw [Finset.sum_apply]
+          apply Finset.sum_congr rfl
+          intro i _
+          have h2 := congrFun (hsteps i) 0
+          rwa [Pi.smul_apply, Pi.smul_apply] at h2
+        rw [hdsum]
+        ring
+    refine ⟨fun j ↦ u 0 j - tdig j + c j / 2, ?_⟩
+    intro x hx
+    obtain ⟨n', hn', rfl⟩ := Finset.mem_image.mp hx
+    have hn'₀ : n' ∈ P₀.coeffs := by rwa [unpack_coeffs] at hn'
+    have hn's : n' ∈ (P₀.widthScale k).coeffs := hcoeffs_sub hn'₀
+    have hn'sl : n' ∈ ((P₀.liveStep k).widthScale k).coeffs := hn's
+    -- the reflected coefficient `w − 1 − n'`
+    have hmmem : (fun i ↦ P₀.width i - 1 - n' i) ∈ P₀.coeffs := by
+      rw [mem_coeffs]
+      intro i
+      have h1 := coeff_mem_width hn'₀ i
+      have h2 := hw i
+      show P₀.width i - 1 - n' i < P₀.width i
+      omega
+    have hmms : (fun i ↦ P₀.width i - 1 - n' i) ∈
+        ((P₀.liveStep k).widthScale k).coeffs := hcoeffs_sub hmmem
+    refine Finset.mem_image.mpr ⟨fun i ↦ P₀.width i - 1 - n' i, ?_, ?_⟩
+    · rwa [unpack_coeffs]
+    · -- `eval (w−1−n') = 2·mid − eval n'`
+      have hkn := key _ n' hn'sl rfl
+      have hkm := key _ _ hmms rfl
+      have hev' : (unpack dig bdig P₀.width).eval n' = u n' - tdig := hkn
+      have hevm : (unpack dig bdig P₀.width).eval
+          (fun i ↦ P₀.width i - 1 - n' i) =
+          u (fun i ↦ P₀.width i - 1 - n' i) - tdig := hkm
+      -- `Σ(wᵢ−1)digᵢ = c` (as a vector)
+      have hdiamv : ∑ i, ((P₀.width i - 1 : ℕ) : ℤ) • dig i = c := by
+        have hkm' := key _ _ hntmem rfl
+        have hev : (unpack dig bdig W).eval (fun i ↦ P₀.width i - 1) =
+            bdig + ∑ i, ((P₀.width i - 1 : ℕ) : ℤ) • dig i := rfl
+        rw [hev, hbdigdef] at hkm'
+        have h1 : ∑ i, ((P₀.width i - 1 : ℕ) : ℤ) • dig i =
+            u (fun i ↦ P₀.width i - 1) - u 0 := by
+          linear_combination hkm'
+        rw [h1, hdiam]
+      -- `Σn'ᵢdigᵢ = u n' − u 0`
+      have hsumn : ∑ i, ((n' i : ℕ) : ℤ) • dig i = u n' - u 0 := by
+        have hkn' := hkn
+        have hev : (unpack dig bdig W).eval n' =
+            bdig + ∑ i, ((n' i : ℕ) : ℤ) • dig i := rfl
+        rw [hev, hbdigdef] at hkn'
+        linear_combination hkn'
+      -- `Σ(wᵢ−1−n'ᵢ)digᵢ = Σ(wᵢ−1)digᵢ − Σn'ᵢdigᵢ`
+      have hsumm : ∑ i, ((P₀.width i - 1 - n' i : ℕ) : ℤ) • dig i =
+          (∑ i, ((P₀.width i - 1 : ℕ) : ℤ) • dig i) -
+            ∑ i, ((n' i : ℕ) : ℤ) • dig i := by
+        rw [← Finset.sum_sub_distrib]
+        apply Finset.sum_congr rfl
+        intro i _
+        rw [← sub_smul]
+        congr 1
+        have hle : n' i ≤ P₀.width i - 1 :=
+          Nat.le_pred_of_lt (coeff_mem_width hn'₀ i)
+        rw [Nat.cast_sub hle]
+      -- hence `u (w−1−n') = 2·u 0 + c − u n'` (pointwise)
+      have hum : u (fun i ↦ P₀.width i - 1 - n' i) =
+          fun j ↦ 2 * u 0 j + c j - u n' j := by
+        have hkm' := hkm
+        have hev : (unpack dig bdig W).eval (fun i ↦ P₀.width i - 1 - n' i) =
+            bdig + ∑ i, ((P₀.width i - 1 - n' i : ℕ) : ℤ) • dig i := rfl
+        rw [hev, hsumm, hdiamv, hsumn, hbdigdef] at hkm'
+        funext j
+        have hj := congrFun hkm' j
+        simp only [Pi.add_apply, Pi.sub_apply] at hj
+        show u (fun i ↦ P₀.width i - 1 - n' i) j = 2 * u 0 j + c j - u n' j
+        linarith
+      rw [hevm, hev', hum, two_nsmul]
+      funext j
+      simp only [Pi.sub_apply, Pi.add_apply]
+      obtain ⟨r, hr⟩ := hc2 j
+      omega
+  · -- `Â₀ ∪ {0} ⊆ P.toFinset`
+    apply subset_unpack_toFinset (P₀ := P₀.liveStep k)
+      (by linarith : (0 : ℤ) < H) hdig hbdig
+      (K := (s : ℤ) * n + H / 2) (Kx := (n : ℤ))
+    · -- `ϕ(Â₀ ∪ {0}) ⊆ (P₀.liveStep k).toFinset`
+      intro x hxT
+      rw [Finset.mem_union] at hxT
+      rcases hxT with hx | hx
+      · have hxx := hsub x hx
+        rwa [liveStep_toFinset P₀ hk]
+      · rw [Finset.mem_singleton] at hx
+        subst hx
+        rw [packVec_zero]
+        show (fun _ : Fin 1 ↦ (0 : ℤ)) ∈ (P₀.liveStep k).toFinset
+        rwa [liveStep_toFinset P₀ hk]
+    · -- decoded points bounded by `sn + H/2`
+      intro n' hn' j
+      have hn's : n' ∈ ((P₀.liveStep k).widthScale k).coeffs := by
+        rw [mem_coeffs] at hn' ⊢
+        intro i
+        simp only [widthScale_width, liveStep_width]
+        have hle : P₀.width i ≤ k * P₀.width i := Nat.le_mul_of_pos_left _ hk
+        have h2 : n' i < P₀.width i := by
+          have := hn' i
+          simpa only [liveStep_width] using this
+        omega
+      have hkn := key _ n' hn's rfl
+      have hev' : (unpack dig bdig (P₀.liveStep k).width).eval n' =
+          u n' - tdig := hkn
+      rw [hev']
+      show |(u n' - tdig) j| ≤ (s : ℤ) * n + H / 2
+      rw [Pi.sub_apply]
+      exact le_trans abs_sub_le_abs_add (add_le_add (hub n' hn's j) (htdb j))
+    · -- `Â₀ ∪ {0}` points bounded by `n`
+      intro x hx j
+      rw [Finset.mem_union] at hx
+      rcases hx with hx | hx
+      · have h1 := (hÂ x hx j).1
+        have h2 := (hÂ x hx j).2
+        have hn0 : (0 : ℤ) ≤ (n : ℤ) := Nat.cast_nonneg _
+        exact abs_le.mpr ⟨by linarith, h2⟩
+      · rw [Finset.mem_singleton] at hx
+        subst hx
+        simp only [Pi.zero_apply, abs_zero]
+        positivity
+    · -- `(sn + H/2) + n < H`
+      have h2 : 2 * ((s : ℤ) + 1) * ((n : ℤ) + 1) < H := by nlinarith [h16]
+      have h3 : 2 * ((s : ℤ) * n) + 2 * (n : ℤ) + 2 < H := by
+        have hnn : (0 : ℤ) ≤ (s : ℤ) := Nat.cast_nonneg _
+        nlinarith [h2, hnn]
+      omega
+  · -- `((P.widthScale k).translate tdig).toFinset ⊆ Σ(A'₀)`
+    intro y hy
+    obtain ⟨n', hn', hny⟩ := Finset.mem_image.mp hy
+    have hmem : n' ∈ ((P₀.liveStep k).widthScale k).coeffs := by
+      have h2 := hn'
+      rw [translate_coeffs] at h2
+      rw [mem_coeffs] at h2 ⊢
+      intro i
+      have h3 : n' i < k * P₀.width i := by
+        have := h2 i
+        simpa only [widthScale_width, unpack_width] using this
+      simp only [widthScale_width, liveStep_width]
+      exact h3
+    have hkn := key _ n' hmem rfl
+    have hev' : ((unpack dig bdig P₀.width).widthScale k).eval n' =
+        u n' - tdig := hkn
+    subst hny
+    rw [translate_eval]
+    have hstep : tdig + (u n' - tdig) = u n' := by abel
+    rw [hev', hstep]
+    exact humem n' hmem
+  · -- `(P.widthScale k).Proper` via `Proper.unpack` on the scaled live GAP
+    have hdig' : ∀ i, packVec H (dig i) =
+        ((P₀.liveStep k).widthScale k).step i 0 := hdig
+    have hbdig' : packVec H bdig = ((P₀.liveStep k).widthScale k).base 0 := hbdig
+    have hQp : ((P₀.liveStep k).widthScale k).Proper :=
+      liveStep_widthScale_proper P₀ k hkP₀
+    have hdec : (unpack dig bdig ((P₀.liveStep k).widthScale k).width).Proper :=
+      Proper.unpack (P₀ := (P₀.liveStep k).widthScale k) hdig' hbdig' hQp
+    exact hdec
 
 /-- **Residual input — the unanchored-box lift.**  If the Appendix-A
 conclusion holds for the anchored translate `A₀ = A − lo`, it lifts to `A`
@@ -1655,6 +2383,50 @@ theorem cfp_main {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1) :
                 (P.widthScale k).Proper := by
   sorry
 
+/-- **CFP23 main theorem, centred form** — the strengthening of `cfp_main`
+needed by the Appendix-A decode (`appendix_decode`).  Same content as
+`cfp_main`, plus two `packVec`-digit conclusions that the paper's version
+gets for free because CFP23's `P` may be taken *centred at the origin*
+(i.e. with odd widths, `x ↦ -x` a symmetry):
+
+* `tdig : Fin ℓ → ℤ` decodes the translate `t 0` with `|tdig j| ≤ H/2`
+  (any translate may be shifted into the fundamental domain
+  `(−H/2, H/2]` without changing the subset-sum containment, since the
+  decode happens through `packVec`);
+* `cd : Fin ℓ → ℤ` is a small *even* digit vector for the diameter
+  `Σᵢ (wᵢ − 1) • stepᵢ` of `P`: centring makes the diameter twice the
+  centre, hence componentwise even.  The caller supplies the bound `M`.
+
+This is quoted as a black box, like `cfp_main` (it is the same external
+theorem in centred form). -/
+theorem cfp_main_centered {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1)
+    {ℓ : ℕ} :
+    ∃ c d : ℝ, 0 < c ∧ 0 < d ∧
+      ∀ (A : Finset (Fin 1 → ℤ)) (n s : ℕ) (H : ℤ) (M : ℤ),
+        A.Nonempty →
+        (∀ a ∈ A, 0 ≤ a 0 ∧ a 0 ≤ (n : ℤ)) →
+        (n : ℝ) ≤ (A.card : ℝ) ^ β →
+        (A.card : ℝ) ^ η ≤ s →
+        (s : ℝ) ≤ c * A.card / Real.log A.card →
+        ∃ (Â : Finset (Fin 1 → ℤ)) (d' : ℕ) (P : GAP 1 d'),
+          Â ⊆ A ∧
+          (A.card : ℝ) - c⁻¹ * s * Real.log A.card ≤ (Â.card : ℝ) ∧
+          (d' : ℝ) ≤ d ∧
+          P.Symmetric ∧ P.Homogeneous ∧ P.Proper ∧
+          (Â ∪ {0}) ⊆ P.toFinset ∧
+          ∃ A' ⊆ Â, A'.card ≤ s ∧
+            ∃ k : ℕ, 0 < k ∧ (k : ℝ) ≤ c * s ∧
+              ∃ t : Fin 1 → ℤ,
+                ((P.widthScale k).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
+                (P.widthScale k).Proper ∧
+                ∃ tdig : Fin ℓ → ℤ, packVec H tdig = t 0 ∧
+                  (∀ j, |tdig j| ≤ H / 2) ∧
+                  ∃ cd : Fin ℓ → ℤ, (∀ j, 2 ∣ cd j) ∧
+                    (∀ j, |cd j| ≤ M) ∧
+                    packVec H cd =
+                      (∑ i, ((P.width i - 1 : ℕ) : ℤ) • P.step i) 0 := by
+  sorry
+
 set_option maxHeartbeats 800000 in
 /-- **Theorem 3 (CFP structure theorem)**.  For `ℓ, β > 1` and `0 < η < 1`
 there are `c, d > 0` such that for any `A ⊆ B ⊆ ℤ^ℓ`, `|A| = m`, `|B| ≤ m^β`
@@ -1721,7 +2493,8 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
   -- range is `n·H^ℓ = n^{10ℓ⁴ + 1}` with `H = n^κ`, `κ = 10ℓ³` a high power
   -- of the box scale); `cfp_main` is applied at that exponent.
   obtain ⟨c, d, hc, hd, hcfp⟩ :=
-    cfp_main (β := β * (10 * (ℓ : ℝ) ^ 4 + 1)) (by
+    cfp_main_centered (ℓ := ℓ)
+      (β := β * (10 * (ℓ : ℝ) ^ 4 + 1)) (by
       have h10 : (1 : ℝ) ≤ 10 * (ℓ : ℝ) ^ 4 + 1 := by
         have h0 : (0 : ℝ) ≤ (ℓ : ℝ) ^ 4 := pow_nonneg (Nat.cast_nonneg _) 4
         linarith
@@ -1773,8 +2546,8 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
       rcases lt_or_ge A.card 2 with h | h
       · have h1 : A.card = 1 := by
           have := Finset.card_pos.mpr ⟨a₀, ha₀⟩; omega
-        simp only [h1, Nat.cast_one, Real.log_one, div_zero, Real.one_rpow,
-          Nat.cast_zero] at hs1 hs2
+        simp only [h1, Nat.cast_one, Real.log_one, div_zero, Real.one_rpow]
+          at hs1 hs2
         linarith
       · exact h
     have hBn : A.card ≤ n := by
@@ -1889,8 +2662,9 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
     have hs1' : (A₀'.card : ℝ) ^ η ≤ (s : ℝ) := by rwa [hA₀'card]
     have hs2' : (s : ℝ) ≤ c * A₀'.card / Real.log A₀'.card := by rwa [hA₀'card]
     obtain ⟨Â₀', d', P₀, hÂ₀'sub, hÂ₀'card, hd'le, hP₀s, hP₀h, hP₀p, hmemP₀,
-      A'₀', hA'₀'sub, hA'₀'card, k, hk0, hkle, t₀, hcont₀, hkP₀⟩ :=
-      hcfp A₀' n₀ s hA₀'ne hA₀'bnd hn₀le hs1' hs2'
+      A'₀', hA'₀'sub, hA'₀'card, k, hk0, hkle, t₀, hcont₀, hkP₀,
+      tdig₀, htdpk, htdb, cd₀, hcd2, hcdb, hcdpk⟩ :=
+      hcfp A₀' n₀ s H (2 * (s : ℤ) * (n : ℤ)) hA₀'ne hA₀'bnd hn₀le hs1' hs2'
     -- pull back through `ϕ`
     have hÂ₀'sub' : Â₀' ⊆ A₀.image (fun a ↦ fun _ : Fin 1 ↦ packVec H a) := by
       rw [← hA₀'def]
@@ -2026,7 +2800,8 @@ theorem cfp_structure (ℓ : ℕ) {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (h
         (fun a ha j ↦ hA₀bnd a (hÂ₀sub ha) j)
         (fun a ha j ↦ hA₀bnd a (hA'₀sub ha) j)
         (by rw [hA'₀card]; exact_mod_cast hA'₀'card)
-        hP₀p hP₀s hsub h0 hk0 hcontP₀ hdom
+        hP₀p hsub h0 hk0 hcontP₀ hkP₀
+        ⟨tdig₀, htdpk, htdb⟩ ⟨cd₀, hcd2, hcdb, hcdpk⟩ hdom
     obtain ⟨P', hP's, hP'mem, t', hcont', hkP'⟩ :=
       cfp_unshift (P := P) (lo := lo) (k := k) (Â₀ := Â₀) (A'₀ := A'₀)
         (tdig := tdig) hPmem0 hPs hcontP hkP

@@ -2232,7 +2232,328 @@ private theorem exists_cap_direction {ι : Type*} [DecidableEq ι]
         (2 * d) * (4 * R * Real.sqrt d / u) ^ (d - 1) * J.card ∧
       ∀ i ∈ J, 0 < dot v (x i) ∧
         ∀ w : Fin d → ℝ, dot w v = 0 → |dot w (x i)| ≤ u * l2norm w := by
-  sorry
+  obtain ⟨n, rfl⟩ : ∃ n, d = n + 1 := ⟨d - 1, (Nat.sub_add_cancel hd).symm⟩
+  classical
+  have hdpos : (0 : ℝ) < n + 1 := by positivity
+  have hsqrtd : 0 < Real.sqrt (n + 1) := Real.sqrt_pos.mpr hdpos
+  -- The bin width in ratio space.
+  set u' : ℝ := u / (R * Real.sqrt (n + 1)) with hu'def
+  have hu' : 0 < u' := div_pos hu (mul_pos hR hsqrtd)
+  set B : ℕ := ⌊2 / u'⌋₊ + 1 with hBdef
+  have hB : 0 < B := Nat.succ_pos _
+  haveI : Nonempty (Fin B) := ⟨⟨0, hB⟩⟩
+  haveI : Nonempty (Fin (n + 1)) := ⟨⟨0, Nat.succ_pos n⟩⟩
+  haveI : Nonempty (Fin n → Fin B) := ⟨fun _ ↦ ⟨0, hB⟩⟩
+  haveI : Nonempty (Fin (n + 1) × Bool × (Fin n → Fin B)) :=
+    ⟨⟨⟨0, Nat.succ_pos n⟩, true, fun _ ↦ ⟨0, hB⟩⟩⟩
+  -- For each `i`, a coordinate `kOf i` maximizing `|x i ·|`.
+  have harg : ∀ i, ∃ j : Fin (n + 1), ∀ l, |(x i) l| ≤ |(x i) j| := fun i ↦ by
+    obtain ⟨j, _, hj⟩ := Finset.exists_max_image Finset.univ (fun j ↦ |(x i) j|)
+      Finset.univ_nonempty
+    exact ⟨j, fun l ↦ hj l (Finset.mem_univ l)⟩
+  classical
+  set kOf : ι → Fin (n + 1) := fun i ↦ Classical.choose (harg i) with hkOfdef
+  have hkOf : ∀ i, ∀ l, |(x i) l| ≤ |(x i) (kOf i)| :=
+    fun i ↦ Classical.choose_spec (harg i)
+  -- `lam i = ‖x i‖∞`, the maximal coordinate.
+  set lam : ι → ℝ := fun i ↦ |(x i) (kOf i)| with hlamdef
+  have hlam : ∀ i ∈ I, 0 < lam i := by
+    intro i hi
+    obtain ⟨j, hj⟩ := Function.ne_iff.mp (hne i hi)
+    have : (x i) j ≠ 0 := by simpa using hj
+    rw [hlamdef]
+    exact lt_of_lt_of_le (abs_pos.mpr this) (hkOf i j)
+  -- The sign `sOf i = ±1` of the dominant coordinate.
+  set sOf : ι → ℝ := fun i ↦ if 0 ≤ (x i) (kOf i) then 1 else -1 with hsOfdef
+  have hsOf_abs : ∀ i, sOf i * (x i) (kOf i) = lam i := by
+    intro i
+    simp only [hsOfdef, hlamdef]
+    by_cases h : 0 ≤ (x i) (kOf i)
+    · rw [if_pos h, one_mul, abs_of_nonneg h]
+    · have h' : (x i) (kOf i) < 0 := lt_of_not_ge h
+      rw [if_neg h, neg_mul, one_mul, abs_of_neg h']
+  have hsOf_abs1 : ∀ i, |sOf i| = 1 := fun i ↦ by
+    simp only [hsOfdef]
+    split_ifs <;> simp
+  -- The bin index of the ratio `s·xⱼ/λ` for `j ≠ k`.
+  set binOf : ι → Fin n → ℕ := fun i j' ↦
+    ⌊(sOf i * (x i) ((kOf i).succAbove j') / lam i + 1) / u'⌋₊ with hbindef
+  have hbinlt : ∀ i ∈ I, ∀ j', binOf i j' < B := by
+    intro i hi j'
+    have hle : |sOf i * (x i) ((kOf i).succAbove j') / lam i| ≤ 1 := by
+      have h1 : |sOf i * (x i) ((kOf i).succAbove j') / lam i| =
+          |(x i) ((kOf i).succAbove j')| / lam i := by
+        rw [abs_div, abs_mul, abs_of_nonneg (hlam i hi).le, hsOf_abs1, one_mul]
+      rw [h1, div_le_one (hlam i hi)]
+      exact hkOf i _
+    have hnn : 0 ≤ sOf i * (x i) ((kOf i).succAbove j') / lam i + 1 := by
+      linarith [(abs_le.mp hle).1]
+    have hlt : (sOf i * (x i) ((kOf i).succAbove j') / lam i + 1) / u' <
+        (B : ℝ) := by
+      have h2 : sOf i * (x i) ((kOf i).succAbove j') / lam i + 1 ≤ 2 := by
+        linarith [abs_le.mp hle |>.2]
+      calc (sOf i * (x i) ((kOf i).succAbove j') / lam i + 1) / u'
+          ≤ 2 / u' := div_le_div_of_nonneg_right h2 hu'.le
+        _ < B := by
+            have hfl := Nat.lt_floor_add_one (2 / u')
+            rw [hBdef]
+            exact_mod_cast hfl
+    have hfl : (⌊(sOf i * (x i) ((kOf i).succAbove j') / lam i + 1) / u'⌋₊ : ℝ) <
+        B := lt_of_le_of_lt (Nat.floor_le (div_nonneg hnn hu'.le)) hlt
+    rw [hbindef]
+    exact_mod_cast hfl
+  -- For `i ∈ I`, `binOf i j' < B`, so clamping is harmless.
+  set zOf : ι → Fin n → Fin B := fun i j' ↦
+    ⟨min (binOf i j') (B - 1), by omega⟩ with hzOfdef
+  have hzOf : ∀ i ∈ I, ∀ j', (zOf i j').val = binOf i j' := fun i hi j' ↦
+    min_eq_left (by have h := hbinlt i hi j'; omega)
+  -- The cell key: dominant coordinate, its sign, and the ratio bins.
+  set keyOf : ι → Fin (n + 1) × Bool × (Fin n → Fin B) := fun i ↦
+    (kOf i, decide (0 ≤ (x i) (kOf i)), zOf i) with hkeydef
+  -- Pigeonhole over the cells.
+  obtain ⟨⟨k, b, z⟩, -, hcard⟩ := exists_fiber_card_ge (s := I)
+    (t := Finset.univ) (f := keyOf) (fun i _ ↦ Finset.mem_univ _)
+    Finset.univ_nonempty
+  set J := I.filter (fun i ↦ keyOf i = (k, b, z)) with hJdef
+  have hJI : J ⊆ I := Finset.filter_subset _ _
+  -- The cell centre `c` and the direction `v`.
+  set ctr : Fin n → ℝ := fun j' ↦ ((z j' : ℕ) : ℝ) * u' - 1 + u' / 2 with hctrdef
+  set c : Fin (n + 1) → ℝ := fun j ↦
+    if h : j ≠ k then ctr ((finSuccAboveEquiv k).symm ⟨j, h⟩) else 0 with hcdef
+  set eₖ : Fin (n + 1) → ℝ := Pi.single k 1 with hekdef
+  set nn : ℝ := l2norm (eₖ + c) with hnndef
+  have hnn : 1 ≤ nn := by
+    have h1 : |(eₖ + c) k| ≤ nn := l2norm_coord_le _ _
+    have hk : (eₖ + c) k = 1 := by
+      have hek1 : eₖ k = 1 := by
+        simp only [hekdef]
+        exact Pi.single_eq_same k 1
+      have hck : c k = 0 := by
+        simp only [hcdef]
+        exact dif_neg (not_not.mpr rfl)
+      rw [Pi.add_apply, hek1, hck, add_zero]
+    rw [hk] at h1
+    simpa using h1
+  have hnnpos : 0 < nn := lt_of_lt_of_le zero_lt_one hnn
+  set s : ℝ := if b then 1 else -1 with hsdef
+  set v : Fin (n + 1) → ℝ := (s / nn) • (eₖ + c) with hvdef
+  have hsne : s ≠ 0 := by
+    simp only [hsdef]; cases b <;> simp
+  have hs2 : s * s = 1 := by
+    simp only [hsdef]; cases b <;> simp
+  have hsabs : |s| = 1 := by
+    simp only [hsdef]; cases b <;> simp
+  -- Properties of `v`.
+  have hv : l2norm v = 1 := by
+    rw [hvdef, l2norm_smul, ← hnndef, abs_div, abs_of_pos hnnpos, hsabs]
+    exact div_mul_cancel₀ _ hnnpos.ne'
+  refine ⟨v, hv, J, hJI, ?_, ?_⟩
+  · -- Cardinality bound.
+    have htcard : (Finset.univ : Finset (Fin (n + 1) × Bool × (Fin n → Fin B))).card
+        = (n + 1) * 2 * B ^ n := by
+      rw [Finset.card_univ, Fintype.card_prod, Fintype.card_prod, Fintype.card_pi,
+        Finset.prod_const, Finset.card_univ]
+      simp only [Fintype.card_fin, Fintype.card_bool]
+      ring
+    have hBbound : (B : ℝ) ≤ 4 * R * Real.sqrt (n + 1) / u := by
+      have h1 : (B : ℝ) ≤ 2 / u' + 1 := by
+        rw [hBdef]
+        push_cast
+        exact add_le_add_left
+          (Nat.floor_le (div_nonneg (by norm_num : (0 : ℝ) ≤ 2) hu'.le)) 1
+      have h2 : (2 : ℝ) / u' = 2 * R * Real.sqrt (n + 1) / u := by
+        have hu0 : u ≠ 0 := hu.ne'
+        have hRsd : R * Real.sqrt (n + 1) ≠ 0 := mul_ne_zero hR.ne' hsqrtd.ne'
+        rw [hu'def]
+        field_simp
+      have h3 : (1 : ℝ) ≤ 2 * R * Real.sqrt (n + 1) / u := by
+        rw [le_div_iff₀ hu, one_mul]
+        have hsd1 : (1:ℝ) ≤ Real.sqrt (n + 1) :=
+          Real.one_le_sqrt.mpr (by exact_mod_cast Nat.le_add_left 1 n)
+        have h4 := mul_nonneg hR.le
+          (show (0:ℝ) ≤ 2 * Real.sqrt (n + 1) - 1 by linarith)
+        linarith [huR]
+      calc (B : ℝ) ≤ 2 / u' + 1 := h1
+        _ = 2 * R * Real.sqrt (n + 1) / u + 1 := by rw [h2]
+        _ ≤ 4 * R * Real.sqrt (n + 1) / u := by
+            rw [show (4 : ℝ) * R * Real.sqrt (n + 1) / u =
+              2 * R * Real.sqrt (n + 1) / u + 2 * R * Real.sqrt (n + 1) / u by ring]
+            linarith
+    rw [htcard] at hcard
+    have hcard' : (I.card : ℝ) ≤ ((n + 1) * 2 * B ^ n : ℕ) * J.card := by
+      exact_mod_cast hcard
+    refine le_trans hcard' ?_
+    have hcast : (((n + 1) * 2 * B ^ n : ℕ) : ℝ) =
+        (2 * (n + 1)) * (B : ℝ) ^ n := by push_cast; ring
+    rw [hcast]
+    push_cast
+    apply mul_le_mul_of_nonneg_right _ (Nat.cast_nonneg _)
+    apply mul_le_mul_of_nonneg_left _ (by positivity : (0:ℝ) ≤ 2 * (↑n + 1))
+    exact pow_le_pow_left₀ (Nat.cast_nonneg _) hBbound _
+  · -- Geometric conclusions for `i ∈ J`.
+    intro i hi
+    have hiI := hJI hi
+    rw [hJdef, Finset.mem_filter] at hi
+    obtain ⟨_, hkey⟩ := hi
+    have hki : kOf i = k := congrArg Prod.fst hkey
+    have hsb : decide (0 ≤ (x i) (kOf i)) = b :=
+      congrArg (Prod.fst ∘ Prod.snd) hkey
+    have hzi : zOf i = z := congrArg (Prod.snd ∘ Prod.snd) hkey
+    have hlami : 0 < lam i := hlam i hiI
+    have hs : sOf i = s := by
+      simp only [hsOfdef, hsdef]
+      cases b
+      · rw [if_neg (decide_eq_false_iff_not.mp hsb)]
+        simp
+      · rw [if_pos (decide_eq_true_eq.mp hsb)]
+        simp
+    have hsk : s * (x i) k = lam i := by
+      have h := hsOf_abs i
+      rw [hs, hki] at h
+      exact h
+    -- The rescaled direction `y = s·xᵢ/λ` satisfies `yₖ = 1` and `yⱼ ≈ cⱼ`.
+    set y : Fin (n + 1) → ℝ := fun j ↦ s * (x i) j / lam i with hydef
+    have hyk : y k = 1 := by
+      have h1 : y k = s * (x i) k / lam i := by simp only [hydef]
+      rw [h1, hsk]
+      exact div_self hlami.ne'
+    -- `c (k.succAbove j') = ctr j'`.
+    have hc : ∀ j' : Fin n, c (k.succAbove j') = ctr j' := by
+      intro j'
+      have hne' : k.succAbove j' ≠ k := Fin.succAbove_ne _ _
+      simp only [hcdef, dif_pos hne']
+      congr 1
+      rw [Equiv.symm_apply_eq, finSuccAboveEquiv_apply]
+    -- Ratio containment: `|yⱼ − cⱼ| ≤ u'/2` for `j ≠ k`.
+    have hyc : ∀ j' : Fin n, |y (k.succAbove j') - ctr j'| ≤ u' / 2 := by
+      intro j'
+      have hzij : binOf i j' = (z j').val := by
+        have h1 : (zOf i j').val = (z j').val :=
+          congrArg Fin.val (congrFun hzi j')
+        rw [hzOf i hiI j'] at h1
+        exact h1
+      set r : ℝ := sOf i * (x i) ((kOf i).succAbove j') / lam i with hrdef
+      have hle : |r| ≤ 1 := by
+        have h1 : |r| = |(x i) ((kOf i).succAbove j')| / lam i := by
+          rw [hrdef, abs_div, abs_mul, abs_of_nonneg hlami.le, hsOf_abs1,
+            one_mul]
+        rw [h1, div_le_one hlami]
+        exact hkOf i _
+      have hnn' : 0 ≤ r + 1 := by linarith [neg_abs_le r]
+      have hfl : ⌊(r + 1) / u'⌋₊ = (z j').val := hzij
+      rw [Nat.floor_eq_iff (div_nonneg hnn' hu'.le)] at hfl
+      obtain ⟨hlo, hhi⟩ := hfl
+      have hlo' : ((z j' : ℕ) : ℝ) * u' ≤ r + 1 := by
+        have h2 := mul_le_mul_of_nonneg_right hlo hu'.le
+        rwa [div_mul_cancel₀ _ hu'.ne'] at h2
+      have hhi' : r + 1 < (((z j' : ℕ) : ℝ) + 1) * u' := by
+        have h2 := mul_lt_mul_of_pos_right hhi hu'
+        rwa [div_mul_cancel₀ _ hu'.ne'] at h2
+      have hyr : y (k.succAbove j') = r := by
+        simp only [hydef, hrdef]
+        rw [hs, hki]
+      have hctr : ctr j' = ((z j' : ℕ) : ℝ) * u' - 1 + u' / 2 := by
+        simp only [hctrdef]
+      rw [hyr, hctr, abs_le]
+      constructor
+      · linarith [hlo']
+      · linarith [hhi']
+    -- The defect `Δ = y − (eₖ + c)` is small in every coordinate.
+    set Δ : Fin (n + 1) → ℝ := fun j ↦ y j - (eₖ + c) j with hΔdef
+    have hΔeq : y = eₖ + c + Δ := by
+      funext j
+      simp only [hΔdef, Pi.add_apply]
+      ring
+    have hΔ : ∀ j, |Δ j| ≤ u' / 2 := by
+      intro j
+      by_cases hjk : j = k
+      · subst j
+        have hek : eₖ k = 1 := by
+          simp only [hekdef]
+          exact Pi.single_eq_same k 1
+        have hck : c k = 0 := by
+          simp only [hcdef]
+          exact dif_neg (not_not.mpr rfl)
+        have h0 : Δ k = 0 := by
+          simp only [hΔdef, Pi.add_apply, hek, hck, hyk]
+          ring
+        rw [h0, abs_zero]
+        exact (half_pos hu').le
+      · obtain ⟨j', rfl⟩ := Fin.exists_succAbove_eq hjk
+        have hek : eₖ (k.succAbove j') = 0 := by
+          simp only [hekdef]
+          exact Pi.single_eq_of_ne (Fin.succAbove_ne k j') 1
+        have hcj : c (k.succAbove j') = ctr j' := hc j'
+        simp only [hΔdef, Pi.add_apply, hek, hcj, zero_add]
+        exact hyc j'
+    have hΔnorm : l2norm Δ ≤ u / (2 * R) := by
+      refine le_trans (l2norm_le_of_bound (half_pos hu').le hΔ) ?_
+      have hsplit : Real.sqrt (n + 1) * (u' / 2) = u / (2 * R) := by
+        have h1 : u' / 2 = u / (2 * R * Real.sqrt (n + 1)) := by
+          rw [hu'def]; ring
+        rw [h1, ← mul_div_assoc, mul_comm (Real.sqrt (n + 1)) u]
+        exact mul_div_mul_right _ _ hsqrtd.ne'
+      push_cast
+      exact hsplit.le
+    have hΔnn : l2norm Δ < nn := by
+      have h1 : u / (2 * R) ≤ 1 / 2 := by
+        rw [show u / (2 * R) = u / R / 2 by rw [div_div, mul_comm R 2]]
+        have h3 : u / R ≤ 1 := (div_le_one hR).mpr huR
+        linarith
+      calc l2norm Δ ≤ u / (2 * R) := hΔnorm
+        _ ≤ 1 / 2 := h1
+        _ < nn := lt_of_lt_of_le (by norm_num) hnn
+    -- `x i = (λ·s) • y`.
+    have hxy : x i = (lam i * s) • y := by
+      funext j
+      show (x i) j = lam i * s * (s * (x i) j / lam i)
+      have h1 : lam i * s * (s * (x i) j / lam i) =
+          (s * s) * ((x i) j) * (lam i / lam i) := by ring
+      rw [h1, div_self hlami.ne', mul_one, hs2, one_mul]
+    refine ⟨?_, ?_⟩
+    · -- `xᵢ · v > 0`.
+      have hnn2 : dot (eₖ + c) (eₖ + c) = nn ^ 2 := dot_self_eq_l2norm_sq _
+      have h1 : dot v (x i) = lam i * (nn ^ 2 + dot (eₖ + c) Δ) / nn := by
+        rw [hvdef, dot_smul_left, hxy, dot_smul_right, hΔeq, dot_add, hnn2]
+        rw [div_mul_eq_mul_div, div_eq_div_iff hnnpos.ne' hnnpos.ne']
+        linear_combination (lam i * (nn ^ 2 + dot (eₖ + c) Δ) * nn) * hs2
+      rw [h1]
+      apply div_pos _ hnnpos
+      apply mul_pos hlami
+      have hδ : -nn * l2norm Δ ≤ dot (eₖ + c) Δ := by
+        have h2 := abs_dot_le_l2 (eₖ + c) Δ
+        linarith [neg_abs_le (dot (eₖ + c) Δ)]
+      nlinarith [hΔnn, hnnpos, mul_pos hnnpos (sub_pos.mpr hΔnn)]
+    · -- `|xᵢ·w| ≤ u·‖w‖` for `w ⟂ v`.
+      intro w hwv
+      have hsnn : s / nn ≠ 0 := div_ne_zero hsne hnnpos.ne'
+      have hwe : dot w (eₖ + c) = 0 := by
+        have h : dot w v = (s / nn) * dot w (eₖ + c) := by
+          rw [hvdef, dot_smul_right]
+        rw [h] at hwv
+        exact (mul_eq_zero.mp hwv).resolve_left hsnn
+      have hwx : dot w (x i) = lam i * s * dot w Δ := by
+        rw [hxy, dot_smul_right, hΔeq, dot_add, hwe, zero_add]
+      rw [hwx, abs_mul, abs_mul, abs_of_pos hlami, hsabs, mul_one]
+      have hlamR : lam i ≤ R := hbound i hiI (kOf i)
+      have h1 : |dot w Δ| ≤ l2norm w * (u / (2 * R)) :=
+        le_trans (abs_dot_le_l2 w Δ)
+          (mul_le_mul_of_nonneg_left hΔnorm (l2norm_nonneg w))
+      calc lam i * |dot w Δ|
+          ≤ lam i * (l2norm w * (u / (2 * R))) :=
+            mul_le_mul_of_nonneg_left h1 hlami.le
+        _ = lam i / (2 * R) * (u * l2norm w) := by ring
+        _ ≤ u * l2norm w := by
+            have hle : lam i / (2 * R) ≤ 1 / 2 := by
+              have h2 : lam i / (2 * R) = lam i / R / 2 := by
+                rw [div_div, mul_comm R 2]
+              rw [h2]
+              have h3 : lam i / R ≤ 1 := (div_le_one hR).mpr hlamR
+              linarith
+            have hX : (0:ℝ) ≤ u * l2norm w := mul_nonneg hu.le (l2norm_nonneg w)
+            have h5 : lam i / (2 * R) * (u * l2norm w) ≤
+                (1 / 2) * (u * l2norm w) := mul_le_mul_of_nonneg_right hle hX
+            linarith
 
 /-- `x ↦ r • x + b` is injective when `r ≠ 0`. -/
 theorem smul_add_injective {r : ℝ} (hr : r ≠ 0) (b : Fin d → ℝ) :
@@ -2525,15 +2846,178 @@ private theorem exists_dyadic_scale (hd : 2 ≤ d) {δ : ℝ} (hδ : 0 < δ)
       _ = δ⁻¹ := mul_one _
   refine (lt_inv_comm₀ ?_ ?_).mpr hgoal <;> positivity
 
-/-- **The boxed case** of `density_increment_core`: `A ⊆ [−1,1]^d`.  This is
-the genuinely hard geometric step of Lemma 1, where the paper's machinery is
-needed: the dyadic `r`-box decomposition (`r ~ δ^{1/d}`), the observation
-that boxes containing more than `δ|A|` points are in "rough convex position"
-(equation (3)), the width/inradius dichotomy for `P = conv(⋃ Bᵢ)`, averaging
-over `SO(d)` to place `~u^{d−1}` of the boundary points `xᵢ` above the cap
-`[−u,u]^{d−1}`, the concave envelope `h`, an application of
-`convex_linear_approx` (Lemma 2), and the volume estimate of the resulting
-graph-slab `Ω'`. -/
+/-! ### Affine-equivalence transport and the cubical kernel
+
+The remaining geometric argument is formulated for the model case
+`Ω = [-1,1]^d` (`density_increment_cube`).  A John-type covering lemma
+(`exists_affine_cover_cube`) places `conv(A)` inside an affine image of the
+cube of comparable volume, and the transport lemmas below pull the cubical
+conclusion back to `Ω`. -/
+
+/-- `dot u` distributes over a linear combination. -/
+private lemma dot_sum_smul {ι : Type*} {s : Finset ι} {c : ι → ℝ}
+    {v : ι → Fin d → ℝ} (u : Fin d → ℝ) :
+    dot u (∑ i ∈ s, c i • v i) = ∑ i ∈ s, c i * dot u (v i) := by
+  simp only [dot, Finset.sum_apply, Pi.smul_apply, smul_eq_mul, Finset.mul_sum]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun i _ ↦ Finset.sum_congr rfl fun j _ ↦ ?_
+  ring
+
+/-- The adjoint direction `u'ᵢ := u · L⁻¹ eᵢ` satisfies `u' · (L x) = u · x`:
+expanding `x = ∑ (Lx)ᵢ • L⁻¹ eᵢ` and taking `dot u` of both sides. -/
+private lemma dot_symm_single (L : (Fin d → ℝ) ≃ₗ[ℝ] (Fin d → ℝ))
+    (u x : Fin d → ℝ) :
+    dot (fun i ↦ dot u (L.symm (Pi.single i (1 : ℝ)))) (L x) = dot u x := by
+  have hx : x = ∑ i : Fin d, (L x) i • L.symm (Pi.single i (1 : ℝ)) := by
+    calc x = L.symm (L x) := (L.symm_apply_apply x).symm
+      _ = L.symm (∑ i : Fin d, (L x) i • Pi.single i (1 : ℝ)) := by
+          rw [← eq_sum_single_smul (L x)]
+      _ = ∑ i : Fin d, L.symm ((L x) i • Pi.single i (1 : ℝ)) :=
+          map_sum _ _ _
+      _ = ∑ i : Fin d, (L x) i • L.symm (Pi.single i (1 : ℝ)) :=
+          Finset.sum_congr rfl fun i _ ↦ map_smul _ _ _
+  conv_rhs => rw [hx]
+  rw [dot_sum_smul]
+  simp only [dot]
+  exact Finset.sum_congr rfl fun i _ ↦ mul_comm _ _
+
+/-- `x ↦ L x + b` is injective for a linear equivalence `L`. -/
+theorem linear_add_injective (L : (Fin d → ℝ) ≃ₗ[ℝ] (Fin d → ℝ))
+    (b : Fin d → ℝ) : Function.Injective fun x : Fin d → ℝ ↦ L x + b := by
+  intro x y h
+  have h2 := congrArg (fun z : Fin d → ℝ ↦ L.symm (z - b)) h
+  simpa only [add_sub_cancel_right, LinearEquiv.symm_apply_apply] using h2
+
+/-- `x ↦ L x + b` preserves affine combinations. -/
+theorem linear_add_affine (L : (Fin d → ℝ) ≃ₗ[ℝ] (Fin d → ℝ))
+    (b x y : Fin d → ℝ) {a b' : ℝ} (hab : a + b' = 1) :
+    L (a • x + b' • y) + b = a • (L x + b) + b' • (L y + b) := by
+  rw [map_add, map_smul, map_smul]
+  funext i
+  simp only [Pi.add_apply, Pi.smul_apply, smul_eq_mul]
+  have h1 : b i = (a + b') * b i := by rw [hab, one_mul]
+  nth_rewrite 1 [h1]
+  ring
+
+/-- Images of convex sets under `x ↦ L x + b` are convex. -/
+theorem convex_linear_add_image (L : (Fin d → ℝ) ≃ₗ[ℝ] (Fin d → ℝ))
+    (b : Fin d → ℝ) {s : Set (Fin d → ℝ)} (hs : Convex ℝ s) :
+    Convex ℝ ((fun x ↦ L x + b) '' s) := by
+  rintro _ ⟨x, hx, rfl⟩ _ ⟨y, hy, rfl⟩ a b' ha hb' hab
+  exact ⟨a • x + b' • y, hs hx hy ha hb' hab, linear_add_affine L b x y hab⟩
+
+/-- The affine map `x ↦ L x + b` multiplies volume by `|det L|`. -/
+theorem volume_linear_add_image (L : (Fin d → ℝ) ≃ₗ[ℝ] (Fin d → ℝ))
+    (b : Fin d → ℝ) (s : Set (Fin d → ℝ)) :
+    volume ((fun x ↦ L x + b) '' s) =
+      ENNReal.ofReal |LinearMap.det (L : (Fin d → ℝ) →ₗ[ℝ] (Fin d → ℝ))| *
+        volume s := by
+  have hcomp : (fun x : Fin d → ℝ ↦ L x + b) = (· + b) ∘ (L ·) := rfl
+  rw [hcomp, Set.image_comp, Set.image_add_right, measure_preimage_add_right]
+  exact MeasureTheory.Measure.addHaar_image_linearMap volume
+    (L : (Fin d → ℝ) →ₗ[ℝ] (Fin d → ℝ)) s
+
+/-- `δ`-convex position is preserved by any affine equivalence
+`x ↦ L x + b`: a half-space at `L a + b` with direction `u'` pulls back to
+the half-space at `a` with direction `u'ᵢ := u · L⁻¹ eᵢ`. -/
+theorem InDeltaConvexPosition.image_linear_add {A : Finset (Fin d → ℝ)}
+    {δ : ℝ} (L : (Fin d → ℝ) ≃ₗ[ℝ] (Fin d → ℝ)) (b : Fin d → ℝ)
+    (h : InDeltaConvexPosition A δ) :
+    InDeltaConvexPosition (A.image fun x ↦ L x + b) δ := by
+  classical
+  have hinj := linear_add_injective L b
+  intro a' ha'
+  obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp ha'
+  obtain ⟨u, t, ht, hcap⟩ := h a ha
+  set u' : Fin d → ℝ := fun i ↦ dot u (L.symm (Pi.single i (1 : ℝ))) with hu'
+  have hkey : ∀ x : Fin d → ℝ, dot u' (L x + b) = dot u x + dot u' b := by
+    intro x
+    rw [dot_add]
+    congr 1
+    rw [hu']
+    exact dot_symm_single L u x
+  refine ⟨u', t + dot u' b, ?_, ?_⟩
+  · rw [hkey]
+    exact add_le_add ht le_rfl
+  · have hcardeq : ((A.image fun x ↦ L x + b).filter
+        fun x ↦ t + dot u' b ≤ dot u' x).card =
+        (A.filter fun a'' ↦ t ≤ dot u a'').card := by
+      rw [Finset.filter_image, Finset.card_image_of_injective _ hinj]
+      congr 1
+      ext a''
+      simp only [Finset.mem_filter, and_congr_right_iff]
+      intro _
+      rw [hkey]
+      exact add_le_add_iff_right _
+    rw [hcardeq, Finset.card_image_of_injective _ hinj]
+    exact hcap
+
+/-- **John-type covering (weak form).**  Every convex `K ⊆ [-1,1]^d` of
+positive volume is contained in an affine image `{L y + c : y ∈ [-1,1]^d}` of
+the cube whose volume is at most `C·vol K`, where `C` depends only on `d`.
+
+Standard proof: take a maximum-volume inscribed simplex `S ⊆ K` (a
+near-maximiser suffices if `K` is not closed); then `K` lies in the `-d`-fold
+homothetic copy of `S` about one vertex, which is a parallelepiped image of
+the cube of volume `2^d·d!·d^d·vol S ≤ C·vol K`.  Alternatively one may
+invoke John's theorem on the maximal-volume inscribed ellipsoid. -/
+private theorem exists_affine_cover_cube (d : ℕ) :
+    ∃ C : ℝ, 0 < C ∧ 1 ≤ C ∧ ∀ K : Set (Fin d → ℝ), Convex ℝ K →
+      K ⊆ (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1) 1) →
+      (0 : ENNReal) < volume K →
+      ∃ L : (Fin d → ℝ) ≃ₗ[ℝ] (Fin d → ℝ), ∃ c : Fin d → ℝ,
+        K ⊆ (fun y ↦ L y + c) ''
+            (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1) 1) ∧
+        ENNReal.ofReal |LinearMap.det (L : (Fin d → ℝ) →ₗ[ℝ] (Fin d → ℝ))| *
+            volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1)
+          ≤ ENNReal.ofReal C * volume K := sorry
+
+/-- **The cubical kernel of Lemma 1.**  This is the geometric heart of the
+argument, specialised to `Ω = [-1,1]^d` (so that `volume Ω = 2^d`): for all
+sufficiently small `δ`, every sufficiently large `A ⊆ [-1,1]^d` in δ-convex
+position admits a convex `Ω'` of volume `≤ η·2^d` capturing
+`η^{(d-1)/(d+1)+ε}|A|` points, with `η ∈ [δ, δ^g]`,
+`g = min(ε/5 + 1/8, 1/4)`.
+
+The paper's proof (arXiv:2410.14624v2, proof of Lemma 1) proceeds as follows
+and uses the infrastructure already formalised above:
+- `exists_dyadic_scale` + `exists_dyadic_box_scale` produce a family `I` of
+  dyadic boxes of side `r ~ δ^{1/d}`, each containing `~|A|/2^j` points,
+  covering `≥ 3|A|/(4J)` points (`J = d(k+2)+2 ~ log(1/δ)`);
+- `dilatedBox_notsubset_convexHull` + `exists_mem_frontier_centeredBox`
+  produce, for each `l ∈ I`, a boundary point `x_l` of
+  `P = closure (conv (⋃ B_l))` inside the `4√d r`-dilated box;
+- a width dichotomy for `P`: if `P` has width `< w₀ ~ δ^g` in some direction,
+  `Ω' := P` already works (its volume is `≲ w₀` since `P ⊆ [-2,2]^d`);
+  otherwise `P` contains a ball of radius `≳ w₀`;
+- `exists_cap_direction` (the formalised replacement for averaging over
+  `SO(d)`) selects a direction `v` and `~u^{d-1}|I|` boundary points with
+  transverse components `≤ u`;
+- after rotating `v` to the last coordinate, `upperEnv` (proved concave on
+  its cell decomposition) controls `P`, and `convex_linear_approx` (Lemma 2)
+  yields a graph-slab `Ω'` of volume `~u^{d-1} m^{-(d+1)} ~ δ^g·2^d`
+  containing the claimed number of points. -/
+private theorem density_increment_cube (d : ℕ) (hd : 2 ≤ d) {ε : ℝ}
+    (hε : 0 < ε) :
+    ∃ δ₀ : ℝ, 0 < δ₀ ∧ ∀ δ : ℝ, 0 < δ → δ < δ₀ →
+      ∃ M : ℕ, ∀ A : Finset (Fin d → ℝ),
+        (∀ a ∈ A, ∀ i : Fin d, a i ∈ Set.Icc (-1) 1) →
+        InDeltaConvexPosition A δ → M ≤ A.card →
+        ∃ η : ℝ, δ ≤ η ∧ η ≤ δ ^ (min (ε / 5 + 1 / 8) (1 / 4)) ∧
+          ∃ Ω' : Set (Fin d → ℝ), Convex ℝ Ω' ∧
+            volume Ω' ≤ ENNReal.ofReal η *
+              volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1) ∧
+            η ^ ((d - 1 : ℝ) / (d + 1) + ε) * A.card ≤
+              ((A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω').card : ℝ) := sorry
+
+/-- **The boxed case** of `density_increment_core`: `A ⊆ [−1,1]^d`.  The
+proof reduces to the cubical kernel `density_increment_cube`: a John-type
+covering (`exists_affine_cover_cube`) embeds `conv(A)` in an affine image
+`F(cube)` of the cube of volume `≤ C·vol Ω`, the kernel is applied to the
+transported set `F⁻¹ A ⊆ cube`, and the resulting `Ω'` is pulled back through
+`F`.  The constants are tracked explicitly: with `ε₁ = min ε (1/(d+1))` the
+kernel is invoked at `ε₁/2`, giving `η ∈ [δ, δ^{ε₁/10+1/8}]`, and the final
+answer is `η_f = C·η ∈ [δ, δ^{ε₁/10}]`, so `τ = ε₁/10`. -/
 private theorem density_increment_core_boxed (d : ℕ) (hd : 2 ≤ d) {ε : ℝ}
     (hε : 0 < ε) :
     ∃ τ : ℝ, 0 < τ ∧ τ < 1 ∧ ∃ δ₀ : ℝ, 0 < δ₀ ∧ ∀ δ : ℝ, 0 < δ → δ < δ₀ →
@@ -2546,7 +3030,211 @@ private theorem density_increment_core_boxed (d : ℕ) (hd : 2 ≤ d) {ε : ℝ}
         ENNReal.ofReal δ * volume Ω <
           volume (convexHull ℝ (A : Set (Fin d → ℝ))) →
         DensityIncrementGoal d δ τ ε Ω A := by
-  sorry
+  classical
+  obtain ⟨C, hCpos, hC1, hCov⟩ := exists_affine_cover_cube d
+  set ε₁ : ℝ := min ε (1 / ((d : ℝ) + 1)) with hε₁def
+  have hd2 : (2 : ℝ) ≤ d := by exact_mod_cast hd
+  have hε₁pos : 0 < ε₁ := lt_min hε (by positivity)
+  have hε₁le : ε₁ ≤ ε := min_le_left _ _
+  have hε₁d : ε₁ ≤ 1 / ((d : ℝ) + 1) := min_le_right _ _
+  have hε₁1 : ε₁ ≤ 1 := le_trans hε₁d (by
+    rw [div_le_one (by positivity : (0 : ℝ) < (d : ℝ) + 1)]
+    linarith)
+  obtain ⟨δ₀k, hδ₀k, Hk⟩ := density_increment_cube d hd (half_pos hε₁pos)
+  set τ : ℝ := ε₁ / 10 with hτdef
+  have hτpos : 0 < τ := by positivity
+  have hτ1 : τ < 1 := by rw [hτdef]; linarith
+  set δ₀ : ℝ := min δ₀k (min (1 / 2) (min (C ^ (-8 : ℝ))
+    (C ^ (-80 * (((d : ℝ) - 1) / ((d : ℝ) + 1) + ε₁) / (ε₁ * (4 * ε₁ + 5))))))
+    with hδ₀def
+  have hδ₀pos : 0 < δ₀ := by
+    rw [hδ₀def]
+    exact lt_min hδ₀k (lt_min (by norm_num)
+      (lt_min (Real.rpow_pos_of_pos hCpos _) (Real.rpow_pos_of_pos hCpos _)))
+  refine ⟨τ, hτpos, hτ1, δ₀, hδ₀pos, fun δ hδ0 hδδ₀ ↦ ?_⟩
+  have hδ2 : δ < 1 / 2 := lt_of_lt_of_le hδδ₀
+    (le_trans (min_le_right _ _) (min_le_left _ _))
+  have hδ1 : δ < 1 := by linarith
+  have hδk : δ < δ₀k := lt_of_lt_of_le hδδ₀ (min_le_left _ _)
+  have hδC8 : δ ≤ C ^ (-8 : ℝ) :=
+    le_trans (le_trans hδδ₀.le (le_trans (min_le_right _ _)
+      (min_le_right _ _))) (min_le_left _ _)
+  have hδCe : δ ≤ C ^
+      (-80 * (((d : ℝ) - 1) / ((d : ℝ) + 1) + ε₁) / (ε₁ * (4 * ε₁ + 5))) :=
+    le_trans (le_trans hδδ₀.le (le_trans (min_le_right _ _)
+      (min_le_right _ _))) (min_le_right _ _)
+  obtain ⟨M, HkM⟩ := Hk δ hδ0 hδk
+  refine ⟨M, fun Ω A hΩconv hint hAO hA1 hcp hM hvolΩ hhull ↦ ?_⟩
+  set convA : Set (Fin d → ℝ) := convexHull ℝ (A : Set (Fin d → ℝ)) with hconvA
+  have hconvAΩ : convA ⊆ Ω :=
+    convexHull_min (fun x hx ↦ hAO x (Finset.mem_coe.mp hx)) hΩconv
+  have hconvAcube : convA ⊆
+      Set.pi Set.univ (fun _ : Fin d ↦ Set.Icc (-1) 1) :=
+    convexHull_min (fun x hx ↦ Set.mem_univ_pi.mpr fun i ↦
+      hA1 x (Finset.mem_coe.mp hx) i) (convex_pi fun i _ ↦ convex_Icc _ _)
+  have hconvApos : (0 : ENNReal) < volume convA := lt_of_le_of_lt zero_le hhull
+  obtain ⟨L, c, hLsub, hLvol⟩ :=
+    hCov convA (convex_convexHull _ _) hconvAcube hconvApos
+  -- The affine equivalence `G` pulling the covering parallelepiped back to
+  -- the cube: `G(Ly + c) = y` and `L(Gx) + c = x`.
+  set G : (Fin d → ℝ) → Fin d → ℝ := fun x ↦ L.symm x + -L.symm c with hGdef
+  have hGinj : Function.Injective G := linear_add_injective L.symm (-L.symm c)
+  have hGL : ∀ y : Fin d → ℝ, G (L y + c) = y := by
+    intro y
+    show L.symm (L y + c) + -L.symm c = y
+    rw [map_add, L.symm_apply_apply]
+    simp
+  have hGc : ∀ x : Fin d → ℝ, L (G x) + c = x := by
+    intro x
+    show L (L.symm x + -L.symm c) + c = x
+    rw [map_add, map_neg]
+    simp
+  have hGcube : ∀ a ∈ A,
+      G a ∈ Set.pi Set.univ (fun _ : Fin d ↦ Set.Icc (-1) 1) := by
+    intro a ha
+    obtain ⟨y, hy, hya⟩ := hLsub
+      (subset_convexHull ℝ _ (Finset.mem_coe.mpr ha))
+    rw [← hya, hGL]
+    exact hy
+  set A' : Finset (Fin d → ℝ) := A.image G with hA'def
+  have hA'card : A'.card = A.card := Finset.card_image_of_injective _ hGinj
+  have hA'1 : ∀ a ∈ A', ∀ i : Fin d, a i ∈ Set.Icc (-1) 1 := by
+    intro a' ha' i
+    obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp ha'
+    exact Set.mem_univ_pi.mp (hGcube a ha) i
+  have hA'cp : InDeltaConvexPosition A' δ := by
+    rw [hA'def]
+    exact InDeltaConvexPosition.image_linear_add L.symm (-L.symm c) hcp
+  obtain ⟨η, hηδ, hηup, Ω', hΩ'conv, hΩ'vol, hΩ'cnt⟩ :=
+    HkM A' hA'1 hA'cp (hA'card ▸ hM)
+  -- The kernel's exponent bound is `min(ε₁/10 + 1/8, 1/4) = ε₁/10 + 1/8`.
+  have hg : min (ε₁ / 2 / 5 + 1 / 8) (1 / 4) = ε₁ / 10 + 1 / 8 := by
+    rw [min_eq_left (by linarith : ε₁ / 2 / 5 + 1 / 8 ≤ 1 / 4)]
+    ring
+  rw [hg] at hηup
+  have hηpos : 0 < η := lt_of_lt_of_le hδ0 hηδ
+  set ηf : ℝ := C * η with hηfdef
+  have hηfδ : δ ≤ ηf :=
+    le_trans hηδ (le_mul_of_one_le_left hηpos.le hC1)
+  have hηfτ : ηf ≤ δ ^ τ := by
+    have hCδ : C ≤ δ ^ (-(1 / 8 : ℝ)) := by
+      have h := Real.rpow_le_rpow hδ0.le hδC8 (by norm_num : (0:ℝ) ≤ 1/8)
+      rw [← Real.rpow_mul hCpos.le,
+        show (-8 : ℝ) * (1 / 8) = -1 by norm_num, Real.rpow_neg_one] at h
+      have h2 := inv_anti₀ (Real.rpow_pos_of_pos hδ0 (1 / 8)) h
+      rwa [inv_inv, ← Real.rpow_neg hδ0.le] at h2
+    calc ηf = C * η := hηfdef
+      _ ≤ C * δ ^ (ε₁ / 10 + 1 / 8) :=
+          mul_le_mul_of_nonneg_left hηup hCpos.le
+      _ ≤ δ ^ (-(1 / 8 : ℝ)) * δ ^ (ε₁ / 10 + 1 / 8) :=
+          mul_le_mul_of_nonneg_right hCδ (Real.rpow_nonneg hδ0.le _)
+      _ = δ ^ τ := by
+          rw [← Real.rpow_add hδ0, hτdef]
+          congr 1
+          ring
+  set Ω'' : Set (Fin d → ℝ) := (fun y ↦ L y + c) '' Ω' ∩ Ω with hΩ''def
+  have hΩ''conv : Convex ℝ Ω'' :=
+    (convex_linear_add_image L c hΩ'conv).inter hΩconv
+  have hΩ''sub : Ω'' ⊆ Ω := Set.inter_subset_right
+  have hvol'' : volume Ω'' ≤ ENNReal.ofReal ηf * volume Ω := by
+    have hvol1 : volume ((fun y ↦ L y + c) '' Ω') ≤
+        ENNReal.ofReal |LinearMap.det (L : (Fin d → ℝ) →ₗ[ℝ] (Fin d → ℝ))| *
+          (ENNReal.ofReal η *
+            volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1)) := by
+      rw [volume_linear_add_image L c Ω']
+      exact mul_le_mul_right hΩ'vol _
+    have h3 : ENNReal.ofReal
+          |LinearMap.det (L : (Fin d → ℝ) →ₗ[ℝ] (Fin d → ℝ))| *
+          volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1) ≤
+        ENNReal.ofReal C * volume Ω :=
+      le_trans hLvol (mul_le_mul_right (measure_mono hconvAΩ) _)
+    calc volume Ω'' ≤ volume ((fun y ↦ L y + c) '' Ω') :=
+            measure_mono Set.inter_subset_left
+      _ ≤ ENNReal.ofReal
+            |LinearMap.det (L : (Fin d → ℝ) →ₗ[ℝ] (Fin d → ℝ))| *
+            (ENNReal.ofReal η *
+              volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1)) := hvol1
+      _ = ENNReal.ofReal η *
+            (ENNReal.ofReal
+              |LinearMap.det (L : (Fin d → ℝ) →ₗ[ℝ] (Fin d → ℝ))| *
+              volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1)) :=
+            mul_left_comm _ _ _
+      _ ≤ ENNReal.ofReal η * (ENNReal.ofReal C * volume Ω) :=
+            mul_le_mul_right h3 _
+      _ = ENNReal.ofReal ηf * volume Ω := by
+            rw [hηfdef, ← mul_assoc, ← ENNReal.ofReal_mul hηpos.le,
+              mul_comm η C]
+  have hcnt'' : ηf ^ ((d - 1 : ℝ) / (d + 1) + ε₁) * (A.card : ℝ) ≤
+      ((A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω'').card : ℝ) := by
+    have hcardeq : (A'.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω').card =
+        (A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω'').card := by
+      rw [hA'def, Finset.filter_image, Finset.card_image_of_injective _ hGinj]
+      congr 1
+      ext a''
+      simp only [Finset.mem_filter, and_congr_right_iff]
+      intro ha
+      rw [hΩ''def]
+      constructor
+      · intro h
+        exact ⟨⟨G a'', h, hGc a''⟩, hAO a'' ha⟩
+      · rintro ⟨⟨y, hy, hya⟩, -⟩
+        rw [← hya, hGL]
+        exact hy
+    -- Exponent bookkeeping: `(Cη)^{p+ε₁} = C^{p+ε₁}·η^{p+ε₁}
+    --   ≤ η^{-ε₁/2}·η^{p+ε₁} = η^{p+ε₁/2}` since `η^{ε₁/2} ≤ C^{-(p+ε₁)}`
+    -- follows from `η ≤ δ^{ε₁/10+1/8}` and `δ ≤ C^{-80(p+ε₁)/(ε₁(4ε₁+5))}`.
+    have hpow : η ^ ((d - 1 : ℝ) / (d + 1) + ε₁ / 2) =
+        η ^ (-ε₁ / 2) * η ^ ((d - 1 : ℝ) / (d + 1) + ε₁) := by
+      rw [← Real.rpow_add hηpos]
+      congr 1
+      ring
+    have hCb : C ^ ((d - 1 : ℝ) / (d + 1) + ε₁) ≤ η ^ (-ε₁ / 2) := by
+      have hq : (0 : ℝ) < ε₁ ^ 2 / 20 + ε₁ / 16 :=
+        add_pos_of_nonneg_of_pos (div_nonneg (sq_nonneg _) (by norm_num))
+          (by linarith)
+      have e1 : η ^ (ε₁ / 2) ≤ δ ^ (ε₁ ^ 2 / 20 + ε₁ / 16) := by
+        calc η ^ (ε₁ / 2) ≤ (δ ^ (ε₁ / 10 + 1 / 8)) ^ (ε₁ / 2) :=
+              Real.rpow_le_rpow hηpos.le hηup (by linarith)
+          _ = δ ^ ((ε₁ / 10 + 1 / 8) * (ε₁ / 2)) := by
+              rw [← Real.rpow_mul hδ0.le]
+          _ = δ ^ (ε₁ ^ 2 / 20 + ε₁ / 16) := by congr 1; ring
+      have e2 : δ ^ (ε₁ ^ 2 / 20 + ε₁ / 16) ≤
+          C ^ (-((d - 1 : ℝ) / (d + 1) + ε₁)) := by
+        have h := Real.rpow_le_rpow hδ0.le hδCe hq.le
+        rw [← Real.rpow_mul hCpos.le] at h
+        have hexp : -80 * ((d - 1 : ℝ) / (d + 1) + ε₁) / (ε₁ * (4 * ε₁ + 5)) *
+            (ε₁ ^ 2 / 20 + ε₁ / 16) = -((d - 1 : ℝ) / (d + 1) + ε₁) := by
+          field_simp
+          ring
+        rwa [hexp] at h
+      have e3 : η ^ (-ε₁ / 2) = (η ^ (ε₁ / 2))⁻¹ := by
+        rw [show (-ε₁ / 2 : ℝ) = -(ε₁ / 2) by ring, Real.rpow_neg hηpos.le]
+      have e4 : C ^ ((d - 1 : ℝ) / (d + 1) + ε₁) =
+          (C ^ (-((d - 1 : ℝ) / (d + 1) + ε₁)))⁻¹ := by
+        rw [← Real.rpow_neg hCpos.le, neg_neg]
+      rw [e3, e4]
+      exact inv_anti₀ (Real.rpow_pos_of_pos hηpos _) (le_trans e1 e2)
+    have hexp2 : ηf ^ ((d - 1 : ℝ) / (d + 1) + ε₁) ≤
+        η ^ ((d - 1 : ℝ) / (d + 1) + ε₁ / 2) := by
+      rw [hηfdef, Real.mul_rpow hCpos.le hηpos.le, hpow]
+      exact mul_le_mul hCb le_rfl (Real.rpow_nonneg hηpos.le _)
+        (Real.rpow_nonneg hηpos.le _)
+    rw [hA'card] at hΩ'cnt
+    calc ηf ^ ((d - 1 : ℝ) / (d + 1) + ε₁) * (A.card : ℝ)
+        ≤ η ^ ((d - 1 : ℝ) / (d + 1) + ε₁ / 2) * (A.card : ℝ) :=
+          mul_le_mul_of_nonneg_right hexp2 (Nat.cast_nonneg _)
+      _ ≤ ((A'.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω').card : ℝ) := hΩ'cnt
+      _ = ((A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω'').card : ℝ) := by
+          rw [hcardeq]
+  refine DensityIncrementGoal.of_mono_exponent hε₁le
+    (DensityIncrementGoal.of_subset (A' := A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω'')
+      hηfδ hηfτ hΩ''conv hΩ''sub hvol''
+      (Finset.filter_subset (fun a ↦ (a : Fin d → ℝ) ∈ Ω'') A)
+      (fun a ha ↦ (Finset.mem_filter.mp ha).2) hcnt'')
+    ?_
+  intro η' hη'δ hη'τ
+  exact ⟨lt_of_lt_of_le hδ0 hη'δ,
+    le_trans hη'τ (rpow_le_one' hδ0.le hδ1.le hτpos.le)⟩
 
 /-- **The geometric core of Lemma 1**: the genuinely difficult case of a
 *finite-volume* `Ω` in which `A` is not already confined to a thin set

@@ -1802,14 +1802,16 @@ inserted at `i₀`. -/
 private theorem eval_dropStep {d : ℕ} (P : GAP ℓ (d + 1))
     (i₀ : Fin (d + 1)) (m : Fin d → ℕ) :
     (P.dropStep i₀).eval m = P.eval (Fin.insertNth i₀ 0 m) := by
+  generalize hn : (Fin.insertNth i₀ 0 m : Fin (d + 1) → ℕ) = n
   show P.base + ∑ j, (m j : ℤ) • P.step (i₀.succAbove j)
-      = P.base + ∑ j, ((Fin.insertNth i₀ 0 m) j : ℤ) • P.step j
+      = P.base + ∑ j, (n j : ℤ) • P.step j
   congr 1
   rw [Fin.sum_univ_succAbove
-    (fun j : Fin (d + 1) ↦ ((Fin.insertNth i₀ 0 m) j : ℤ) • P.step j) i₀,
-    Fin.insertNth_apply_same, Int.cast_zero, zero_smul, zero_add]
+    (fun j : Fin (d + 1) ↦ (n j : ℤ) • P.step j) i₀]
+  have hi₀ : n i₀ = 0 := by rw [← hn, Fin.insertNth_apply_same]
+  rw [hi₀, Nat.cast_zero, zero_smul, zero_add]
   exact Finset.sum_congr rfl fun j _ ↦ by
-    rw [Fin.insertNth_apply_succAbove]
+    rw [← hn, Fin.insertNth_apply_succAbove]
 
 /-- Coefficient tuples of `P` that vanish at `i₀` are exactly the
 coefficient tuples of the dropped GAP. -/
@@ -1842,7 +1844,7 @@ private theorem eval_eq_eval_dropStep {d : ℕ} {P : GAP ℓ (d + 1)}
       = P.base + ∑ j, (n (i₀.succAbove j) : ℤ) • P.step (i₀.succAbove j)
   congr 1
   rw [Fin.sum_univ_succAbove (fun j : Fin (d + 1) ↦ (n j : ℤ) • P.step j)
-    i₀, h0, Int.cast_zero, zero_smul, zero_add]
+    i₀, h0, Nat.cast_zero, zero_smul, zero_add]
 
 /-- Dropping a `width 1` step leaves the point set unchanged. -/
 private theorem toFinset_dropStep {d : ℕ} (P : GAP ℓ (d + 1))
@@ -1858,7 +1860,7 @@ private theorem toFinset_dropStep {d : ℕ} (P : GAP ℓ (d + 1))
   · rintro ⟨n, hn, rfl⟩
     exact ⟨fun j ↦ n (i₀.succAbove j),
       mem_coeffs.mpr fun j ↦ coeff_mem_width hn (i₀.succAbove j),
-      eval_eq_eval_dropStep hw hn⟩
+      (eval_eq_eval_dropStep hw hn).symm⟩
 
 /-- Dropping a step commutes with dilation (definitionally). -/
 private theorem dropStep_smul {d : ℕ} (P : GAP ℓ (d + 1))
@@ -1893,9 +1895,10 @@ private theorem dropTrivialStep {d : ℕ} {c : ℝ} {X : Finset (Fin ℓ → ℤ
     (W : SubSumWitness X c (d + 1)) {i₀ : Fin (d + 1)}
     (hw : W.P.width i₀ = 1) : Nonempty (SubSumWitness X c d) := by
   refine ⟨{ Ah := W.Ah, A' := W.A', P := W.P.dropStep i₀, k := W.k,
-    t := W.t, cpos := W.cpos, kpos := W.kpos, hk := W.hk, hAh := W.hAh,
-    hA' := W.hA', hA'card := W.hA'card, hAhcard := W.hAhcard, hsub := ?_,
-    htranslate := ?_, hproper := ?_ }⟩
+            t := W.t, cpos := W.cpos, kpos := W.kpos, hk := W.hk,
+            hAh := W.hAh, hA' := W.hA', hA'card := W.hA'card,
+            hAhcard := W.hAhcard, hsub := ?_, htranslate := ?_,
+            hproper := ?_ }⟩
   · rw [GAP.toFinset_dropStep W.P hw]
     exact W.hsub
   · have hdef : (W.k • W.P.dropStep i₀).translate W.t
@@ -1940,14 +1943,17 @@ private theorem step_ne_zero {d : ℕ} {c : ℝ} {X : Finset (Fin ℓ → ℤ)}
   intro hs
   have hw : ∀ i, 2 ≤ W.P.width i := fun i ↦ W.two_le_width hdim i
   have h0 : (0 : Fin d → ℕ) ∈ W.P.coeffs :=
-    GAP.mem_coeffs.mpr fun i ↦ by have := hw i; omega
+    GAP.mem_coeffs.mpr fun i ↦ by
+      have := hw i
+      simp only [Pi.zero_apply]
+      omega
   have he : Function.update (0 : Fin d → ℕ) j 1 ∈ W.P.coeffs :=
     GAP.mem_coeffs.mpr fun i ↦ by
       by_cases hij : i = j
       · subst hij
         rw [Function.update_self]
-        have := hw j; omega
-      · rw [Function.update_of_ne hij]
+        have := hw i; omega
+      · rw [Function.update_of_ne hij, Pi.zero_apply]
         have := hw i; omega
   have heval : W.P.eval (0 : Fin d → ℕ) =
       W.P.eval (Function.update (0 : Fin d → ℕ) j 1) := by
@@ -2053,7 +2059,7 @@ subset sum `v ∈ Σ(X₁) ∩ Σ(X₂)` needed at the end of Theorem 4.  A
   Lemma-13 rounding error into `(kᵢ/2)Pᵢ`). -/
 structure SubSumCoveringPackage {d : ℕ} [NeZero d] {c₁ c₂ : ℝ}
     {X₁ X₂ : Finset (Fin d → ℤ)}
-    (W₁ : SubSumWitness X₁ c₁ d) (W₂ : SubSumWitness X₂ c₂ d) : Prop where
+    (W₁ : SubSumWitness X₁ c₁ d) (W₂ : SubSumWitness X₂ c₂ d) where
   /-- The common basepoint. -/
   T : Fin d → ℤ
   /-- The box radii. -/
@@ -2139,7 +2145,7 @@ package fields: `idxᵢ` is `gapLattice_index_ne_zero` and `covol_le` is
 `r_covol`. -/
 structure SubSumCoveringSeed {d : ℕ} [NeZero d] {c₁ c₂ : ℝ}
     {X₁ X₂ : Finset (Fin d → ℤ)}
-    (W₁ : SubSumWitness X₁ c₁ d) (W₂ : SubSumWitness X₂ c₂ d) : Prop where
+    (W₁ : SubSumWitness X₁ c₁ d) (W₂ : SubSumWitness X₂ c₂ d) where
   /-- `P₁` has `ℤ`-linearly independent steps (full rank of `⟨P₁⟩`). -/
   li₁ : LinearIndependent ℤ W₁.P.step
   /-- `P₂` has `ℤ`-linearly independent steps. -/
@@ -2172,7 +2178,7 @@ structure SubSumCoveringSeed {d : ℕ} [NeZero d] {c₁ c₂ : ℝ}
 /-- A `SubSumCoveringSeed` yields a `SubSumCoveringPackage`: the lattice
 indices are nonzero by `gapLattice_index_ne_zero` and the covolume bound
 follows from `index_gapLattice_le` applied to the step bounds. -/
-theorem SubSumCoveringSeed.toPackage {d : ℕ} [NeZero d] {c₁ c₂ : ℝ}
+def SubSumCoveringSeed.toPackage {d : ℕ} [NeZero d] {c₁ c₂ : ℝ}
     {X₁ X₂ : Finset (Fin d → ℤ)}
     {W₁ : SubSumWitness X₁ c₁ d} {W₂ : SubSumWitness X₂ c₂ d}
     (s : SubSumCoveringSeed W₁ W₂) :
@@ -2229,9 +2235,8 @@ theorem homogeneous {d : ℕ} {c : ℝ} {X : Finset (Fin ℓ → ℤ)}
   have hbe : W.P.base = -∑ i, (n₀ i : ℤ) • W.P.step i :=
     eq_neg_of_add_eq_zero_left hev
   refine ⟨fun i ↦ -(n₀ i : ℤ), ?_⟩
-  rw [hbe]
+  rw [hbe, ← Finset.sum_neg_distrib]
   simp_rw [← neg_smul]
-  rw [Finset.sum_neg_distrib]
 
 /-- **Compression lemma** — the algebraic half of Lemma 11's rank
 argument.  If a `d`-dimensional witness `W` admits a *sandwich* — a
@@ -2251,9 +2256,9 @@ theorem compress_of_subgap {d r : ℕ} {c : ℝ} {X : Finset (Fin ℓ → ℤ)}
     (hfit : Q.toFinset ⊆ W.P.toFinset) :
     Nonempty (SubSumWitness X c r) := by
   refine ⟨{ Ah := W.Ah, A' := W.A', P := Q, k := W.k, t := W.t,
-    cpos := W.cpos, kpos := W.kpos, hk := W.hk, hAh := W.hAh,
-    hA' := W.hA', hA'card := W.hA'card, hAhcard := W.hAhcard,
-    hsub := hAh, htranslate := ?_, hproper := ?_ }⟩
+            cpos := W.cpos, kpos := W.kpos, hk := W.hk, hAh := W.hAh,
+            hA' := W.hA', hA'card := W.hA'card, hAhcard := W.hAhcard,
+            hsub := hAh, htranslate := ?_, hproper := ?_ }⟩
   · intro x hx
     apply W.htranslate
     rw [GAP.mem_translate_iff] at hx ⊢
@@ -2357,8 +2362,9 @@ theorem exists_lattice_intersection_rounding {d : ℕ} [NeZero d]
   set T : Fin d → ℤ := ∑ j, ⌊bR.repr Tz j⌋ • w j with hTdef
   have hTL : T ∈ L.toIntSubmodule :=
     Submodule.sum_mem _ fun j _ ↦ Submodule.smul_mem _ _ (hwmem j)
-  have hT1 : T ∈ gapLattice P₁ := inf_le_left hTL
-  have hT2 : T ∈ gapLattice P₂ := inf_le_right hTL
+  have hTinf : T ∈ L₁ ⊓ L₂ := hTL
+  have hT1 : T ∈ gapLattice P₁ := (AddSubgroup.mem_inf.mp hTinf).1
+  have hT2 : T ∈ gapLattice P₂ := (AddSubgroup.mem_inf.mp hTinf).2
   refine ⟨T, hT1, hT2, fun i ↦ ?_⟩
   have hTz : Tz = ∑ j, bR.repr Tz j • vR j := by
     have h := bR.sum_repr Tz
@@ -2466,12 +2472,18 @@ theorem seed_radii {d : ℕ} {C : Fin d → ℤ} {T : Fin d → ℤ} {i₀ : Fin
     exact mul_nonneg (pow_nonneg zero_le_two _) (Nat.cast_nonneg _)
   refine ⟨fun i ↦ if i = i₀ then B else 1, fun i ↦ ?_, fun i ↦ ?_, ?_, ?_⟩
   · by_cases hi : i = i₀
-    · rw [if_pos hi]; exact hB
-    · rw [if_neg hi]; exact zero_le_one
+    · show (0 : ℝ) ≤ if i = i₀ then B else 1
+      rw [ite_eq_left hi]; exact hB
+    · show (0 : ℝ) ≤ if i = i₀ then B else 1
+      rw [ite_eq_right hi]; exact zero_le_one
   · by_cases hi : i = i₀
-    · rw [if_pos hi]; linarith
-    · rw [if_neg hi]; linarith
-  · exact ⟨i₀, by rw [if_pos rfl]; exact hT⟩
+    · show (if i = i₀ then B else 1 : ℝ) ≤ B + 1
+      rw [ite_eq_left hi]; linarith
+    · show (if i = i₀ then B else 1 : ℝ) ≤ B + 1
+      rw [ite_eq_right hi]; linarith
+  · exact ⟨i₀, by
+      show (if i₀ = i₀ then B else 1 : ℝ) < |(T i₀ : ℝ)|
+      rw [ite_eq_left rfl]; exact hT⟩
   · have hprod : ∏ i, (if i = i₀ then B else (1 : ℝ)) = B := by
       rw [Finset.prod_eq_single i₀ (fun b _ hb ↦ if_neg hb)
         (fun h ↦ absurd (Finset.mem_univ i₀) h), if_pos rfl]
@@ -2563,12 +2575,14 @@ theorem exists_int_coord_bound {d : ℕ} (S : Finset (Fin d → ℤ)) :
     ∃ B : ℕ, ∀ x ∈ S, ∀ i, |x i| ≤ (B : ℤ) := by
   refine ⟨∑ x ∈ S, ∑ i, (x i).natAbs, fun x hx i ↦ ?_⟩
   have h1 : (x i).natAbs ≤ ∑ j, (x j).natAbs :=
-    Finset.single_le_sum (fun j _ ↦ Nat.zero_le _) (Finset.mem_univ i)
+    Finset.single_le_sum (f := fun j ↦ (x j).natAbs)
+      (fun j _ ↦ Nat.zero_le _) (Finset.mem_univ i)
   have h2 : ∑ j, (x j).natAbs ≤ ∑ y ∈ S, ∑ j, (y j).natAbs :=
-    Finset.single_le_sum (fun y _ ↦ Finset.sum_nonneg fun j _ ↦
-      Nat.zero_le _) hx
+    Finset.single_le_sum (f := fun y ↦ ∑ j, (y j).natAbs)
+      (fun y _ ↦ Finset.sum_nonneg (f := fun j ↦ (y j).natAbs)
+        fun j _ ↦ Nat.zero_le _) hx
   have h3 := h1.trans h2
-  rw [← Nat.cast_natAbs]
+  rw [← Int.natCast_natAbs]
   exact_mod_cast h3
 
 /-- **Residual input — Lemma 11 second half (rank).**  For `|A|` large,
@@ -2597,7 +2611,8 @@ theorem exists_lemma11_rank {ℓ : ℕ} {c c' δ γ C' : ℝ} :
         (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
         (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
         (Tz : Fin d → ℝ),
-      lemma33Hypotheses N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
       LinearIndependent ℤ W₁.P.step ∧ LinearIndependent ℤ W₂.P.step :=
   sorry
 
@@ -2641,7 +2656,8 @@ theorem exists_lemma13_14_data {ℓ : ℕ} {c c' δ γ C' : ℝ} :
         (Tz : Fin d → ℝ)
         (hli₁ : LinearIndependent ℤ W₁.P.step)
         (hli₂ : LinearIndependent ℤ W₂.P.step),
-      lemma33Hypotheses N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
       ∃ (C lo₁ hi₁ lo₂ hi₂ : Fin d → ℤ),
         (W₁.P.toFinset ⊆
           Fintype.piFinset fun i ↦ Finset.Icc (lo₁ i) (hi₁ i)) ∧
@@ -2767,7 +2783,8 @@ theorem exists_lemma14_lattice_core {ℓ : ℕ} {c c' δ γ C' : ℝ} :
         (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
         (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
         (Tz : Fin d → ℝ),
-      lemma33Hypotheses N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
       (∀ a ∈ B₁.image (· - a₀) \ W₁.Ah, a ∈ gapLattice W₁.P) ∧
       (∀ a ∈ B₂.image (a₀ - ·) \ W₂.Ah, a ∈ gapLattice W₂.P) :=
   sorry
@@ -2784,7 +2801,8 @@ theorem exists_lemma14_lattice {ℓ : ℕ} {c c' δ γ C' : ℝ} :
         (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
         (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
         (Tz : Fin d → ℝ),
-      lemma33Hypotheses N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
       (∀ a ∈ B₁.image (· - a₀), a ∈ gapLattice W₁.P) ∧
       (∀ a ∈ B₂.image (a₀ - ·), a ∈ gapLattice W₂.P) := by
   classical
@@ -2814,7 +2832,8 @@ theorem exists_lemma14_absorption {ℓ : ℕ} {c c' δ γ C' : ℝ} :
         (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
         (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
         (Tz : Fin d → ℝ),
-      lemma33Hypotheses N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
       (∀ s : Fin d → ℤ, s ∈ gapLattice W₁.P →
         (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
         ∀ t ∈ (((W₁.k : ℤ) / 2) • W₁.P).toFinset,
@@ -3053,14 +3072,14 @@ theorem exists_subSumCoveringSeed {ℓ : ℕ} {c c' δ γ C' : ℝ} :
       Finset.mem_image.mp (Finset.mem_sdiff.mp ha).1
     exact hb₂ x hx i
   exact ⟨{ li₁ := hli₁, li₂ := hli₂, C := C,
-    step₁ := lemma11_step_bound hbox₁ ⟨0, W₁.zero_mem_toFinset⟩
-      (fun j ↦ W₁.two_le_width hdim₁ j) hC₁,
-    step₂ := lemma11_step_bound hbox₂ ⟨0, W₂.zero_mem_toFinset⟩
-      (fun j ↦ W₂.two_le_width hdim₂ j) hC₂,
-    T := T, T_mem₁ := hT₁, T_mem₂ := hT₂, r := r,
-    r_nonneg := hrnn, T_big := hrbig, r_covol := hrcovol,
-    cov₁ := fat_box_covering W₁ hwX0 hwX₁ hX₁ habs₁ hfat₁,
-    cov₂ := fat_box_covering W₂ hwX0 hwX₂ hX₂ habs₂ hfat₂ }⟩
+           step₁ := lemma11_step_bound hbox₁ ⟨0, W₁.zero_mem_toFinset⟩
+             (fun j ↦ W₁.two_le_width hdim₁ j) hC₁,
+           step₂ := lemma11_step_bound hbox₂ ⟨0, W₂.zero_mem_toFinset⟩
+             (fun j ↦ W₂.two_le_width hdim₂ j) hC₂,
+           T := T, T_mem₁ := hT₁, T_mem₂ := hT₂, r := r,
+           r_nonneg := hrnn, T_big := hrbig, r_covol := hrcovol,
+           cov₁ := fat_box_covering W₁ hwX0 hwX₁ hX₁ habs₁ hfat₁,
+           cov₂ := fat_box_covering W₂ hwX0 hwX₂ hX₂ habs₂ hfat₂ }⟩
 
 /-- The covering package of Lemmas 11–14, obtained from the seed input
 `exists_subSumCoveringSeed` via `SubSumCoveringSeed.toPackage`. -/
@@ -3474,9 +3493,9 @@ theorem embedded_in_mu_convex_position {ℓ : ℕ} {β c c' δ γ μ C C' : ℝ}
     W₁.Ah_mem_gapLattice ha
   have hAhL₂ : ∀ a ∈ W₂.Ah, a ∈ gapLattice W₂.P := fun a ha ↦
     W₂.Ah_mem_gapLattice ha
-  have hΣL₁ : ∀ x ∈ GAP.subsetSumsL W₁.A', x ∈ gapLattice W₁.P :=
+  have hSigL₁ : ∀ x ∈ GAP.subsetSumsL W₁.A', x ∈ gapLattice W₁.P :=
     fun x hx ↦ W₁.mem_gapLattice_of_mem_subsetSumsL_A' hx
-  have hΣL₂ : ∀ x ∈ GAP.subsetSumsL W₂.A', x ∈ gapLattice W₂.P :=
+  have hSigL₂ : ∀ x ∈ GAP.subsetSumsL W₂.A', x ∈ gapLattice W₂.P :=
     fun x hx ↦ W₂.mem_gapLattice_of_mem_subsetSumsL_A' hx
   have htr₁ : ((W₁.k • W₁.P).translate W₁.t).toFinset ⊆
       GAP.subsetSumsL (B₁.image (· - a₀)) := W₁.subsetSumsL_superset

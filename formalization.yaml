@@ -5,7 +5,7 @@ prize_ready: true
 github_owner: Yi-111-a
 lean_repository: https://github.com/Yi-111-a/jsp-000179-nonaveraging
 branch: main
-commit_sha: "590a1ab1ce7b2d07f91d3ecb18e71d9ca84f632d"
+commit_sha: "0f74707ca93f3bbfb5e06d19a6f60accb77b8410"
 headline_theorems:
   - nonaveraging_max_size_sharp
 roles:

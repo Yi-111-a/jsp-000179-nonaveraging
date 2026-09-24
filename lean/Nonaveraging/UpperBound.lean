@@ -20,6 +20,13 @@ open Finset MeasureTheory Filter
 
 namespace Nonaveraging
 
+/- Quoted external inputs consumed by this file's theorems (see the
+`*Inputs` classes in the imported modules).  The binders propagate to
+every declaration that references an input-carrying lemma. -/
+variable [GAP.GAPInputs] [GAPInputs2] [DiscreteJohnInputs]
+  [ConvexPositionInputs] [StructureInputs] [IrreducibilityInputs]
+  [Thm2.IterationInputs]
+
 /-- The exponent `α_d` of Theorem 2: `(d−1)/(d+1)` for `d ≥ 2`, `1/4` for
 `d = 1`. -/
 noncomputable def alphaExp (d : ℕ) : ℝ :=

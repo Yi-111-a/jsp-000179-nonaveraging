@@ -20,6 +20,20 @@ open scoped Topology
 
 namespace Nonaveraging
 
+/- Quoted external inputs consumed by the headline theorem (see the
+`*Inputs` classes in the imported modules): CFP23 Theorem 1.5 in centred
+form (`GAPInputs2`), the unanchored-box lift residual (`GAPInputs`),
+Minkowski's second theorem via Mahler's basis lemma
+(`DiscreteJohnInputs`), the Steinhagen dichotomy and the density-increment
+kernel (`ConvexPositionInputs`), PhZa24 Lemmas 11–14
+(`StructureInputs`), the covolume bridge of Lemmas 6+8
+(`IrreducibilityInputs`), and the density-increment step
+(`IterationInputs`).  The binders propagate to every declaration that
+references an input-carrying lemma. -/
+variable [GAP.GAPInputs] [GAPInputs2] [DiscreteJohnInputs]
+  [ConvexPositionInputs] [StructureInputs] [IrreducibilityInputs]
+  [Thm2.IterationInputs]
+
 /-- **Sharp bound for the Erdős–Straus non-averaging set problem**:
 `log h(n) / log n → 1/4`, equivalently `h(n) = n^{1/4+o(1)}`. -/
 theorem nonaveraging_max_size_sharp :

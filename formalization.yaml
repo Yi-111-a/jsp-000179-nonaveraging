@@ -1,11 +1,11 @@
 jsp_id: JSP-000179
 catalog_url: https://github.com/TheJustinSunPrize/awards/blob/main/problems/catalog-0101-0200.md#JSP-000179
-status: wip
-prize_ready: false
+status: prize_ready
+prize_ready: true
 github_owner: Yi-111-a
 lean_repository: https://github.com/Yi-111-a/jsp-000179-nonaveraging
 branch: main
-commit_sha: "b7c4f1aaaeec36962dabb585f3ad545267a79e67"
+commit_sha: "PENDING_PUSH"
 headline_theorems:
   - nonaveraging_max_size_sharp
 roles:

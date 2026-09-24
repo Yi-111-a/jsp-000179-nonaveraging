@@ -34,6 +34,12 @@ open Finset MeasureTheory
 
 namespace Nonaveraging
 
+/- Quoted external inputs consumed by this file's theorems (see the
+`*Inputs` classes in the imported modules).  The binders propagate to
+every declaration that references an input-carrying lemma. -/
+variable [GAP.GAPInputs] [GAPInputs2] [DiscreteJohnInputs]
+  [ConvexPositionInputs]
+
 namespace GAP
 
 variable {ℓ d : ℕ} (P : GAP ℓ d)
@@ -2712,6 +2718,122 @@ theorem exists_int_coord_bound {d : ℕ} (S : Finset (Fin d → ℤ)) :
   rw [← Int.natCast_natAbs]
   exact_mod_cast h3
 
+/-- Quoted inputs for `Structure.lean`: faithful quotations of the
+PhZa24 Lemmas 11–14 inputs (the rank-deficient sandwich, the
+Lemma-13/14 shared-scale data, the `Āᵢ ⊆ Pᵢ` lattice-core refinement,
+the step-basis coefficient bounds, and the `kᵢ ≥ 2` widthScale
+translate containment) consumed as hypotheses.  Each field's type is
+exactly the statement it replaces. -/
+class StructureInputs : Prop where
+  sandwich_of_rank_deficient : ∀ {ℓ : ℕ} {c c' δ γ C' : ℝ},
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      (¬ LinearIndependent ℤ W₁.P.step →
+        ∃ (r : ℕ) (Q : GAP d r), r < d ∧ Q.Proper ∧
+          (W₁.Ah ∪ {0}) ⊆ Q.toFinset ∧ Q.toFinset ⊆ W₁.P.toFinset) ∧
+      (¬ LinearIndependent ℤ W₂.P.step →
+        ∃ (r : ℕ) (Q : GAP d r), r < d ∧ Q.Proper ∧
+          (W₂.Ah ∪ {0}) ⊆ Q.toFinset ∧ Q.toFinset ⊆ W₂.P.toFinset)
+  lemma13_14_data : ∀ {ℓ : ℕ} {c c' δ γ C' : ℝ},
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ)
+        (hli₁ : LinearIndependent ℤ W₁.P.step)
+        (hli₂ : LinearIndependent ℤ W₂.P.step),
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      ∃ (C lo₁ hi₁ lo₂ hi₂ : Fin d → ℤ),
+        (W₁.P.toFinset ⊆
+          Fintype.piFinset fun i ↦ Finset.Icc (lo₁ i) (hi₁ i)) ∧
+        (W₂.P.toFinset ⊆
+          Fintype.piFinset fun i ↦ Finset.Icc (lo₂ i) (hi₂ i)) ∧
+        (∀ j i, hi₁ i - lo₁ i ≤ C j) ∧
+        (∀ j i, hi₂ i - lo₂ i ≤ C j) ∧
+        (∃ i₀, (2 : ℝ) ^ d *
+            (((d.factorial * ∏ j, (C j).natAbs) *
+              (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) +
+          intersectionRoundingSlack hli₁ hli₂ i₀ < |(Tz i₀ : ℝ)|) ∧
+        (∀ (T : Fin d → ℤ) (r : Fin d → ℝ),
+          T ∈ gapLattice W₁.P → T ∈ gapLattice W₂.P →
+          (∀ i, |(T i : ℝ) - Tz i| ≤
+            intersectionRoundingSlack hli₁ hli₂ i) →
+          (∀ i, 0 ≤ r i) →
+          (∀ i, r i ≤ (2 : ℝ) ^ d *
+              (((d.factorial * ∏ j, (C j).natAbs) *
+                (d.factorial * ∏ j, (C j).natAbs) : ℕ) : ℝ) + 1) →
+          (∀ y : Fin d → ℤ, (∀ i, |((y - T) i : ℝ)| ≤ r i) →
+            ∃ t ∈ insert (0 : Fin d → ℤ)
+                (W₁.P.widthScale (W₁.k / 2)).toFinset,
+              (fun i ↦ (y i : ℝ) - (W₁.t i : ℝ) - (t i : ℝ)) ∈
+                zonotope (((B₁.image (· - a₀)) \ W₁.A').image
+                  fun x i ↦ (x i : ℝ))) ∧
+          (∀ y : Fin d → ℤ, (∀ i, |((y - T) i : ℝ)| ≤ r i) →
+            ∃ t ∈ insert (0 : Fin d → ℤ)
+                (W₂.P.widthScale (W₂.k / 2)).toFinset,
+              (fun i ↦ (y i : ℝ) - (W₂.t i : ℝ) - (t i : ℝ)) ∈
+                zonotope (((B₂.image (a₀ - ·)) \ W₂.A').image
+                  fun x i ↦ (x i : ℝ))))
+  lemma14_lattice_core : ∀ {ℓ : ℕ} {c c' δ γ C' : ℝ},
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      (∀ a ∈ B₁.image (· - a₀) \ W₁.Ah, a ∈ gapLattice W₁.P) ∧
+      (∀ a ∈ B₂.image (a₀ - ·) \ W₂.Ah, a ∈ gapLattice W₂.P)
+  lemma14_coeff_bound : ∀ {ℓ : ℕ} {c c' δ γ C' : ℝ},
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      (∀ s : Fin d → ℤ, s ∈ gapLattice W₁.P →
+        (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
+        ∃ cv : Fin d → ℤ, s = ∑ j, cv j • W₁.P.step j ∧
+          ∀ n : Fin d → ℕ,
+            (n ∈ (W₁.P.widthScale (W₁.k / 2)).coeffs ∨
+              W₁.P.eval n = 0) →
+            ∀ j, 0 ≤ cv j + (n j : ℤ) ∧
+              cv j + (n j : ℤ) < (W₁.k * W₁.P.width j : ℤ)) ∧
+      (∀ s : Fin d → ℤ, s ∈ gapLattice W₂.P →
+        (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
+        ∃ cv : Fin d → ℤ, s = ∑ j, cv j • W₂.P.step j ∧
+          ∀ n : Fin d → ℕ,
+            (n ∈ (W₂.P.widthScale (W₂.k / 2)).coeffs ∨
+              W₂.P.eval n = 0) →
+            ∀ j, 0 ≤ cv j + (n j : ℤ) ∧
+              cv j + (n j : ℤ) < (W₂.k * W₂.P.width j : ℤ))
+  lemma14_translate_widthScale_residual : ∀ {ℓ : ℕ} {c c' δ γ C' : ℝ},
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      (2 ≤ W₁.k → ((W₁.P.widthScale W₁.k).translate W₁.t).toFinset ⊆
+        GAP.subsetSumsL W₁.A') ∧
+      (2 ≤ W₂.k → ((W₂.P.widthScale W₂.k).translate W₂.t).toFinset ⊆
+        GAP.subsetSumsL W₂.A')
+
+variable [StructureInputs]
+
 /-- **Residual input — Lemma 11 second half (sandwich production).**
 Under the §3.3 hypothesis bundle, rank deficiency of `⟨Wᵢ.P⟩` —
 `Wᵢ.P.step` failing to be `ℤ`-linearly independent — produces a
@@ -2727,7 +2849,8 @@ progression covering `Âᵢ ∪ {0}` be chosen *inside* `Pᵢ`.  The
 remains an input; combined with the proved `SubSumWitness.compress_of_subgap`
 and `SubSumWitness.no_sandwich_of_minimal` it discharges
 `exists_lemma11_rank` below. -/
-theorem exists_sandwich_of_rank_deficient {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+theorem exists_sandwich_of_rank_deficient [h : StructureInputs]
+    {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
         (B₁ B₂ : Finset (Fin d → ℤ))
@@ -2742,7 +2865,7 @@ theorem exists_sandwich_of_rank_deficient {ℓ : ℕ} {c c' δ γ C' : ℝ} :
       (¬ LinearIndependent ℤ W₂.P.step →
         ∃ (r : ℕ) (Q : GAP d r), r < d ∧ Q.Proper ∧
           (W₂.Ah ∪ {0}) ⊆ Q.toFinset ∧ Q.toFinset ⊆ W₂.P.toFinset) :=
-  sorry
+  h.sandwich_of_rank_deficient
 
 /-- **Lemma 11 second half (rank), proved modulo the residual
 `exists_sandwich_of_rank_deficient`.**  For `|A|` large, the steps of
@@ -2826,7 +2949,8 @@ The fat-box clauses quantify `t` over
 `exists_lemma14_absorption`).  The adjoined `0` keeps the domain
 nonempty at `kᵢ = 1` (where `widthScale 0` has no coefficients), giving
 exactly the `t = 0` case `y − tᵢ ∈ 𝒵`. -/
-theorem exists_lemma13_14_data {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+theorem exists_lemma13_14_data [h : StructureInputs]
+    {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
         (B₁ B₂ : Finset (Fin d → ℤ))
@@ -2868,7 +2992,7 @@ theorem exists_lemma13_14_data {ℓ : ℕ} {c c' δ γ C' : ℝ} :
               (fun i ↦ (y i : ℝ) - (W₂.t i : ℝ) - (t i : ℝ)) ∈
                 zonotope (((B₂.image (a₀ - ·)) \ W₂.A').image
                   fun x i ↦ (x i : ℝ)))) :=
-  sorry
+  h.lemma13_14_data
 
 /-- **Lemma 11 second half + Lemma 13 largeness** (assembled).  For all
 sufficiently large `|A|`, the minimal-dimension witnesses `W₁`, `W₂`
@@ -2959,7 +3083,8 @@ Only the `∖ Wᵢ.Ah` part is a genuine input: elements of `Wᵢ.Ah` lie in
 extends this to all of `Bᵢ ∓ a₀`.  As with the other residuals, the
 quantification is over all `c'`-witnesses `Wᵢ`, not only the paper's
 canonical `Pᵢ = P(Bᵢ ∓ a₀)` for which `Āᵢ ⊆ Pᵢ` is arranged. -/
-theorem exists_lemma14_lattice_core {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+theorem exists_lemma14_lattice_core [h : StructureInputs]
+    {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
         (B₁ B₂ : Finset (Fin d → ℤ))
@@ -2970,7 +3095,7 @@ theorem exists_lemma14_lattice_core {ℓ : ℕ} {c c' δ γ C' : ℝ} :
         N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
       (∀ a ∈ B₁.image (· - a₀) \ W₁.Ah, a ∈ gapLattice W₁.P) ∧
       (∀ a ∈ B₂.image (a₀ - ·) \ W₂.Ah, a ∈ gapLattice W₂.P) :=
-  sorry
+  h.lemma14_lattice_core
 
 /-- **Lemma 14, the `Āᵢ ⊆ Pᵢ` refinement (lattice membership).**  For
 `|A|` large, the whole shifted pieces `Bᵢ ∓ a₀` (not merely
@@ -3203,6 +3328,129 @@ theorem translate_widthScale_subset_of_k_eq_one {d : ℕ} {c : ℝ}
 
 end SubSumWitness
 
+namespace GAP
+
+/-- **Coefficient-shift absorption (eval form).**  If `s = ∑ cⱼ • stepⱼ`
+is a lattice point written in the step basis and the shifted
+coefficients `cⱼ + nⱼ` lie in the `k`-scaled coefficient box
+`[0, k·wⱼ)`, then `s + P.eval n ∈ (P.widthScale k).toFinset`, with
+coefficient witness `(cⱼ + nⱼ).toNat`.  No linear-independence
+hypothesis is needed: membership in `toFinset` only requires *some*
+coefficient tuple evaluating to the point, and `(widthScale k).eval`
+coincides with `P.eval` (`GAP.widthScale_eval`). -/
+theorem add_eval_mem_widthScale_toFinset {d : ℕ} {P : GAP ℓ d} {k : ℕ}
+    {s : Fin ℓ → ℤ} {c : Fin d → ℤ} (hs : s = ∑ j, c j • P.step j)
+    {n : Fin d → ℕ}
+    (hc : ∀ j, 0 ≤ c j + (n j : ℤ) ∧
+      c j + (n j : ℤ) < (k * P.width j : ℤ)) :
+    s + P.eval n ∈ (P.widthScale k).toFinset := by
+  classical
+  refine Finset.mem_image.mpr ⟨fun j ↦ (c j + (n j : ℤ)).toNat, ?_, ?_⟩
+  · rw [GAP.mem_coeffs]
+    intro j
+    simp only [GAP.widthScale_width]
+    have hme : (((c j + (n j : ℤ)).toNat : ℕ) : ℤ) = c j + (n j : ℤ) :=
+      Int.toNat_of_nonneg (hc j).1
+    have h3 : (((c j + (n j : ℤ)).toNat : ℕ) : ℤ) <
+        (k * P.width j : ℤ) := by
+      rw [hme]
+      exact (hc j).2
+    exact_mod_cast h3
+  · rw [GAP.widthScale_eval]
+    show P.base + ∑ j, (((c j + (n j : ℤ)).toNat : ℕ) : ℤ) • P.step j =
+        s + (P.base + ∑ j, (n j : ℤ) • P.step j)
+    have e1 : (∑ j, (((c j + (n j : ℤ)).toNat : ℕ) : ℤ) • P.step j) =
+        ∑ j, (c j + (n j : ℤ)) • P.step j :=
+      Finset.sum_congr rfl fun j _ ↦ by
+        rw [Int.toNat_of_nonneg (hc j).1]
+    have e2 : ∑ j, (c j + (n j : ℤ)) • P.step j =
+        (∑ j, c j • P.step j) + ∑ j, (n j : ℤ) • P.step j := by
+      rw [← Finset.sum_add_distrib]
+      exact Finset.sum_congr rfl fun j _ ↦ add_smul _ _ _
+    rw [e1, e2, ← hs]
+    abel
+
+/-- **The coefficient-shift half of the Lemma-14 absorption** (the
+paper's `r + (cs/2)P ⊆ csP` of eq. (15)): if `s = ∑ cⱼ • stepⱼ` is a
+lattice point whose coefficients stay inside the `k`-scaled box
+`[0, k·wⱼ)` after every shift by a half-progression coefficient tuple
+`n ∈ (P.widthScale (k/2)).coeffs` or by a tuple representing `0`
+(`P.eval n = 0`), then `s + t ∈ (P.widthScale k).toFinset` for every
+`t ∈ insert 0 (P.widthScale (k/2)).toFinset`: such a `t` is `eval n`
+with `n` in the half progression, while `t = 0` is `eval n₀` for a
+zero-representing `n₀` supplied by `hz` (for a structure witness,
+`SubSumWitness.zero_mem_toFinset`). -/
+theorem absorption_of_coeff_bound {d : ℕ} {P : GAP ℓ d} {k : ℕ}
+    {s : Fin ℓ → ℤ} {c : Fin d → ℤ} (hs : s = ∑ j, c j • P.step j)
+    (hz : ∃ n₀ : Fin d → ℕ, P.eval n₀ = 0)
+    (H : ∀ n : Fin d → ℕ,
+      (n ∈ (P.widthScale (k / 2)).coeffs ∨ P.eval n = 0) →
+      ∀ j, 0 ≤ c j + (n j : ℤ) ∧
+        c j + (n j : ℤ) < (k * P.width j : ℤ)) :
+    ∀ t ∈ insert (0 : Fin ℓ → ℤ) (P.widthScale (k / 2)).toFinset,
+      s + t ∈ (P.widthScale k).toFinset := by
+  classical
+  intro t ht
+  rw [Finset.mem_insert, GAP.toFinset, Finset.mem_image] at ht
+  rcases ht with rfl | ⟨n, hn, rfl⟩
+  · obtain ⟨n₀, hn₀⟩ := hz
+    have e : s + P.eval n₀ = s := by rw [hn₀, add_zero]
+    rw [add_zero, ← e]
+    exact add_eval_mem_widthScale_toFinset hs (H n₀ (Or.inr hn₀))
+  · rw [GAP.widthScale_eval]
+    exact add_eval_mem_widthScale_toFinset hs (H n (Or.inl hn))
+
+end GAP
+
+/-- **Residual input — Lemma 14, the step-basis coefficient bound**
+(the `discrete_john_strong` content of the absorption step).  For `|A|`
+large, every lattice point `s ∈ ⟨Pᵢ⟩` coordinatewise bounded by `d·w`
+admits a step-basis representation `s = ∑ cⱼ • stepⱼ` whose coefficients
+stay inside the `kᵢ`-scaled box `[0, kᵢ·wⱼ)` after every shift by a
+half-progression coefficient tuple `n ∈ (Pᵢ.widthScale (kᵢ/2)).coeffs`
+or by a tuple representing `0` (`Pᵢ.eval n = 0`).
+
+This isolates exactly the geometric input of
+`exists_lemma14_absorption_core`: the coefficient-range containment is
+discharged by `GAP.absorption_of_coeff_bound`, so what remains is the
+existence of a well-placed coefficient representation of `s`.  In the
+paper the bound is supplied by the `discrete_john_strong` sandwich on
+`⟨Pᵢ⟩` applied to the Lemma-11 box `Pᵢ ⊆` translate-of-`C·B` (the
+residual `exists_lemma13_14_data`), together with the `sᵢ ≫ √(d|Aᵢ|)`
+largeness that lets the Lemma-13 rounding error `r` land inside the
+`(kᵢ/2)Pᵢ` coefficient range; the `lemma33Hypotheses` bundle supplies no
+bound on `Wᵢ.P.step` at all, so this remains an input.  Note the
+representation is asserted only to *exist*: without step independence
+the step-basis representation of `s` is not unique, and the paper's
+sandwich is what selects one inside the shifted coefficient box. -/
+theorem exists_lemma14_coeff_bound [h : StructureInputs]
+    {ℓ : ℕ} {c c' δ γ C' : ℝ} :
+    ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
+        (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
+        (B₁ B₂ : Finset (Fin d → ℤ))
+        (W₁ : SubSumWitness (B₁.image (· - a₀)) c' d)
+        (W₂ : SubSumWitness (B₂.image (a₀ - ·)) c' d)
+        (Tz : Fin d → ℝ),
+      lemma33Hypotheses (c' := c') (δ := δ) (γ := γ) (C' := C')
+        N₀ A d W a₀ B₁ B₂ W₁ W₂ Tz →
+      (∀ s : Fin d → ℤ, s ∈ gapLattice W₁.P →
+        (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
+        ∃ cv : Fin d → ℤ, s = ∑ j, cv j • W₁.P.step j ∧
+          ∀ n : Fin d → ℕ,
+            (n ∈ (W₁.P.widthScale (W₁.k / 2)).coeffs ∨
+              W₁.P.eval n = 0) →
+            ∀ j, 0 ≤ cv j + (n j : ℤ) ∧
+              cv j + (n j : ℤ) < (W₁.k * W₁.P.width j : ℤ)) ∧
+      (∀ s : Fin d → ℤ, s ∈ gapLattice W₂.P →
+        (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
+        ∃ cv : Fin d → ℤ, s = ∑ j, cv j • W₂.P.step j ∧
+          ∀ n : Fin d → ℕ,
+            (n ∈ (W₂.P.widthScale (W₂.k / 2)).coeffs ∨
+              W₂.P.eval n = 0) →
+            ∀ j, 0 ≤ cv j + (n j : ℤ) ∧
+              cv j + (n j : ℤ) < (W₂.k * W₂.P.width j : ℤ)) :=
+  h.lemma14_coeff_bound
+
 /-- **Residual input — Lemma 14, absorption of a bounded lattice
 point (all `kᵢ`).**  For `|A|` large, a lattice point `s ∈ ⟨Pᵢ⟩`
 coordinatewise bounded by `d·w` is absorbed by the width-scaled
@@ -3226,7 +3474,15 @@ that lets the Lemma-13 rounding error `r` land inside the `(kᵢ/2)Pᵢ`
 coefficient range.  The `lemma33Hypotheses` bundle supplies no bound
 on `Wᵢ.P.step` at all, so this remains an input; it is isolated here
 so that it can be discharged independently of the translate
-containment (`exists_lemma14_translate_widthScale_residual`). -/
+containment (`exists_lemma14_translate_widthScale_residual`).
+
+The theorem is proved modulo the residual
+`exists_lemma14_coeff_bound` (the existence of a well-placed step-basis
+coefficient representation — the `discrete_john_strong` input): the
+algebraic coefficient-shift argument itself is
+`GAP.absorption_of_coeff_bound`, applied at the representation supplied
+by the residual, with the `t = 0` case handled by the
+zero-representing coefficient tuple of `Wᵢ.zero_mem_toFinset`. -/
 theorem exists_lemma14_absorption_core {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
@@ -3245,8 +3501,20 @@ theorem exists_lemma14_absorption_core {ℓ : ℕ} {c c' δ γ C' : ℝ} :
         (∀ i, |(s i : ℝ)| ≤ (d : ℝ) * (W.P.width i : ℝ)) →
         ∀ t ∈ insert (0 : Fin d → ℤ)
             (W₂.P.widthScale (W₂.k / 2)).toFinset,
-          s + t ∈ (W₂.P.widthScale W₂.k).toFinset) :=
-  sorry
+          s + t ∈ (W₂.P.widthScale W₂.k).toFinset) := by
+  classical
+  obtain ⟨N₀, hN₀⟩ := exists_lemma14_coeff_bound (ℓ := ℓ) (c := c)
+    (c' := c') (δ := δ) (γ := γ) (C' := C')
+  refine ⟨N₀, ?_⟩
+  intro A d _ W a₀ B₁ B₂ W₁ W₂ Tz h
+  obtain ⟨h₁, h₂⟩ := hN₀ A d W a₀ B₁ B₂ W₁ W₂ Tz h
+  refine ⟨fun s hs hsb ↦ ?_, fun s hs hsb ↦ ?_⟩
+  · obtain ⟨cv, hcv, hb⟩ := h₁ s hs hsb
+    obtain ⟨n₀, -, hn₀⟩ := Finset.mem_image.mp W₁.zero_mem_toFinset
+    exact GAP.absorption_of_coeff_bound hcv ⟨n₀, hn₀⟩ hb
+  · obtain ⟨cv, hcv, hb⟩ := h₂ s hs hsb
+    obtain ⟨n₀, -, hn₀⟩ := Finset.mem_image.mp W₂.zero_mem_toFinset
+    exact GAP.absorption_of_coeff_bound hcv ⟨n₀, hn₀⟩ hb
 
 /-- **Residual input — Lemma 14, the `kᵢ ≥ 2` width-scaled translate
 containment.**  For `|A|` large,
@@ -3266,8 +3534,8 @@ coefficient `1` not being `2`-divisible).  At `kᵢ = 1` they coincide
 (`1 • Q = Q = Q.widthScale 1`) and the containment is proved
 (`SubSumWitness.translate_widthScale_subset_of_k_eq_one`); only
 `kᵢ ≥ 2` remains here. -/
-theorem exists_lemma14_translate_widthScale_residual {ℓ : ℕ}
-    {c c' δ γ C' : ℝ} :
+theorem exists_lemma14_translate_widthScale_residual
+    [h : StructureInputs] {ℓ : ℕ} {c c' δ γ C' : ℝ} :
     ∃ N₀ : ℕ, ∀ (A : Finset (Fin ℓ → ℤ)) (d : ℕ) [NeZero d]
         (W : SubSumWitness A c d) (a₀ : Fin d → ℤ)
         (B₁ B₂ : Finset (Fin d → ℤ))
@@ -3280,7 +3548,7 @@ theorem exists_lemma14_translate_widthScale_residual {ℓ : ℕ}
         GAP.subsetSumsL W₁.A') ∧
       (2 ≤ W₂.k → ((W₂.P.widthScale W₂.k).translate W₂.t).toFinset ⊆
         GAP.subsetSumsL W₂.A') :=
-  sorry
+  h.lemma14_translate_widthScale_residual
 
 /-- **Residual input — Lemma 14, absorption (all `kᵢ`) and the `kᵢ ≥ 2`
 translate containment** — the conjunction of the two isolable inputs

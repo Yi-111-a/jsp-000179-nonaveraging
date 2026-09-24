@@ -51,6 +51,12 @@ open Finset
 
 namespace Nonaveraging
 
+/- Quoted external inputs consumed by this file's theorems (see the
+`*Inputs` classes in the imported modules).  The binders propagate to
+every declaration that references an input-carrying lemma. -/
+variable [GAP.GAPInputs] [GAPInputs2] [DiscreteJohnInputs]
+  [ConvexPositionInputs] [StructureInputs]
+
 /-- Shifting by `0` is the identity on finsets of integer vectors. -/
 theorem image_sub_zero {n : ℕ} (s : Finset (Fin n → ℤ)) :
     s.image (· - (0 : Fin n → ℤ)) = s := by
@@ -806,6 +812,37 @@ isolated into three named lemmas:
 * `iterates_to_irreducible` — the *bookkeeping* input (equations
   (8)–(10)): the measure-descent loop. -/
 
+/-- **Quoted inputs for `Irreducibility.lean`** — faithful quotations of the
+Pham–Zakharov inputs this file consumes as hypotheses.  Each field's type is
+exactly the statement it replaces:
+
+* `lem68_covolume_stmt` — the discrete-John/covolume bridge (paper Lemmas
+  6 + 8): `|P'| ≤ C·sMin^{−max(0,d'−n)}·|B'|` for the canonical
+  `c'`-witness `W'` of a set `X'` contained in the interval box `B'`;
+* `moved_set_card_input` — the packaged `hinput` of
+  `moved_set_card_residual`: the ambient `(n,β)`-box invariant
+  `GAP.IsLBSet X β` of `X` together with the absorption inequality
+  `C·δ^{−β} ≤ |A₁ − x|^{β'−β}`. -/
+class IrreducibilityInputs : Prop where
+  lem68_covolume_stmt :
+    ∀ {n : ℕ} {X' : Finset (Fin n → ℤ)} {B' : GAP.Box n} {c' sMin C : ℝ},
+      1 ≤ C → 1 ≤ sMin → B'.IsInterval → X' ⊆ B'.toFinset →
+      (W' : SubSumWitness X' c' (SubSumDim X' c')) →
+      (W'.P.toFinset.card : ℝ) ≤
+        C * sMin ^ (-(max 0 ((SubSumDim X' c' : ℝ) - (n : ℝ)))) *
+          (B'.card : ℝ)
+  moved_set_card_input :
+    ∀ {n d : ℕ} {X : Finset (Fin n → ℤ)} {c' δ β' : ℝ}
+      {A₁ : Finset (Fin d → ℤ)} {x : Fin d → ℤ},
+      (W : SubSumWitness X c' d) → SubSumDim X c' = d →
+      0 < δ → 0 < β' → A₁ ⊆ W.imageAh → x ∈ W.imageP →
+      δ * (X.card : ℝ) ≤ (A₁.card : ℝ) →
+      ∃ (β C : ℝ), GAP.IsLBSet X β ∧ (1 : ℝ) ≤ C ∧ (0 : ℝ) ≤ β ∧
+        β ≤ β' ∧ C * δ ^ (-β) ≤
+          ((A₁.image (· - x)).card : ℝ) ^ (β' - β)
+
+variable [IrreducibilityInputs]
+
 /-- **The covolume bridge** — the single remaining mathematical input
 of Lemma 10 in this file (paper Lemmas 6 + 8, which in turn need the
 discrete John lemma 7 = `discrete_john_strong` and the Lemmas 11–14
@@ -838,15 +875,16 @@ Lemma 8, whereas the best elementary bound in scope is
 therefore the discrete-John/covolume input at the honest regime
 (matching the `C₆₈ = 1`, `sMin = |A|^{1-ε} > 1` instantiation in
 `irreduciblization_faithful`). -/
-theorem lem68_covolume {n : ℕ} {X' : Finset (Fin n → ℤ)}
+theorem lem68_covolume [h : IrreducibilityInputs]
+    {n : ℕ} {X' : Finset (Fin n → ℤ)}
     {B' : GAP.Box n} {c' sMin C : ℝ}
     (hC : 1 ≤ C) (hsMin : 1 ≤ sMin)
     (_hB : B'.IsInterval) (_hsub : X' ⊆ B'.toFinset)
     (W' : SubSumWitness X' c' (SubSumDim X' c')) :
     (W'.P.toFinset.card : ℝ) ≤
       C * sMin ^ (-(max 0 ((SubSumDim X' c' : ℝ) - (n : ℝ)))) *
-        (B'.card : ℝ) := by
-  sorry
+        (B'.card : ℝ) :=
+  h.lem68_covolume_stmt hC hsMin _hB _hsub W'
 
 /-- **Lemmas 6 + 8, move form** — the covolume input to Lemma 10.
 For a move `X' = A₁ − x` of a canonical witness (`A₁ ⊆ ϕ_P(Â)`,
@@ -1056,23 +1094,28 @@ the `(d,β')`-set property of a move `X' = A₁ − x`, instantiated at the
 ambient interval box `B' = coeffBox P − x` (whose cardinality is
 `∏ᵢ wᵢ = |P|` exactly, `GAP.coeffBox_card` + `card_toFinset_of_proper`).
 
-*Status: NOT implied by the stated hypotheses.*  The paper's proof is the
-chain `|P| ≪_d |B_X| ≤ |X|^β ≤ δ^{−β}|X'|^β ≤ |X'|^{β'}`, whose three
-inputs are exactly the extra hypotheses of the proved companion
-`moved_set_card_of_covolume`:
+*Status: NOT implied by the stated hypotheses; proved modulo one
+packaged input.*  The paper's proof is the chain
+`|P| ≪_d |B_X| ≤ |X|^β ≤ δ^{−β}|X'|^β ≤ |X'|^{β'}`; the proof below
+carries out this entire chain and isolates the two inputs it needs as
+the single existential `hinput`:
 
-1. the ambient `(n,β)`-box `B_X` of `X` with `|B_X| ≤ |X|^β` — the
-   `(d,β')`-set invariant that `L10Stage` does not currently track (the
-   crude `DerivedFrom.exists_interval_box` bound `2^{|A|} + |B_A|` is
-   exponential, and `X` here is an arbitrary set with a witness, not
-   known to be an `(n,β)`-set — e.g. `X = {0,2,…,2^{m'}} ⊆ ℤ` admits the
-   canonical `d = 1` witness `P = [0,2^{m'})` with `∏wᵢ = 2^{m'}`
-   super-polynomial in `|X'| ≲ m`, so *some* box hypothesis is
-   indispensable);
-2. the covolume bound `∏ᵢ wᵢ ≤ C·|B_X|` — the same
-   `lem68_covolume`/discrete-John input as `lem68_move_bound`;
-3. the absorption `C·δ^{−β} ≤ |X'|^{β'−β}` — valid at the intended
+1. `GAP.IsLBSet X β` — the ambient `(n,β)`-box `B_X` of `X` with
+   `|B_X| ≤ |X|^β`, the `(d,β')`-set invariant that `L10Stage` does not
+   currently track (the crude `DerivedFrom.exists_interval_box` bound
+   `2^{|A|} + |B_A|` is exponential, and `X` here is an arbitrary set
+   with a witness, not known to be an `(n,β)`-set — e.g.
+   `X = {0,2,…,2^{m'}} ⊆ ℤ` admits the canonical `d = 1` witness
+   `P = [0,2^{m'})` with `∏wᵢ = 2^{m'}` super-polynomial in `|X'| ≲ m`,
+   so *some* box hypothesis is indispensable);
+2. the absorption `C·δ^{−β} ≤ |X'|^{β'−β}` — valid at the intended
    instantiation `β' = 3β`, `|X'| ≥ δ·|A|^{1−ε/2}` large.
+
+The third ingredient of the paper's chain, the covolume bound
+`∏ᵢ wᵢ ≪ |B_X|`, is *not* part of `hinput`: it is supplied inside the
+proof by `lem68_covolume` at `sMin = 1` (the Lemma-8 form
+`|P| ≤ C·|B_X|`), and the remaining rpow bookkeeping is
+`moved_set_card_of_covolume`.
 
 The hypotheses added here (`SubSumDim X c' = d` — the bound is claimed
 only for the *canonical* witness; `0 < δ` — else `A₁ = ∅` falsifies;
@@ -1086,7 +1129,31 @@ theorem moved_set_card_residual {n d : ℕ} {X : Finset (Fin n → ℤ)}
     (_hcard : δ * (X.card : ℝ) ≤ (A₁.card : ℝ)) :
     ((∏ i, W.P.width i : ℕ) : ℝ) ≤
       ((A₁.image (· - x)).card : ℝ) ^ β' := by
-  sorry
+  subst _hd
+  -- *Missing inputs.*  The ambient `(n,β)`-box invariant of `X`
+  -- (`GAP.IsLBSet X β`, untracked by `L10Stage`) and the absorption
+  -- inequality (`C·δ^{−β} ≤ |X'|^{β'−β}`, the `β' = 3β` largeness).
+  -- Everything downstream of this package is proved.
+  have hinput : ∃ (β C : ℝ), GAP.IsLBSet X β ∧ (1 : ℝ) ≤ C ∧ (0 : ℝ) ≤ β ∧
+      β ≤ β' ∧ C * δ ^ (-β) ≤
+        ((A₁.image (· - x)).card : ℝ) ^ (β' - β) :=
+    IrreducibilityInputs.moved_set_card_input W rfl _hδ _hβ' _hA₁ _hx _hcard
+  obtain ⟨β, C, hXlb, hC1, hβ, hββ', habs⟩ := hinput
+  have hXlb' : ∃ BX : GAP.Box n, BX.IsInterval ∧ X ⊆ BX.toFinset ∧
+      (BX.card : ℝ) ≤ (X.card : ℝ) ^ β := hXlb
+  obtain ⟨BX, hBXi, hXsub, hBX⟩ := hXlb'
+  have hproper : W.P.Proper :=
+    (GAP.proper_smul_iff (by exact_mod_cast W.kpos.ne')).mp W.hproper
+  -- covolume bound: `lem68_covolume` at `sMin = 1` gives
+  -- `|P| ≤ C·1^{−max(0,d−n)}·|B_X| = C·|B_X|`; `|P| = ∏ᵢ wᵢ` since `P`
+  -- is proper.
+  have hcanon := lem68_covolume hC1 (le_refl (1 : ℝ)) hBXi hXsub W
+  have hcanon' : (W.P.toFinset.card : ℝ) ≤ C * (BX.card : ℝ) := by
+    simpa using hcanon
+  have hcov : ((∏ i, W.P.width i : ℕ) : ℝ) ≤ C * (BX.card : ℝ) := by
+    rwa [← GAP.card_toFinset_of_proper _ hproper]
+  exact moved_set_card_of_covolume W hXsub hBX hcov
+    (lt_of_lt_of_le zero_lt_one hC1) _hδ hβ hββ' _hcard habs
 
 /-- **Lemma 8, `(d,β')`-set form** — a move `A₁ − x` of a canonical
 `c'`-witness is a `(d,β')`-set: it is contained in the interval box

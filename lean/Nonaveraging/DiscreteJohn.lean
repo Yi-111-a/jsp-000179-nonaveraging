@@ -1661,6 +1661,34 @@ theorem dualVec_dot {v : Fin d → Fin d → ℤ}
   · rw [if_neg (fun h ↦ hij h.symm), if_neg hij, smul_eq_mul, mul_zero,
       mul_zero]
 
+/-- Quoted input for `DiscreteJohn.lean`: the Mahler-basis coordinate
+bound (the Minkowski-second-theorem content of Mahler's basis lemma),
+consumed as a hypothesis.  The field's type is exactly the statement it
+replaces: uniformly in the symmetric convex bounded body `B ∋ 0`, for
+every adapted `ℤ`-basis `v` of a greedy flag `u` of successive-minimum
+vectors, the `v`-dual pairing `⟨z, dualVec v i⟩` of an integer point
+`z ∈ B` satisfies `|coord| · λᵢ ≤ C` with `C` depending only on `d`. -/
+class DiscreteJohnInputs : Prop where
+  mahler_coord_bound_stmt : ∀ (d : ℕ), ∃ C : ℝ, 0 < C ∧
+    ∀ (B : Set (Fin d → ℝ)), Convex ℝ B →
+      (0 : Fin d → ℝ) ∈ B → (∀ x ∈ B, -x ∈ B) → Bornology.IsBounded B →
+      ∀ (u : Fin d → Fin d → ℤ) (r : ℕ) (v : Fin d → Fin d → ℤ),
+        LinearIndependent ℝ (fun i ↦ intVec (u i)) →
+        (∀ i : Fin d, (i:ℕ) < r → intVec (u i) ∈ intSpan B) →
+        (∀ i : Fin d, (i:ℕ) < r → ∀ z : Fin d → ℤ,
+          intVec z ∈ intSpan B → intVec z ∉ flagSpan u (i:ℕ) →
+          gauge B (intVec (u i)) ≤ gauge B (intVec z)) →
+        flagSpan u r = intSpan B →
+        adaptedToFlag u v →
+        LinearIndependent ℤ v →
+        Submodule.span ℤ (Set.range v) = ⊤ →
+        ∀ i : Fin d, (i:ℕ) < r →
+          ∀ z : Fin d → ℤ, intVec z ∈ B →
+            |(∑ k, (z k : ℝ) * (dualVec v i k : ℝ))| *
+              gauge B (intVec (u i)) ≤ C
+
+variable [DiscreteJohnInputs]
+
 /-- **The remaining geometric input: Minkowski's second theorem.**
 For `i < r`, the `i`-th coordinate of an integer point `z ∈ B` in the
 adapted basis satisfies `|coord| · λᵢ ≤ C`, where `λᵢ` is the `i`-th
@@ -1682,7 +1710,7 @@ Mathlib currently provides only Minkowski's *first* theorem
 (`MeasureTheory.exists_ne_zero_mem_lattice_of_measure_mul_two_pow_lt_measure`),
 so this remains the single remaining proof obligation of the
 formalization; every other step of Mahler's lemma is fully formalized. -/
-theorem mahler_coord_bound (d : ℕ) :
+theorem mahler_coord_bound [h : DiscreteJohnInputs] (d : ℕ) :
     ∃ C : ℝ, 0 < C ∧ ∀ (B : Set (Fin d → ℝ)), Convex ℝ B →
       (0 : Fin d → ℝ) ∈ B → (∀ x ∈ B, -x ∈ B) → Bornology.IsBounded B →
       ∀ (u : Fin d → Fin d → ℤ) (r : ℕ) (v : Fin d → Fin d → ℤ),
@@ -1698,8 +1726,8 @@ theorem mahler_coord_bound (d : ℕ) :
         ∀ i : Fin d, (i:ℕ) < r →
           ∀ z : Fin d → ℤ, intVec z ∈ B →
             |(∑ k, (z k : ℝ) * (dualVec v i k : ℝ))| *
-              gauge B (intVec (u i)) ≤ C := by
-  sorry
+              gauge B (intVec (u i)) ≤ C :=
+  h.mahler_coord_bound_stmt d
 
 /-- **The geometric core of the Mahler basis theorem** — the exact
 geometry-of-numbers content needed by `exists_zbasis_mahler`, isolated as a

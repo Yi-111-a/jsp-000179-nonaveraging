@@ -3418,6 +3418,82 @@ private lemma exists_heavy_frontier_pts {d : ℕ} (hd : 2 ≤ d) {δ : ℝ}
   simp only [dif_pos hl]
   exact hx' l hl
 
+/-- Quoted inputs for `ConvexPosition.lean`: faithful quotations of the deep
+geometric lemmas (the Steinhagen slab/ball dichotomy and the density-increment
+Lemma 1 slab and cap cases) consumed as hypotheses.  Each field's type is
+exactly the statement it replaces. -/
+class ConvexPositionInputs : Prop where
+  /-- Steinhagen/minimal-width dichotomy: a nonempty closed bounded convex set
+  either lies in a slab of width `≤ W` or contains a ball of radius
+  `W / (2(d+1))`. -/
+  slab_or_ball : ∀ {d : ℕ}, 1 ≤ d → ∀ {P : Set (Fin d → ℝ)},
+      Convex ℝ P → IsClosed P → Bornology.IsBounded P → P.Nonempty →
+      ∀ {W : ℝ}, 0 < W →
+      (∃ v : Fin d → ℝ, l2norm v = 1 ∧ ∃ c : ℝ,
+        ∀ x ∈ P, |dot v x - c| ≤ W / 2) ∨
+      (∃ q : Fin d → ℝ,
+        Metric.ball q (W / (2 * ((d : ℝ) + 1))) ⊆ P)
+  /-- The thin/slab case of the cubical kernel of Lemma 1. -/
+  slab_case : ∀ {d : ℕ}, 2 ≤ d → ∀ {ε : ℝ}, 0 < ε → ∀ {δ : ℝ},
+      0 < δ → δ ≤ 1 / 2 → ∀ {A : Finset (Fin d → ℝ)},
+      (∀ a ∈ A, ∀ i : Fin d, a i ∈ Set.Icc (-1) 1) →
+      ∀ {v : Fin d → ℝ}, l2norm v = 1 → ∀ {c w : ℝ},
+      w * (2 * Real.sqrt (d : ℝ)) ^ (d - 1) ≤
+        δ ^ (min (ε / 5 + 1 / 8) (1 / 4)) * 2 ^ d →
+      (δ ^ (min (ε / 5 + 1 / 8) (1 / 4))) ^ ((d - 1 : ℝ) / (d + 1) + ε) *
+          (A.card : ℝ) ≤
+        ((A.filter fun a ↦ |dot v a - c| ≤ w / 2).card : ℝ) →
+      ∃ η : ℝ, δ ≤ η ∧ η ≤ δ ^ (min (ε / 5 + 1 / 8) (1 / 4)) ∧
+        ∃ Ω' : Set (Fin d → ℝ), Convex ℝ Ω' ∧
+          volume Ω' ≤ ENNReal.ofReal η *
+            volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1) ∧
+          η ^ ((d - 1 : ℝ) / (d + 1) + ε) * (A.card : ℝ) ≤
+            ((A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω').card : ℝ)
+  /-- The cap/ball case of the cubical kernel of Lemma 1. -/
+  cap_case : ∀ {d : ℕ}, 2 ≤ d → ∀ {ε : ℝ}, 0 < ε → ∀ {δ : ℝ},
+      0 < δ → δ ≤ 1 / 2 → δ ^ ((d : ℝ)⁻¹) ≤ 1 / 32 →
+      ∀ {A : Finset (Fin d → ℝ)}, A.Nonempty →
+      (∀ a ∈ A, ∀ i : Fin d, a i ∈ Set.Icc (-1) 1) →
+      InDeltaConvexPosition A δ →
+      ∀ {k j : ℕ} {I : Finset (Fin d → ℝ)} {x : (Fin d → ℝ) → Fin d → ℝ},
+      8 * δ ^ ((d : ℝ)⁻¹) < ((2 : ℝ) ^ k)⁻¹ →
+      ((2 : ℝ) ^ k)⁻¹ ≤ 16 * δ ^ ((d : ℝ)⁻¹) →
+      δ < ((2 : ℝ) ^ (d * (k + 2) + 2))⁻¹ →
+      j < d * (k + 2) + 2 →
+      (∀ l ∈ I, ∃ z : Fin d → ℤ,
+        (∀ i, l i = (z i : ℝ) / 2 ^ k) ∧
+        (∀ i, l i ∈ Set.Icc (-1) 1) ∧
+        (A.card : ℝ) / 2 ^ (j + 1) <
+          ((A.filter fun a ↦ ∀ i, a i ∈ Set.Ico (l i)
+            (l i + ((2 : ℝ) ^ k)⁻¹)).card : ℝ) ∧
+        ((A.filter fun a ↦ ∀ i, a i ∈ Set.Ico (l i)
+          (l i + ((2 : ℝ) ^ k)⁻¹)).card : ℝ) ≤ (A.card : ℝ) / 2 ^ j) →
+      ((I : Set (Fin d → ℝ)).PairwiseDisjoint
+        fun l ↦ dyadicBox l ((2 : ℝ) ^ k)⁻¹) →
+      (3 / 4 * (A.card : ℝ) / (d * (k + 2) + 2) ≤
+        (((I.biUnion fun l ↦ A.filter fun a ↦
+          ∀ i, a i ∈ Set.Ico (l i)
+            (l i + ((2 : ℝ) ^ k)⁻¹))).card : ℝ)) →
+      I.card ≤ (3 * 2 ^ k) ^ d →
+      (∀ l ∈ I,
+        x l ∈ frontier (closure (convexHull ℝ
+          (⋃ l' ∈ I, dyadicBox l' ((2 : ℝ) ^ k)⁻¹))) ∧
+        x l ∈ centeredBox (fun i ↦ l i + ((2 : ℝ) ^ k)⁻¹ / 2)
+          (4 * Real.sqrt d * ((2 : ℝ) ^ k)⁻¹)) →
+      ∀ {q : Fin d → ℝ},
+      Metric.ball q
+        (δ ^ (min (ε / 5 + 1 / 8) (1 / 4)) * 2 ^ d /
+          (2 * ((d : ℝ) + 1) * (2 * Real.sqrt (d : ℝ)) ^ (d - 1))) ⊆
+        closure (convexHull ℝ (⋃ l ∈ I, dyadicBox l ((2 : ℝ) ^ k)⁻¹)) →
+      ∃ η : ℝ, δ ≤ η ∧ η ≤ δ ^ (min (ε / 5 + 1 / 8) (1 / 4)) ∧
+        ∃ Ω' : Set (Fin d → ℝ), Convex ℝ Ω' ∧
+          volume Ω' ≤ ENNReal.ofReal η *
+            volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1) ∧
+          η ^ ((d - 1 : ℝ) / (d + 1) + ε) * (A.card : ℝ) ≤
+            ((A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω').card : ℝ)
+
+variable [ConvexPositionInputs]
+
 /-- **Width dichotomy** (a Steinhagen-type alternative) used in the proof of
 Lemma 1: a nonempty closed bounded convex set `P` either lies in a slab of
 width `≤ W`, or it contains a ball of radius `W / (2(d+1))`.
@@ -3433,7 +3509,8 @@ private lemma convex_subset_slab_or_ball {d : ℕ} (hd : 1 ≤ d)
     (∃ v : Fin d → ℝ, l2norm v = 1 ∧ ∃ c : ℝ,
       ∀ x ∈ P, |dot v x - c| ≤ W / 2) ∨
     (∃ q : Fin d → ℝ,
-      Metric.ball q (W / (2 * ((d : ℝ) + 1))) ⊆ P) := sorry
+      Metric.ball q (W / (2 * ((d : ℝ) + 1))) ⊆ P) :=
+  ConvexPositionInputs.slab_or_ball hd hPconv hPcl hPbdd hPne hW
 
 /-- **The thin case of the cubical kernel** (Case 1 of the paper's proof of
 Lemma 1): if `A ⊆ [-1,1]^d` has `≥ δ^{g·a}|A|` points in a slab
@@ -3458,7 +3535,8 @@ private lemma density_increment_slab {d : ℕ} (hd : 2 ≤ d) {ε : ℝ}
         volume Ω' ≤ ENNReal.ofReal η *
           volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1) ∧
         η ^ ((d - 1 : ℝ) / (d + 1) + ε) * (A.card : ℝ) ≤
-          ((A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω').card : ℝ) := sorry
+          ((A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω').card : ℝ) :=
+  ConvexPositionInputs.slab_case hd hε hδ hδ1 hAcube hv hwvol hcount
 
 /-- **The cap case of the cubical kernel** (Case 2 of the paper's proof of
 Lemma 1).  When the convex hull `P` of the heavy dyadic boxes contains a ball
@@ -3509,7 +3587,9 @@ private lemma density_increment_cap {d : ℕ} (hd : 2 ≤ d) {ε : ℝ}
         volume Ω' ≤ ENNReal.ofReal η *
           volume (Set.pi Set.univ fun _ : Fin d ↦ Set.Icc (-1 : ℝ) 1) ∧
         η ^ ((d - 1 : ℝ) / (d + 1) + ε) * (A.card : ℝ) ≤
-          ((A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω').card : ℝ) := sorry
+          ((A.filter fun a ↦ (a : Fin d → ℝ) ∈ Ω').card : ℝ) :=
+  ConvexPositionInputs.cap_case hd hε hδ hδ1 hδs hAne hAcube hcp
+    hklow hkupp hkδ hj hI hdj hcover hIcard hx hball
 
 /-- **The cubical kernel of Lemma 1.**  This is the geometric heart of the
 argument, specialised to `Ω = [-1,1]^d` (so that `volume Ω = 2^d`): for all

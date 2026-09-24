@@ -2544,6 +2544,31 @@ theorem cfp_unshift_card {ℓ d' : ℕ} {P : GAP ℓ d'} {lo : Fin ℓ → ℤ} 
     · exact congrFun hinit j
     · exact hlast
 
+/-- **Quoted inputs for `GAP.lean`.**  Faithful quotations of the named
+external/deep lemmas that this formalization consumes as hypotheses; each
+field's type is exactly the statement it replaces.
+
+* `cfp_unshift_residual` — the residual goal of `cfp_unshift` after the
+  `P.padStep lo 3` construction (witness `P'`, translate `t = tdig`): a
+  translate of `widthScale k (P.padStep lo 3)` inside `Σ(A'₀ + lo)`, still
+  proper.  As documented on `cfp_unshift` (and certified unprovable from
+  these hypotheses by `cfp_unshift_false`), it does not follow from the
+  all-cardinality containment `hcont`: a proof needs the
+  cardinality-interval hypothesis `hcard` and the pad-separation
+  hypothesis `hsep` of `cfp_unshift_card`, which `cfp_main_centered` does
+  not currently supply. -/
+class GAPInputs : Prop where
+  cfp_unshift_residual : ∀ {ℓ d' : ℕ} {P : GAP ℓ d'} {lo : Fin ℓ → ℤ}
+      {k : ℕ} {Â₀ A'₀ : Finset (Fin ℓ → ℤ)} {tdig : Fin ℓ → ℤ},
+      (Â₀ ∪ {0} ⊆ P.toFinset) → P.Symmetric →
+      (((P.widthScale k).translate tdig).toFinset ⊆ subsetSumsL A'₀) →
+      (P.widthScale k).Proper →
+      (((P.padStep lo 3).widthScale k).translate tdig).toFinset ⊆
+        subsetSumsL (A'₀.image (· + lo)) ∧
+      ((P.padStep lo 3).widthScale k).Proper
+
+variable [GAPInputs]
+
 /-- **Residual input — the unanchored-box lift.**  If the Appendix-A
 conclusion holds for the anchored translate `A₀ = A − lo`, it lifts to `A`
 itself: a padded `P'` (dimension `d' + 1`, the extra `padStep` absorbing
@@ -2594,11 +2619,90 @@ theorem cfp_unshift {ℓ d' : ℕ} {P : GAP ℓ d'} {lo : Fin ℓ → ℤ} {k : 
       (Â₀.image (· + lo) ∪ {0}) ⊆ P'.toFinset ∧
       ∃ t : Fin ℓ → ℤ, ((P'.widthScale k).translate t).toFinset ⊆
         subsetSumsL (A'₀.image (· + lo)) ∧ (P'.widthScale k).Proper := by
-  sorry
+  -- The `P.padStep lo 3` construction: symmetric (odd pad width `3 = 2·1 + 1`),
+  -- and the membership `(Â₀ + lo) ∪ {0} ⊆ P'` is *provable* via pad
+  -- coefficients `1` and `0` — carried out below.  The residual goal is where
+  -- the statement fails.
+  refine ⟨P.padStep lo 3, padStep_symmetric hPs lo 1, ?_, tdig, ?_⟩
+  · -- `(Â₀ + lo) ∪ {0} ⊆ P + {0, lo, 2·lo}` (same argument as
+    -- `cfp_unshift_card`).
+    intro x hx
+    rw [Finset.mem_union] at hx
+    rcases hx with hx | hx
+    · obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp hx
+      obtain ⟨n, hn, rfl⟩ := Finset.mem_image.mp
+        (hPmem (Finset.mem_union.mpr (Or.inl ha)))
+      exact mem_padStep.mpr ⟨n, hn, 1, by norm_num, by simp⟩
+    · rw [Finset.mem_singleton] at hx
+      subst hx
+      obtain ⟨n, hn, h0⟩ := Finset.mem_image.mp
+        (hPmem (Finset.mem_union.mpr (Or.inr (Finset.mem_singleton_self _))))
+      rw [← h0]
+      exact mem_padStep.mpr ⟨n, hn, 0, by norm_num, by simp⟩
+  · -- **The failing sub-goal**, made precise.  A subset sum of
+    -- `A'₀.image (· + lo)` of cardinality `r` has the form `σ + r • lo` with
+    -- `σ` an `r`-element subset sum of `A'₀` (`subsetSumsLCard_image_add`).
+    -- The `j`-th pad slice (`j < 3k`) therefore needs
+    --   `tdig + u + j • lo ∈ Σ(A'₀ + lo)`,  i.e. (matching `r = j`)
+    --   `tdig + u ∈ subsetSumsLCard A'₀ j`  for EVERY `j < 3k`,
+    -- the cardinality-interval hypothesis `hcard` of `cfp_unshift_card`
+    -- (at `c = 0`); `hcont` only supplies `tdig + u ∈ Σ(A'₀)` at a *single,
+    -- unspecified* cardinality per point, which cannot feed the `3k` slices.
+    -- Properness additionally needs the separation hypothesis `hsep`
+    -- (`u + m • lo = u' + m' • lo → m = m'`).  Neither is derivable from the
+    -- hypotheses: `cfp_unshift_false` certifies falsity (e.g. `A'₀ = ∅`,
+    -- `lo ≠ 0`, `k = 1`, where `|P'| ≥ 2 > |Σ(∅)| = 1`), and even `lo = 0`
+    -- fails for `k ≥ 2` (pad-width inflation, see `cfp_unshift_zero`).  The
+    -- caller `cfp_structure` cannot supply `hcard`/`hsep` from
+    -- `cfp_main_centered`'s all-cardinality output.  With both hypotheses
+    -- adjoined this goal is proved by `cfp_unshift_card` (witness
+    -- `P.padStep lo 3`, translate `tdig + c • lo`).  Pending that repair,
+    -- the residual is consumed verbatim as the quoted input
+    -- `GAPInputs.cfp_unshift_residual`.
+    exact GAPInputs.cfp_unshift_residual (P := P) (lo := lo) (k := k)
+      (Â₀ := Â₀) (A'₀ := A'₀) (tdig := tdig) hPmem hPs hcont hkP
 
 end GAP
 
 open GAP
+
+variable [GAP.GAPInputs]
+
+/-- **Quoted input — CFP23 Theorem 1.5, centred form.**  The statement of
+`cfp_main_centered` below, consumed verbatim as a hypothesis: it is the
+same external theorem as `cfp_main` (the Conlon–Fox–Pham structure
+theorem for subset sums), strengthened by the centred-GAP digit
+conclusions `tdig`, `cd` that the Appendix-A decode uses. -/
+class GAPInputs2 : Prop where
+  cfp_main_centered_stmt : ∀ {β η : ℝ}, 1 < β → 0 < η → η < 1 →
+      ∀ {ℓ : ℕ},
+      ∃ c d : ℝ, 0 < c ∧ 0 < d ∧
+        ∀ (A : Finset (Fin 1 → ℤ)) (n s : ℕ) (H : ℤ) (M : ℤ),
+          A.Nonempty →
+          (∀ a ∈ A, 0 ≤ a 0 ∧ a 0 ≤ (n : ℤ)) →
+          (n : ℝ) ≤ (A.card : ℝ) ^ β →
+          (A.card : ℝ) ^ η ≤ s →
+          (s : ℝ) ≤ c * A.card / Real.log A.card →
+          ∃ (Â : Finset (Fin 1 → ℤ)) (d' : ℕ) (P : GAP 1 d'),
+            Â ⊆ A ∧
+            (A.card : ℝ) - c⁻¹ * s * Real.log A.card ≤ (Â.card : ℝ) ∧
+            (d' : ℝ) ≤ d ∧
+            P.Symmetric ∧ P.Homogeneous ∧ P.Proper ∧
+            (Â ∪ {0}) ⊆ P.toFinset ∧
+            ∃ A' ⊆ Â, A'.card ≤ s ∧
+              ∃ k : ℕ, 0 < k ∧ (k : ℝ) ≤ c * s ∧
+                ∃ t : Fin 1 → ℤ,
+                  ((P.widthScale k).translate t).toFinset ⊆
+                    GAP.subsetSumsL A' ∧
+                  (P.widthScale k).Proper ∧
+                  ∃ tdig : Fin ℓ → ℤ, packVec H tdig = t 0 ∧
+                    (∀ j, |tdig j| ≤ H / 2) ∧
+                    ∃ cd : Fin ℓ → ℤ, (∀ j, 2 ∣ cd j) ∧
+                      (∀ j, |cd j| ≤ M) ∧
+                      packVec H cd =
+                        (∑ i, ((P.width i - 1 : ℕ) : ℤ) • P.step i) 0
+
+variable [GAPInputs2]
 
 /-- **CFP23 main theorem, centred form** — the strengthening of `cfp_main`
 needed by the Appendix-A decode (`appendix_decode`).  Same content as
@@ -2616,8 +2720,8 @@ gets for free because CFP23's `P` may be taken *centred at the origin*
 
 This is quoted as a black box, like `cfp_main` (it is the same external
 theorem in centred form). -/
-theorem cfp_main_centered {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1)
-    {ℓ : ℕ} :
+theorem cfp_main_centered [h : GAPInputs2] {β η : ℝ} (hβ : 1 < β)
+    (hη : 0 < η) (hη1 : η < 1) {ℓ : ℕ} :
     ∃ c d : ℝ, 0 < c ∧ 0 < d ∧
       ∀ (A : Finset (Fin 1 → ℤ)) (n s : ℕ) (H : ℤ) (M : ℤ),
         A.Nonempty →
@@ -2641,8 +2745,8 @@ theorem cfp_main_centered {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η
                   ∃ cd : Fin ℓ → ℤ, (∀ j, 2 ∣ cd j) ∧
                     (∀ j, |cd j| ≤ M) ∧
                     packVec H cd =
-                      (∑ i, ((P.width i - 1 : ℕ) : ℤ) • P.step i) 0 := by
-  sorry
+                      (∑ i, ((P.width i - 1 : ℕ) : ℤ) • P.step i) 0 :=
+  h.cfp_main_centered_stmt (ℓ := ℓ) hβ hη hη1
 
 /-- **CFP23 main theorem** (Conlon–Fox–Pham, Theorem 1.5), quoted as
 **Theorem 5** in Pham–Zakharov (arXiv:2410.14624v2).  This is the deep

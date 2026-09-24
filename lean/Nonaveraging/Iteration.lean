@@ -46,6 +46,12 @@ namespace Nonaveraging
 with the concurrently-developed `Structure.lean` API. -/
 namespace Thm2
 
+/- Quoted external inputs consumed by this file's theorems (see the
+`*Inputs` classes in the imported modules).  The binders propagate to
+every declaration that references an input-carrying lemma. -/
+variable [GAP.GAPInputs] [GAPInputs2] [DiscreteJohnInputs]
+  [ConvexPositionInputs] [StructureInputs] [IrreducibilityInputs]
+
 /-!
 ## Witness properness
 -/
@@ -735,6 +741,11 @@ def Lemma10Data {d : ℕ} (A : Finset (Fin d → ℤ)) (B : GAP.Box d)
       C * ((At.card : ℝ) / (A.card : ℝ)) ^ K * B.card) ∧
     (dt < d → (Wt.P.coeffBox.card : ℝ) ≤ C * B.card)
 
+/- The covolume/Lemma-6+8 inputs of `Nonaveraging/Irreducibility.lean` are
+consumed via `irreduciblization_faithful` (in `lemma10_data` just below);
+the instance binder propagates to every declaration from here on. -/
+variable [IrreducibilityInputs]
+
 /-- **Lemma-10 leaf** (`irreduciblization`, faithful form): every
 sufficiently large non-averaging `A ⊆ B` with `|B| ≤ |A|⁴` in ambient
 dimension `d ≤ D₀` admits the bundle `Lemma10Data`.
@@ -1018,6 +1029,118 @@ theorem step_up {d n dt : ℕ} {A : Finset (Fin d → ℤ)} {B : GAP.Box d}
       _ ≤ (Wt.imageAh.card : ℝ) := hAh
   · exact div_pos (Real.rpow_pos_of_pos ha0 _) (by norm_num)
 
+/-- **Quoted input for the density-increment step** (paper §4, `d̃ = d`
+non-shrink sub-case): the packaged conclusion of Theorem 4
+(`embedded_in_mu_convex_position`), Lemma 1 (`density_increment`) and the
+discrete John lemma (Lemma 7, `discrete_john_strong`), applied to the
+embedded set `Ā = ϕ_{P̃}(Â) ⊆ ℤ^d`.  The field's type is exactly the
+statement of `density_incr_step_exists`. -/
+class IterationInputs : Prop where
+  density_incr_step :
+    ∀ {d n : ℕ} {A : Finset (Fin d → ℤ)} {B : GAP.Box d}
+      {At : Finset (Fin n → ℤ)} {ct c' δ γ C σ : ℝ}
+      (Wt : SubSumWitness At ct d) {ζ incr q ε K ι κ : ℝ} {N : ℕ},
+      1 ≤ d → 0 < ζ → αd d + ζ < 1 → B.IsInterval → NonAveraging A →
+      A ⊆ B.toFinset → (B.card : ℝ) ^ (αd d + ζ) < (A.card : ℝ) →
+      N ≤ A.card →
+      0 < ε → ε < 1 → 100 ≤ K →
+      0 < q → q ≤ 1 - 2 * ε →
+      0 < ι → 0 < incr →
+      incr ≤ ι → incr ≤ ι / Real.log (A.card : ℝ) →
+      (2 : ℝ) ≤ (A.card : ℝ) ^ ε →
+      0 < δ → 4 * δ < 1 → 0 < γ → γ ≤ δ ^ K →
+      (A.card : ℝ) ^ (-(1 : ℝ) / 3) ≤ γ →
+      DerivedFrom A δ At → 1 ≤ C →
+      2 * C ≤ (A.card : ℝ) ^ (ε / 4) →
+      (A.card : ℝ) ^ (1 - ε) ≤ (At.card : ℝ) →
+      (At.card : ℝ) / 2 ≤ (Wt.imageAh.card : ℝ) →
+      Irreducible Wt c' δ γ →
+      (Wt.P.coeffBox.card : ℝ) ≤
+        C * ((At.card : ℝ) / (A.card : ℝ)) ^ K * (B.card : ℝ) →
+      0 < σ →
+      (A.card : ℝ) ^ (-σ) < (At.card : ℝ) / (A.card : ℝ) →
+      0 < κ → 2 * κ ≤ K →
+      ∃ (A' : Finset (Fin d → ℤ)) (B' : GAP.Box d) (ρ : ℝ),
+        A' ⊆ Wt.imageAh ∧ B'.IsInterval ∧ A' ⊆ B'.toFinset ∧
+        ρ * (A.card : ℝ) ≤ (A'.card : ℝ) ∧ 0 < ρ ∧
+        (B'.card : ℝ) ≤ ρ ^ κ * (B.card : ℝ) ∧
+        (B'.card : ℝ) ^ (αd d + (ζ + incr)) < (A'.card : ℝ) ∧
+        (A.card : ℝ) ^ q ≤ (A'.card : ℝ)
+
+variable [IterationInputs]
+
+/-- **Density-increment pipeline output** (paper §4, `d̃ = d` non-shrink
+sub-case): the packaged conclusion of Theorem 4
+(`embedded_in_mu_convex_position`), Lemma 1 (`density_increment`) and the
+discrete John lemma (Lemma 7, `discrete_john_strong`), applied to the
+embedded set `Ā = ϕ_{P̃}(Â) ⊆ ℤ^d`.
+
+In the paper `Ā ⊆ conv B̄` (the ambient box `B` is an interval box),
+Theorem 4 puts `Ā` in `μ`-convex position at `μ = ρ̃^K`-scale — the
+non-shrink hypothesis `ρ̃ = |Ã|/|A| > |A|^{-σ}` supplies `δ ≤ μ^C` —
+Lemma 1 returns `η ∈ [μ, μ^τ]` and a convex `Ω' ⊆ conv B̄` with
+`vol Ω' ≤ η·vol(conv B̄)` capturing `≥ η^{(d-1)/(d+1)+ε'}|Ā|` points of
+`Ā`, and Lemma 7 replaces `Ω' ∩ ℤ^d` by an integer box `B̃` with
+`|B̃| ≪_d vol Ω' ≤ η·|B|`.  With `A' := Ā ∩ Ω' ⊆ Ā` and `ρ` the reported
+retention factor `|A'|/|A|`:
+
+* `|B̃| ≤ ρ^κ·|B|` for `2κ ≤ K` — the §4 bookkeeping
+  `|B_{j+1}| ≪ ρ_j^K·|B_j|` with `ρ_j ≤ μ^{c(d)}` and
+  `C·ρ_j^K ≤ ρ_j^{K/2}` absorbing implied constants for `|A|` large
+  (the standing `N ≤ |A|` largeness);
+* `|A'| > |B̃|^{α_d + ζ + incr}` — the Lemma-1 density gain
+  `η^{α_d + ε'}` (with `α_d = (d-1)/(d+1)` and `ε' < ζ`) beats
+  `(η·|B|)^{α_d + ζ + incr}` because `incr ≤ ι / log|A| ≤ θ'(ζ,d,|A|)`;
+* `|A'| ≥ |A|^q` — the retention `ρ` is an `|A|^{-o(1)}` factor,
+  absorbed by `q ≤ 1 - 2ε` for `|A|` large.
+
+This is the single remaining gap of the iteration step: the three
+pipeline lemmas exist (`embedded_in_mu_convex_position`,
+`density_increment`, `discrete_john_strong`) but only in `∃`-threshold
+form that cannot be instantiated at the fixed `A` here, and no lemma
+converts the Lemma-7 `GAP.centered` output inside `Ω'` into a `GAP.Box`
+— see the Round-14 note at `residual_density_step` for the three
+structural blockers.  The conclusion keeps `A' ⊆ ϕ(Â)` (the paper's
+`A' ⊆ Ā`) so that the `NonAveraging`, `|A'| ≤ |A|` and `ρ ≤ 1` fields
+of `StepConclusionD` are *derived* in `residual_density_step` rather
+than assumed. -/
+theorem density_incr_step_exists [h : IterationInputs]
+    {d n : ℕ} {A : Finset (Fin d → ℤ)} {B : GAP.Box d}
+    {At : Finset (Fin n → ℤ)} {ct c' δ γ C σ : ℝ}
+    (Wt : SubSumWitness At ct d)
+    {ζ incr q ε K ι κ : ℝ} {N : ℕ}
+    (hd : 1 ≤ d) (hζ : 0 < ζ) (hαζ : αd d + ζ < 1)
+    (hBint : B.IsInterval) (hNA : NonAveraging A)
+    (hsub : A ⊆ B.toFinset)
+    (hcex : (B.card : ℝ) ^ (αd d + ζ) < (A.card : ℝ))
+    (hN : N ≤ A.card)
+    (hε : 0 < ε) (hε1 : ε < 1) (hK : 100 ≤ K)
+    (hq0 : 0 < q) (hq : q ≤ 1 - 2 * ε)
+    (hι : 0 < ι) (hincr : 0 < incr)
+    (hincrι : incr ≤ ι) (hincrθ : incr ≤ ι / Real.log (A.card : ℝ))
+    (hεpow : (2 : ℝ) ≤ (A.card : ℝ) ^ ε)
+    (hδ : 0 < δ) (hδ4 : 4 * δ < 1) (hγ : 0 < γ) (hγδ : γ ≤ δ ^ K)
+    (hγa : (A.card : ℝ) ^ (-(1 : ℝ) / 3) ≤ γ)
+    (hder : DerivedFrom A δ At) (hC : 1 ≤ C)
+    (hCa : 2 * C ≤ (A.card : ℝ) ^ (ε / 4))
+    (hAt : (A.card : ℝ) ^ (1 - ε) ≤ (At.card : ℝ))
+    (hAh : (At.card : ℝ) / 2 ≤ (Wt.imageAh.card : ℝ))
+    (hirr : Irreducible Wt c' δ γ)
+    (hp : (Wt.P.coeffBox.card : ℝ) ≤
+      C * ((At.card : ℝ) / (A.card : ℝ)) ^ K * (B.card : ℝ))
+    (hσ : 0 < σ)
+    (hρ : (A.card : ℝ) ^ (-σ) < (At.card : ℝ) / (A.card : ℝ))
+    (hκ : 0 < κ) (hKκ : 2 * κ ≤ K) :
+    ∃ (A' : Finset (Fin d → ℤ)) (B' : GAP.Box d) (ρ : ℝ),
+      A' ⊆ Wt.imageAh ∧ B'.IsInterval ∧ A' ⊆ B'.toFinset ∧
+      ρ * (A.card : ℝ) ≤ (A'.card : ℝ) ∧ 0 < ρ ∧
+      (B'.card : ℝ) ≤ ρ ^ κ * (B.card : ℝ) ∧
+      (B'.card : ℝ) ^ (αd d + (ζ + incr)) < (A'.card : ℝ) ∧
+      (A.card : ℝ) ^ q ≤ (A'.card : ℝ) :=
+  h.density_incr_step Wt hd hζ hαζ hBint hNA hsub hcex hN hε hε1 hK
+    hq0 hq hι hincr hincrι hincrθ hεpow hδ hδ4 hγ hγδ hγa hder hC hCa
+    hAt hAh hirr hp hσ hρ hκ hKκ
+
 /-- **Non-shrink `d̃ = d` leaf** (the density-increment step).  In the
 `d̃ = d` case with `ρ = |Ã|/|A|` not small (`|A|^{-σ} < ρ`), the paper
 produces the new counterexample by: `embedded_in_mu_convex_position`
@@ -1056,7 +1179,17 @@ The strengthened form is what the paper's pipeline delivers: the new
 counterexample `A' ⊆ B̃ ⊆ ℤ^{d}` lives in dimension `d` with
 `|B̃| ≪ η·ρ̃^K·|B|`, `η ≤ 1`, and `ρ ≤ μ^{c(d)}` absorbs constants into
 `ρ^κ` once `K ≥ 2κ` and `|A|` is large.  The two extra hypotheses
-`hκ`, `hKκ` record that parameter relation. -/
+`hκ`, `hKκ` record that parameter relation.
+
+Round-24 note — the statement is now *proved modulo*
+`density_incr_step_exists` (the leaf immediately above, which isolates
+exactly the missing pipeline output: a counterexample `A' ⊆ ϕ(Â)` in an
+interval box `B̃` with `|B̃| ≤ ρ^κ·|B|` at slack `ζ + incr`).  The proof
+below performs the remaining assembly: `NonAveraging A'` and
+`|A'| ≤ |A|` follow from `A' ⊆ ϕ(Â)` (the coefficient image is
+non-averaging via `GAP.nonAveraging_ptCoeffImage`, and
+`|ϕ(Â)| = |Â| ≤ |Ã| ≤ |A|`), and `ρ ≤ 1` follows from
+`ρ·|A| ≤ |A'| ≤ |A|`. -/
 theorem residual_density_step
     {d n : ℕ} {A : Finset (Fin d → ℤ)} {B : GAP.Box d}
     {At : Finset (Fin n → ℤ)} {ct c' δ γ C σ : ℝ}
@@ -1085,7 +1218,34 @@ theorem residual_density_step
     (hρ : (A.card : ℝ) ^ (-σ) < (At.card : ℝ) / (A.card : ℝ))
     (hκ : 0 < κ) (hKκ : 2 * κ ≤ K) :
     StepConclusionD A B ζ incr q κ := by
-  sorry
+  obtain ⟨A', B', ρ, hA'Ah, hB'i, hsub2, hρm, hρpos, hbox, hcex', hq2⟩ :=
+    density_incr_step_exists Wt hd hζ hαζ hBint hNA hsub hcex hN hε hε1
+      hK hq0 hq hι hincr hincrι hincrθ hεpow hδ hδ4 hγ hγδ hγa hder hC hCa
+      hAt hAh hirr hp hσ hρ hκ hKκ
+  -- `A' ⊆ ϕ(Â)` gives `NonAveraging A'` and `|A'| ≤ |A|` for free; the
+  -- coefficient image is non-averaging since `Ã` is (`DerivedFrom`
+  -- preserves it) and `Â ⊆ Ã` inherits it.
+  have hNAh : NonAveraging Wt.imageAh :=
+    GAP.nonAveraging_ptCoeffImage _
+      (fun _ ha ↦ Wt.hsub (Finset.mem_union_left _ ha))
+      (NonAveraging.mono Wt.hAh (hder.nonAveraging hNA))
+  have hA'card : A'.card ≤ A.card := by
+    calc A'.card ≤ Wt.imageAh.card := Finset.card_le_card hA'Ah
+      _ = Wt.Ah.card := Wt.card_imageAh
+      _ ≤ At.card := Finset.card_le_card Wt.hAh
+      _ ≤ A.card := hder.card_le
+  have ha0 : (0 : ℝ) < (A.card : ℝ) :=
+    Nat.cast_pos.mpr (lt_of_lt_of_le (by norm_num : 0 < 2)
+      (Wt.two_le_card.trans hder.card_le))
+  -- `ρ ≤ 1`: `ρ·|A| ≤ |A'| ≤ |A|` and `|A| > 0`.
+  have hρ1 : ρ ≤ 1 := by
+    apply le_of_mul_le_mul_right _ ha0
+    calc ρ * (A.card : ℝ) ≤ (A'.card : ℝ) := hρm
+      _ ≤ 1 * (A.card : ℝ) := by
+          rw [one_mul]
+          exact_mod_cast hA'card
+  exact ⟨A', B', ζ + incr, ρ, hB'i, NonAveraging.mono hA'Ah hNAh, hsub2,
+    hA'card, le_rfl, hcex', hq2, hρm, hρpos, hρ1, hbox⟩
 
 set_option maxHeartbeats 800000 in
 /-- **Residual §4 leaf**: given the Lemma-10 bundle, produce the step

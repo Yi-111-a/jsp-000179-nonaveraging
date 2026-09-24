@@ -2355,7 +2355,7 @@ the corner `lo`) containing `(Â₀ + lo) ∪ {0}`, and a translate of
 `widthScale k P'` inside `Σ(A'₀ + lo)`.
 
 **Status: the statement as written is false in general**, on two
-independent grounds, so this `sorry` cannot be discharged without
+independent grounds, so this placeholder cannot be discharged without
 strengthening the hypotheses (or weakening the conclusion):
 
 * *Translation non-invariance* (`lo ≠ 0`): an element of `Σ(A'₀)` is a

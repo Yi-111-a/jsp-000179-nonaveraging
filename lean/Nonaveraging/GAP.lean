@@ -2348,6 +2348,202 @@ theorem cfp_unshift_zero {ℓ d' : ℕ} {P : GAP ℓ d'} {lo : Fin ℓ → ℤ} 
   rw [h0, h0]
   exact ⟨P, hPs, hPmem, tdig, hcont, hkP⟩
 
+/-- **Certified counterexample to `cfp_unshift`.**  Take `ℓ = 1`, `d' = 0`,
+`P = {0}` (the empty-step GAP), `Â₀ = {0}`, `A'₀ = ∅`, `lo = 1`, `k = 1`,
+`tdig = 0`: the conclusion would give a `1`-dimensional `P'` containing
+`{0, 1}` — so `|P'| ≥ 2` — while `Σ(∅) = {0}` has a single element, so no
+translate of `P'.widthScale 1 = P'` can lie inside it.  (The same argument
+with `A'₀ = {a}`, `lo = b` odd uses symmetry to force `|P'| ≥ 3 > |Σ| = 2`;
+`A'₀ = ∅` avoids the parity analysis.)  This makes the falsity of the
+`cfp_unshift` statement below a theorem, not just a heuristic. -/
+theorem cfp_unshift_false :
+    ¬ (∀ {ℓ d' : ℕ} {P : GAP ℓ d'} {lo : Fin ℓ → ℤ} {k : ℕ}
+        {Â₀ A'₀ : Finset (Fin ℓ → ℤ)} {tdig : Fin ℓ → ℤ},
+        (Â₀ ∪ {0} ⊆ P.toFinset) → P.Symmetric →
+        (((P.widthScale k).translate tdig).toFinset ⊆ subsetSumsL A'₀) →
+        (P.widthScale k).Proper →
+        ∃ P' : GAP ℓ (d' + 1), P'.Symmetric ∧
+          (Â₀.image (· + lo) ∪ {0}) ⊆ P'.toFinset ∧
+          ∃ t : Fin ℓ → ℤ, ((P'.widthScale k).translate t).toFinset ⊆
+            subsetSumsL (A'₀.image (· + lo)) ∧ (P'.widthScale k).Proper) := by
+  intro h
+  set e : Fin 1 → ℤ := fun _ ↦ 1 with hedef
+  set P₀ : GAP 1 0 := ⟨0, fun i ↦ i.elim0, fun i ↦ i.elim0⟩ with hP₀def
+  have hP0 : P₀.toFinset = {0} := by
+    ext x
+    simp only [toFinset, Finset.mem_image, Finset.mem_singleton]
+    constructor
+    · rintro ⟨n, -, rfl⟩
+      simp [GAP.eval, hP₀def]
+    · intro hx
+      subst hx
+      exact ⟨fun _ ↦ 0, by rw [mem_coeffs]; exact fun i ↦ i.elim0,
+        by simp [GAP.eval, hP₀def]⟩
+  have he1 : e ≠ 0 := by
+    intro hbad
+    have := congrFun hbad 0
+    simp [hedef] at this
+  obtain ⟨P', hPs', hmem', t, hcont', -⟩ :=
+    h (P := P₀) (lo := e) (k := 1) (Â₀ := {0}) (A'₀ := ∅) (tdig := 0)
+      (by
+        rw [hP0]
+        exact Finset.union_subset_iff.mpr
+          ⟨fun _ hx ↦ hx, fun _ hx ↦ hx⟩)
+      ⟨0, fun x hx ↦ by
+        rw [hP0, Finset.mem_singleton] at hx
+        subst hx
+        rw [hP0]
+        simp⟩
+      (by
+        rw [widthScale_one, translate_toFinset, hP0, Finset.image_singleton,
+          add_zero]
+        exact Finset.singleton_subset_iff.mpr
+          (mem_subsetSumsL.mpr ⟨∅, Finset.empty_subset _, Finset.sum_empty⟩))
+      (by
+        rw [widthScale_one]
+        intro a _ b _ _
+        funext i
+        exact i.elim0)
+  -- `P'` contains `0` and `e`, so `|P'| ≥ 2`
+  have hcard2 : 2 ≤ P'.toFinset.card := by
+    have h : ∃ a ∈ P'.toFinset, ∃ b ∈ P'.toFinset, a ≠ b :=
+      ⟨0, hmem' (Finset.mem_union_right _ (Finset.mem_singleton_self 0)),
+        e, hmem' (Finset.mem_union_left _ (Finset.mem_image.mpr
+          ⟨0, Finset.mem_singleton_self 0, zero_add e⟩)), he1.symm⟩
+    have h1 := Finset.one_lt_card.mpr h
+    omega
+  -- but a translate of `P'` lies in `Σ(∅) = {0}`, of cardinality `1`
+  have hSig : subsetSumsL (∅ : Finset (Fin 1 → ℤ)) = {0} := by
+    simp [subsetSumsL]
+  have hcardT : ((P'.widthScale 1).translate t).toFinset.card =
+      P'.toFinset.card := by
+    rw [widthScale_one, translate_toFinset]
+    exact Finset.card_image_of_injective _
+      (fun a b hab ↦ add_right_cancel_iff.mp hab)
+  have hle1 : P'.toFinset.card ≤ 1 := by
+    rw [← hcardT]
+    calc ((P'.widthScale 1).translate t).toFinset.card
+        ≤ (subsetSumsL ((∅ : Finset (Fin 1 → ℤ)).image (· + e))).card :=
+          Finset.card_le_card hcont'
+      _ = 1 := by
+          rw [Finset.image_empty, hSig, Finset.card_singleton]
+  omega
+
+/-- **The provable form of `cfp_unshift`: the cardinality-interval repair.**
+If every point of `csP + tdig` is a subset sum of `A'₀` of *every*
+cardinality in `[c, c + 3k)` — the fixed-cardinality interval that the
+all-cardinalities `Σ(A'₀)` containment supplied by `cfp_main` fails to
+give — and `lo` is separated from `csP`-differences (so that the pad stays
+proper), then `P' = P.padStep lo 3` works: it is symmetric (odd pad width,
+`padStep_symmetric`), contains `Â₀ + lo` (pad coefficient `1`) and `0`
+(pad coefficient `0`), and `(widthScale k P') + (tdig + c • lo) ⊆
+Σ(A'₀ + lo)` since the `j`-th pad slice `u + tdig + (c + j) • lo` is a sum
+of `c + j` shifted elements (`subsetSumsLCard_image_add`).
+
+This is the *minimal honest restatement* of `cfp_unshift`: the two extra
+hypotheses `hcard`, `hsep` are exactly the data that `cfp_main`/
+`cfp_main_centered` do not currently supply. -/
+theorem cfp_unshift_card {ℓ d' : ℕ} {P : GAP ℓ d'} {lo : Fin ℓ → ℤ} {k : ℕ}
+    {Â₀ A'₀ : Finset (Fin ℓ → ℤ)} {tdig : Fin ℓ → ℤ} {c : ℕ}
+    (hPmem : Â₀ ∪ {0} ⊆ P.toFinset) (hPs : P.Symmetric)
+    (hcard : ∀ y ∈ ((P.widthScale k).translate tdig).toFinset, ∀ j : ℕ,
+        j < 3 * k → y ∈ subsetSumsLCard A'₀ (c + j))
+    (hsep : ∀ u ∈ (P.widthScale k).toFinset, ∀ m : ℕ, m < 3 * k →
+        ∀ u' ∈ (P.widthScale k).toFinset, ∀ m' : ℕ, m' < 3 * k →
+        u + (m : ℤ) • lo = u' + (m' : ℤ) • lo → m = m')
+    (hkP : (P.widthScale k).Proper) :
+    ∃ P' : GAP ℓ (d' + 1), P'.Symmetric ∧
+      (Â₀.image (· + lo) ∪ {0}) ⊆ P'.toFinset ∧
+      ∃ t : Fin ℓ → ℤ, ((P'.widthScale k).translate t).toFinset ⊆
+        subsetSumsL (A'₀.image (· + lo)) ∧ (P'.widthScale k).Proper := by
+  refine ⟨P.padStep lo 3, padStep_symmetric hPs lo 1, ?_, tdig + c • lo, ?_,
+    ?_⟩
+  · -- `(Â₀ + lo) ∪ {0} ⊆ P + {0, lo, 2lo}` via pad coefficients `1`, `0`
+    intro x hx
+    rw [Finset.mem_union] at hx
+    rcases hx with hx | hx
+    · obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp hx
+      obtain ⟨n, hn, rfl⟩ := Finset.mem_image.mp
+        (hPmem (Finset.mem_union.mpr (Or.inl ha)))
+      exact mem_padStep.mpr ⟨n, hn, 1, by norm_num, by simp⟩
+    · rw [Finset.mem_singleton] at hx
+      subst hx
+      obtain ⟨n, hn, h0⟩ := Finset.mem_image.mp
+        (hPmem (Finset.mem_union.mpr (Or.inr (Finset.mem_singleton_self _))))
+      rw [← h0]
+      exact mem_padStep.mpr ⟨n, hn, 0, by norm_num, by simp⟩
+  · -- `csP' + (tdig + c•lo) ⊆ Σ(A'₀ + lo)`: the `j`-th pad slice is a sum
+    -- of `c + j` shifted elements.
+    intro y hy
+    obtain ⟨n', hn', rfl⟩ := Finset.mem_image.mp hy
+    rw [translate_eval, widthScale_eval, padStep_eval]
+    have hn'init : (fun i ↦ n' i.castSucc) ∈ (P.widthScale k).coeffs := by
+      rw [mem_coeffs]
+      intro i
+      have h := coeff_mem_width hn' i.castSucc
+      simpa only [translate_width, widthScale_width, padStep_width,
+        Fin.snoc_castSucc] using h
+    have hn'last : n' (Fin.last d') < 3 * k := by
+      have h := coeff_mem_width hn' (Fin.last d')
+      simp only [translate_width, widthScale_width, padStep_width,
+        Fin.snoc_last] at h
+      omega
+    have hu : P.eval (fun i ↦ n' i.castSucc) ∈ (P.widthScale k).toFinset :=
+      Finset.mem_image.mpr ⟨_, hn'init, widthScale_eval P k _⟩
+    have htu : tdig + P.eval (fun i ↦ n' i.castSucc) ∈
+        ((P.widthScale k).translate tdig).toFinset := by
+      rw [translate_toFinset]
+      exact Finset.mem_image.mpr ⟨_, hu, add_comm _ _⟩
+    have hcar := hcard _ htu _ hn'last
+    have heq : tdig + c • lo + (P.eval (fun i ↦ n' i.castSucc) +
+        (n' (Fin.last d') : ℤ) • lo) =
+        (tdig + P.eval (fun i ↦ n' i.castSucc)) +
+          (c + n' (Fin.last d')) • lo := by
+      rw [Nat.cast_smul_eq_nsmul ℤ, add_smul]
+      abel
+    rw [heq]
+    exact subsetSumsLCard_subset _ _ (subsetSumsLCard_image_add lo _
+      (Finset.mem_image.mpr ⟨_, hcar, rfl⟩))
+  · -- `csP'` proper: pad-slice separation `hsep` plus `csP` properness
+    intro a' ha' b' hb' hab'
+    rw [widthScale_eval, padStep_eval, widthScale_eval, padStep_eval] at hab'
+    have hainit : (fun i ↦ a' i.castSucc) ∈ (P.widthScale k).coeffs := by
+      rw [mem_coeffs]
+      intro i
+      have h := coeff_mem_width ha' i.castSucc
+      simpa only [widthScale_width, padStep_width, Fin.snoc_castSucc]
+        using h
+    have hbinit : (fun i ↦ b' i.castSucc) ∈ (P.widthScale k).coeffs := by
+      rw [mem_coeffs]
+      intro i
+      have h := coeff_mem_width hb' i.castSucc
+      simpa only [widthScale_width, padStep_width, Fin.snoc_castSucc]
+        using h
+    have halast : a' (Fin.last d') < 3 * k := by
+      have h := coeff_mem_width ha' (Fin.last d')
+      simp only [widthScale_width, padStep_width, Fin.snoc_last] at h
+      omega
+    have hblast : b' (Fin.last d') < 3 * k := by
+      have h := coeff_mem_width hb' (Fin.last d')
+      simp only [widthScale_width, padStep_width, Fin.snoc_last] at h
+      omega
+    have hua : P.eval (fun i ↦ a' i.castSucc) ∈ (P.widthScale k).toFinset :=
+      Finset.mem_image.mpr ⟨_, hainit, widthScale_eval P k _⟩
+    have hub : P.eval (fun i ↦ b' i.castSucc) ∈ (P.widthScale k).toFinset :=
+      Finset.mem_image.mpr ⟨_, hbinit, widthScale_eval P k _⟩
+    have hlast : a' (Fin.last d') = b' (Fin.last d') :=
+      hsep _ hua _ halast _ hub _ hblast hab'
+    rw [hlast] at hab'
+    have hev : (P.widthScale k).eval (fun i ↦ a' i.castSucc) =
+        (P.widthScale k).eval (fun i ↦ b' i.castSucc) := by
+      rw [widthScale_eval, widthScale_eval]
+      exact add_right_cancel_iff.mp hab'
+    have hinit := hkP hainit hbinit hev
+    funext i
+    rcases i.eq_castSucc_or_eq_last with ⟨j, rfl⟩ | rfl
+    · exact congrFun hinit j
+    · exact hlast
+
 /-- **Residual input — the unanchored-box lift.**  If the Appendix-A
 conclusion holds for the anchored translate `A₀ = A − lo`, it lifts to `A`
 itself: a padded `P'` (dimension `d' + 1`, the extra `padStep` absorbing
@@ -2404,43 +2600,6 @@ end GAP
 
 open GAP
 
-/-- **CFP23 main theorem** (Conlon–Fox–Pham, Theorem 1.5), quoted as
-**Theorem 5** in Pham–Zakharov (arXiv:2410.14624v2).  This is the deep
-external input to `cfp_structure`: it is stated here as a black box and is
-*not* proved in this file (the placeholder is the quoted theorem itself).
-
-For `A ⊆ [n] ⊆ ℤ` with `|A| = m`, `n ≤ m^β` and
-`s ∈ [m^η, c·m / log m]`, it gives `Â ⊆ A` with
-`|Â| ≥ m − c⁻¹·s·log m`, a proper `d'`-dimensional (`d' ≤ d`) GAP `P` with
-`Â ∪ {0} ⊆ P`, and `A' ⊆ Â` with `|A'| ≤ s` such that `Σ(A')` contains a
-homogeneous translate of a `≤ c·s` *width-scaling* `cs·P` of `P` (CFP23's
-coefficient scaling `cQ`, `GAP.widthScale` — not the pointwise dilation
-`k • P`), which remains proper.
-
-We phrase it for `ℓ = 1` in the ambient `Fin 1 → ℤ` model used by `GAP`, so
-that `cfp_structure` is literally its `ℓ`-dimensional extension obtained by
-the Appendix-A base-`H` packing (`GAP.packVec`, `GAP.packVec_inj`). -/
-theorem cfp_main {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1) :
-    ∃ c d : ℝ, 0 < c ∧ 0 < d ∧
-      ∀ (A : Finset (Fin 1 → ℤ)) (n s : ℕ),
-        A.Nonempty →
-        (∀ a ∈ A, 0 ≤ a 0 ∧ a 0 ≤ (n : ℤ)) →
-        (n : ℝ) ≤ (A.card : ℝ) ^ β →
-        (A.card : ℝ) ^ η ≤ s →
-        (s : ℝ) ≤ c * A.card / Real.log A.card →
-        ∃ (Â : Finset (Fin 1 → ℤ)) (d' : ℕ) (P : GAP 1 d'),
-          Â ⊆ A ∧
-          (A.card : ℝ) - c⁻¹ * s * Real.log A.card ≤ (Â.card : ℝ) ∧
-          (d' : ℝ) ≤ d ∧
-          P.Symmetric ∧ P.Homogeneous ∧ P.Proper ∧
-          (Â ∪ {0}) ⊆ P.toFinset ∧
-          ∃ A' ⊆ Â, A'.card ≤ s ∧
-            ∃ k : ℕ, 0 < k ∧ (k : ℝ) ≤ c * s ∧
-              ∃ t : Fin 1 → ℤ,
-                ((P.widthScale k).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
-                (P.widthScale k).Proper := by
-  sorry
-
 /-- **CFP23 main theorem, centred form** — the strengthening of `cfp_main`
 needed by the Appendix-A decode (`appendix_decode`).  Same content as
 `cfp_main`, plus two `packVec`-digit conclusions that the paper's version
@@ -2484,6 +2643,51 @@ theorem cfp_main_centered {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η
                     packVec H cd =
                       (∑ i, ((P.width i - 1 : ℕ) : ℤ) • P.step i) 0 := by
   sorry
+
+/-- **CFP23 main theorem** (Conlon–Fox–Pham, Theorem 1.5), quoted as
+**Theorem 5** in Pham–Zakharov (arXiv:2410.14624v2).  This is the deep
+external input to `cfp_structure`: it is stated here as a black box via
+its centred strengthening `cfp_main_centered` (the placeholder there is
+the quoted theorem itself); `cfp_main` is the `tdig`/`cd`-free projection
+of that black box.
+
+For `A ⊆ [n] ⊆ ℤ` with `|A| = m`, `n ≤ m^β` and
+`s ∈ [m^η, c·m / log m]`, it gives `Â ⊆ A` with
+`|Â| ≥ m − c⁻¹·s·log m`, a proper `d'`-dimensional (`d' ≤ d`) GAP `P` with
+`Â ∪ {0} ⊆ P`, and `A' ⊆ Â` with `|A'| ≤ s` such that `Σ(A')` contains a
+homogeneous translate of a `≤ c·s` *width-scaling* `cs·P` of `P` (CFP23's
+coefficient scaling `cQ`, `GAP.widthScale` — not the pointwise dilation
+`k • P`), which remains proper.
+
+We phrase it for `ℓ = 1` in the ambient `Fin 1 → ℤ` model used by `GAP`, so
+that `cfp_structure` is literally its `ℓ`-dimensional extension obtained by
+the Appendix-A base-`H` packing (`GAP.packVec`, `GAP.packVec_inj`). -/
+theorem cfp_main {β η : ℝ} (hβ : 1 < β) (hη : 0 < η) (hη1 : η < 1) :
+    ∃ c d : ℝ, 0 < c ∧ 0 < d ∧
+      ∀ (A : Finset (Fin 1 → ℤ)) (n s : ℕ),
+        A.Nonempty →
+        (∀ a ∈ A, 0 ≤ a 0 ∧ a 0 ≤ (n : ℤ)) →
+        (n : ℝ) ≤ (A.card : ℝ) ^ β →
+        (A.card : ℝ) ^ η ≤ s →
+        (s : ℝ) ≤ c * A.card / Real.log A.card →
+        ∃ (Â : Finset (Fin 1 → ℤ)) (d' : ℕ) (P : GAP 1 d'),
+          Â ⊆ A ∧
+          (A.card : ℝ) - c⁻¹ * s * Real.log A.card ≤ (Â.card : ℝ) ∧
+          (d' : ℝ) ≤ d ∧
+          P.Symmetric ∧ P.Homogeneous ∧ P.Proper ∧
+          (Â ∪ {0}) ⊆ P.toFinset ∧
+          ∃ A' ⊆ Â, A'.card ≤ s ∧
+            ∃ k : ℕ, 0 < k ∧ (k : ℝ) ≤ c * s ∧
+              ∃ t : Fin 1 → ℤ,
+                ((P.widthScale k).translate t).toFinset ⊆ GAP.subsetSumsL A' ∧
+                (P.widthScale k).Proper := by
+  obtain ⟨c, d, hc, hd, h⟩ := cfp_main_centered hβ hη hη1 (ℓ := 1)
+  refine ⟨c, d, hc, hd, fun A n s hne hbnd hn hs hsle ↦ ?_⟩
+  obtain ⟨Â, d', P, hÂsub, hÂcard, hd'le, hPs, hPh, hPp, hmem, A', hA'sub,
+    hA'card, k, hk, hkle, t, hcont, hprop, -⟩ :=
+    h A n s 0 0 hne hbnd hn hs hsle
+  exact ⟨Â, d', P, hÂsub, hÂcard, hd'le, hPs, hPh, hPp, hmem, A', hA'sub,
+    hA'card, k, hk, hkle, t, hcont, hprop⟩
 
 set_option maxHeartbeats 800000 in
 /-- **Theorem 3 (CFP structure theorem)**.  For `ℓ, β > 1` and `0 < η < 1`
